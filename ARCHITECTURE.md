@@ -31,7 +31,7 @@ harness-lint
 ├── Rule Source
 ├── Rule Parser
 ├── Rule Compiler
-├── Rule Engine Adapter
+├── Grit Adapter
 ├── Incremental Runner
 ├── Cache
 ├── Reporter
@@ -47,7 +47,7 @@ harness.toml
   -> Rule Source
   -> Rule Parser
   -> Rule Compiler
-  -> Grit Engine Adapter
+  -> Grit Adapter
   -> Diagnostics
   -> Reporter
 ```
@@ -182,7 +182,6 @@ tags = ["python", "validation", "ai-style"]
 ---
 id: python.prefer-pydantic
 title: Prefer Pydantic for structured validation
-engine: grit
 language: python
 level: warn
 status: draft
@@ -250,7 +249,6 @@ struct RulePack {
 struct RuleDefinition {
     id: String,
     title: String,
-    engine: RuleEngineKind,
     language: Option<String>,
     level: Severity,
     status: RuleStatus,
@@ -287,7 +285,7 @@ trait RuleCompiler {
     fn compile(&self, packs: Vec<RulePack>, config: ProjectConfig) -> Result<CompiledRules>;
 }
 
-trait RuleEngine {
+trait GritRunner {
     fn check(&self, rules: CompiledRules, files: Vec<PathBuf>) -> Result<Vec<Diagnostic>>;
     fn fix(&self, rules: CompiledRules, files: Vec<PathBuf>) -> Result<FixResult>;
 }
@@ -301,7 +299,7 @@ trait Reporter {
 }
 ```
 
-第一版只需要实现 local / git `RuleSource` 和 Grit CLI `RuleEngine`，但接口要允许后续扩展 npm、cargo、text engine、regex engine、external linter adapter。
+第一版实现 local / git `RuleSource` 和 Grit CLI `GritRunner`。可扩展的是规则包来源，不扩展第二套规则执行路径；规则文件里的可执行部分始终是 GritQL。
 
 ## Grit 集成方式
 
@@ -330,13 +328,13 @@ harness-lint 不直接解释 GritQL 语义。
 增量运行以 git 为主：
 
 ```text
-harness check --changed
+harness-lint check --changed
   -> git diff --name-only --diff-filter=ACMR <base>...HEAD
   -> staged files
   -> untracked files
   -> path ignore
   -> rule language/glob filter
-  -> grouped engine execution
+  -> Grit CLI execution
 ```
 
 默认 base 来自 `harness.toml` 的 `lint.changed_base`，命令行 `--base` 可以覆盖。
@@ -347,12 +345,12 @@ harness check --changed
 hash(
   file_content_hash,
   rule_content_hash,
-  engine_version,
+  grit_version,
   harness_config_hash
 )
 ```
 
-规则、配置、engine 版本或文件内容任一变化，缓存自动失效。
+规则、配置、Grit 版本或文件内容任一变化，缓存自动失效。
 
 ## 用户反馈到规则
 
@@ -361,7 +359,7 @@ hash(
 用户可以运行：
 
 ```bash
-harness rule suggest "Python 里结构化参数校验统一用 pydantic，不要手写 dict 校验"
+harness-lint rule suggest "Python 里结构化参数校验统一用 pydantic，不要手写 dict 校验"
 ```
 
 系统生成：
@@ -377,7 +375,7 @@ harness/rules/local/python.prefer-pydantic.md
 ```markdown
 When the user expresses a recurring coding preference, create or update a
 harness-lint rule instead of only changing the current code.
-Run `harness check --changed` before finishing.
+Run `harness-lint check --changed` before finishing.
 ```
 
 AI 不应该通过删除规则、降级 severity 或忽略 diagnostics 来解决问题，除非用户明确要求。
@@ -386,9 +384,9 @@ AI 不应该通过删除规则、降级 severity 或忽略 diagnostics 来解决
 
 ```text
 harness init
-harness check [paths...]
-harness check --changed
-harness check --staged
+harness-lint check [paths...]
+harness-lint check --changed
+harness-lint check --staged
 harness fix [paths...]
 harness fix --changed
 
@@ -397,14 +395,14 @@ harness pack update
 harness pack list
 harness pack remove <id>
 
-harness rule list
-harness rule explain <rule-id>
-harness rule new
-harness rule suggest <feedback>
-harness rule test <rule-id>
-harness rule enable <rule-id>
-harness rule disable <rule-id>
-harness rule set-level <rule-id> <level>
+harness-lint rule list
+harness-lint rule explain <rule-id>
+harness-lint rule new
+harness-lint rule suggest <feedback>
+harness-lint rule test <rule-id>
+harness-lint rule enable <rule-id>
+harness-lint rule disable <rule-id>
+harness-lint rule set-level <rule-id> <level>
 ```
 
 ## Reporter
@@ -429,7 +427,7 @@ AI-readable Markdown 应保持稳定结构，方便 agent 读取并修复。
 - 配置错误：配置文件不存在、字段非法、override 指向不存在规则。
 - 规则包错误：下载失败、版本冲突、manifest 非法、rule id 冲突。
 - 规则错误：frontmatter 缺失、GritQL 语法错误、draft 规则被 enforced。
-- engine 错误：Grit 未安装、版本不兼容、执行失败。
+- Grit 错误：Grit 未安装、版本不兼容、执行失败。
 - 运行错误：git base 不存在、路径不存在、缓存损坏。
 
 错误信息必须包含：
@@ -449,11 +447,4 @@ AI-readable Markdown 应保持稳定结构，方便 agent 读取并修复。
 - OCI artifact
 - HTTP tarball
 
-后续可以扩展更多 engine：
-
-- text / markdown engine
-- regex engine
-- external linter adapter
-- advisory LLM engine
-
-这些扩展都应接入现有 `RuleSource`、`RuleCompiler`、`RuleEngine`、`Reporter` 接口，而不是改变规则文件和规则包协议。
+后续不增加 text、regex、external、LLM advisory 等并行执行路径。用户反馈要落成 rule 时，先生成可审核的 GritQL draft；如果暂时不能表达为 GritQL，就保持 draft 和 TODO，而不是引入另一种执行器。

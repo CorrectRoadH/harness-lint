@@ -1,6 +1,6 @@
 # GritQL Rules
 
-Use `engine: grit` when a rule depends on syntax or AST structure.
+Every executable harness-lint rule is a GritQL rule.
 
 Rule skeleton:
 
@@ -8,7 +8,6 @@ Rule skeleton:
 ---
 id: python.no-print
 title: Avoid print debugging
-engine: grit
 language: python
 level: warn
 status: warn
@@ -44,5 +43,5 @@ Guidelines:
 - Add both Bad and Good examples before promotion to `enforced`.
 - Keep uncertain generated rules as `draft`.
 - Prefer installing maintained rule packs before creating project-local rules.
-- Use text or regex rules for simple document/template checks.
-
+- If a preference cannot be expressed in GritQL yet, keep the rule as `draft`
+  with a TODO GritQL body rather than adding another execution path.

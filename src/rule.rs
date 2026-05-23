@@ -5,15 +5,12 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 use walkdir::WalkDir;
 
-use crate::model::{
-    RuleBody, RuleDefinition, RuleEngineKind, RuleExample, RuleExampleKind, RuleStatus, Severity,
-};
+use crate::model::{RuleBody, RuleDefinition, RuleExample, RuleExampleKind, RuleStatus, Severity};
 
 #[derive(Debug, Deserialize)]
 struct RuleFrontmatter {
     id: String,
     title: String,
-    engine: RuleEngineKind,
     #[serde(default)]
     language: Option<String>,
     #[serde(default)]
@@ -62,13 +59,12 @@ pub fn parse_rule(
         .with_context(|| format!("failed to parse frontmatter in {}", source_path.display()))?;
 
     let description = extract_description(markdown);
-    let body = extract_body(markdown, frontmatter.engine);
+    let body = extract_body(markdown);
     let examples = extract_examples(markdown);
 
     let rule = RuleDefinition {
         id: frontmatter.id,
         title: frontmatter.title,
-        engine: frontmatter.engine,
         language: frontmatter.language,
         level: frontmatter.level,
         status: frontmatter.status,
@@ -108,22 +104,9 @@ fn extract_description(markdown: &str) -> String {
     description.join(" ")
 }
 
-fn extract_body(markdown: &str, engine: RuleEngineKind) -> RuleBody {
-    let desired = match engine {
-        RuleEngineKind::Grit => "grit",
-        RuleEngineKind::Text => "text",
-        RuleEngineKind::Regex => "regex",
-        RuleEngineKind::External => "external",
-        RuleEngineKind::LlmAdvisory => "llm",
-    };
-
-    if let Some((_, code)) = first_fenced_code(markdown, Some(desired)) {
-        return match engine {
-            RuleEngineKind::Grit => RuleBody::Grit(code),
-            RuleEngineKind::Text => RuleBody::Text(code),
-            RuleEngineKind::Regex => RuleBody::Regex(code),
-            RuleEngineKind::External | RuleEngineKind::LlmAdvisory => RuleBody::Text(code),
-        };
+fn extract_body(markdown: &str) -> RuleBody {
+    if let Some((_, code)) = first_fenced_code(markdown, Some("grit")) {
+        return RuleBody::Grit(code);
     }
 
     RuleBody::Missing
@@ -230,7 +213,6 @@ mod tests {
         let content = r#"---
 id: python.prefer-pydantic
 title: Prefer Pydantic
-engine: grit
 language: python
 level: warn
 status: warn
@@ -272,7 +254,6 @@ logger.info("x")
         let content = r#"---
 id: ai.some-rule
 title: Some Rule
-engine: grit
 status: draft
 ---
 

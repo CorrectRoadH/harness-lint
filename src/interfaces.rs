@@ -16,7 +16,7 @@ pub trait RuleCompiler {
     fn compile(&self, packs: Vec<RulePack>) -> Result<CompiledRules>;
 }
 
-pub trait RuleEngine {
+pub trait GritRunner {
     fn check(&self, rules: CompiledRules, files: Vec<PathBuf>) -> Result<Vec<Diagnostic>>;
     fn fix(&self, rules: CompiledRules, files: Vec<PathBuf>) -> Result<FixResult>;
 }

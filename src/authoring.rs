@@ -29,7 +29,6 @@ pub fn suggest_rule(root: &Path, feedback: &str) -> Result<RuleDraft> {
         r#"---
 id: {id}
 title: {title:?}
-engine: grit
 level: warn
 status: draft
 tags: [local, ai-feedback]
@@ -72,13 +71,7 @@ TODO: Add an example that should be allowed.
     })
 }
 
-pub fn new_rule(
-    root: &Path,
-    id: &str,
-    title: &str,
-    engine: &str,
-    language: Option<&str>,
-) -> Result<RuleDraft> {
+pub fn new_rule(root: &Path, id: &str, title: &str, language: Option<&str>) -> Result<RuleDraft> {
     let filename = id
         .strip_prefix("local.")
         .unwrap_or(id)
@@ -87,11 +80,6 @@ pub fn new_rule(
     let language_line = language
         .map(|language| format!("language: {language}\n"))
         .unwrap_or_default();
-    let fence = match engine {
-        "regex" => "regex",
-        "text" => "text",
-        _ => "grit",
-    };
     let id = if id.contains('.') {
         id.to_string()
     } else {
@@ -101,7 +89,6 @@ pub fn new_rule(
         r#"---
 id: {id}
 title: {title:?}
-engine: {engine}
 {language_line}level: warn
 status: draft
 tags: [local]
@@ -112,8 +99,8 @@ fixable: false
 
 TODO: Explain this rule.
 
-```{fence}
-TODO
+```grit
+// TODO: Add GritQL once the matching shape is clear.
 ```
 
 ## Bad

@@ -6,9 +6,7 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::config::GENERATED_GRIT_DIR;
-use crate::model::{
-    CompiledRules, RuleBody, RuleDefinition, RuleEngineKind, RulePack, RuleStatus, Severity,
-};
+use crate::model::{CompiledRules, RuleBody, RuleDefinition, RulePack, RuleStatus, Severity};
 
 #[derive(Debug, Serialize)]
 struct GritYaml {
@@ -56,7 +54,7 @@ pub fn compile_grit_rules(
             skipped_drafts.push(rule);
             continue;
         }
-        if rule.engine == RuleEngineKind::Grit && matches!(rule.body, RuleBody::Grit(_)) {
+        if matches!(rule.body, RuleBody::Grit(_)) {
             write_grit_pattern(&patterns_dir, &rule)?;
             grit_rules.push(rule);
         }
@@ -138,7 +136,7 @@ pub fn generated_grit_yaml_path(root: &Path) -> PathBuf {
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::model::{RuleBody, RuleEngineKind, RulePack, RuleStatus};
+    use crate::model::{RuleBody, RulePack, RuleStatus};
 
     use super::*;
 
@@ -153,7 +151,6 @@ mod tests {
                 RuleDefinition {
                     id: "local.warn".to_string(),
                     title: "Warn".to_string(),
-                    engine: RuleEngineKind::Grit,
                     language: Some("python".to_string()),
                     level: Severity::Warn,
                     status: RuleStatus::Warn,
@@ -168,7 +165,6 @@ mod tests {
                 RuleDefinition {
                     id: "local.draft".to_string(),
                     title: "Draft".to_string(),
-                    engine: RuleEngineKind::Grit,
                     language: Some("python".to_string()),
                     level: Severity::Warn,
                     status: RuleStatus::Draft,

@@ -2,7 +2,7 @@
 
 harness-lint is a GritQL rule ecosystem and rule-authoring CLI. It focuses on making rules easy to install, update, explain, test, and create from user feedback.
 
-The project is intentionally thin around lint execution. GritQL remains the AST rule engine; harness-lint manages rule packs, project configuration, local rules, incremental file selection, reports, and AI-friendly workflows.
+The project is intentionally thin around lint execution. GritQL is the only executable rule language; harness-lint manages rule packs, project configuration, local rules, incremental file selection, reports, and AI-friendly workflows.
 
 ## Install
 
@@ -13,7 +13,7 @@ cargo build
 target/debug/harness-lint --help
 ```
 
-GritQL checks require the `grit` CLI. Text and regex rules can run without Grit.
+All executable rules are GritQL rules and require the `grit` CLI.
 
 ## Initialize A Project
 
@@ -101,7 +101,7 @@ harness-lint pack remove python
 Create a rule from explicit fields:
 
 ```sh
-harness-lint rule new no-todo "No TODO" --engine text --language markdown
+harness-lint rule new no-todo "No TODO" --language markdown
 ```
 
 Create a rule from feedback:
@@ -137,7 +137,6 @@ Rules are Markdown files with YAML frontmatter:
 ---
 id: local.no-todo
 title: No TODO
-engine: text
 language: markdown
 level: warn
 status: warn
@@ -149,8 +148,9 @@ fixable: false
 
 Do not leave TODO markers in committed notes.
 
-```text
-TODO
+```grit
+language markdown
+`TODO`
 ```
 
 ## Bad
@@ -166,11 +166,9 @@ Finish this before committing.
 ```
 ````
 
-Supported engines today:
-
-- `grit`: compiled into `.harness/generated/grit/` and executed by Grit CLI.
-- `text`: deterministic literal text matching.
-- `regex`: deterministic regular expression matching.
+Rule bodies are always GritQL. `language` is target metadata used for path
+selection and as a parser hint inside the GritQL snippet; it does not choose a
+different runner.
 
 Rule statuses:
 
@@ -185,7 +183,7 @@ Add this to `CLAUDE.md`, `AGENTS.md`, or another agent instruction file:
 ```markdown
 When the user expresses a recurring coding preference, create or update a
 harness-lint rule instead of only changing the current code.
-Run `harness check --changed` before finishing.
+Run `harness-lint check --changed` before finishing.
 ```
 
 The intended loop is simple:

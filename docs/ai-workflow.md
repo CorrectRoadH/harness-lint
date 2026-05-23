@@ -7,7 +7,7 @@ Recommended instruction:
 ```markdown
 When the user expresses a recurring coding preference, create or update a
 harness-lint rule instead of only changing the current code.
-Run `harness check --changed` before finishing.
+Run `harness-lint check --changed` before finishing.
 ```
 
 Example:

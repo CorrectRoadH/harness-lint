@@ -8,8 +8,8 @@ pub enum HarnessError {
     Pack(String),
     #[error("HL003 rule error: {0}")]
     Rule(String),
-    #[error("HL004 engine error: {0}")]
-    Engine(String),
+    #[error("HL004 Grit error: {0}")]
+    Grit(String),
     #[error("HL005 git error: {0}")]
     Git(String),
     #[error("HL006 cache error: {0}")]
@@ -22,7 +22,7 @@ impl HarnessError {
             Self::Config(_) => "HL001",
             Self::Pack(_) => "HL002",
             Self::Rule(_) => "HL003",
-            Self::Engine(_) => "HL004",
+            Self::Grit(_) => "HL004",
             Self::Git(_) => "HL005",
             Self::Cache(_) => "HL006",
         }

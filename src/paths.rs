@@ -99,14 +99,13 @@ fn is_internal_path(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{RuleBody, RuleEngineKind, RuleStatus, Severity};
+    use crate::model::{RuleBody, RuleStatus, Severity};
 
     #[test]
     fn filters_by_language_and_internal_paths() {
         let rule = RuleDefinition {
             id: "python.x".to_string(),
             title: "x".to_string(),
-            engine: RuleEngineKind::Grit,
             language: Some("python".to_string()),
             level: Severity::Warn,
             status: RuleStatus::Warn,

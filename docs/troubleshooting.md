@@ -10,7 +10,7 @@ harness-lint init
 
 ## Grit Is Not Installed
 
-Text and regex rules work without Grit. Grit rules require the Grit CLI.
+All executable harness-lint rules require the Grit CLI.
 
 ## Existing `.grit`
 
@@ -42,4 +42,3 @@ Run:
 harness-lint cache clear
 harness-lint check --refresh-cache
 ```
-

@@ -90,16 +90,6 @@ impl fmt::Display for RuleStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum RuleEngineKind {
-    Grit,
-    Text,
-    Regex,
-    External,
-    LlmAdvisory,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PackSourceKind {
@@ -149,7 +139,6 @@ pub struct RulePack {
 pub struct RuleDefinition {
     pub id: String,
     pub title: String,
-    pub engine: RuleEngineKind,
     pub language: Option<String>,
     pub level: Severity,
     pub status: RuleStatus,
@@ -165,8 +154,6 @@ pub struct RuleDefinition {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleBody {
     Grit(String),
-    Text(String),
-    Regex(String),
     Missing,
 }
 

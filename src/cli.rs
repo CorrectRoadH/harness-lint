@@ -8,8 +8,8 @@ use crate::authoring;
 use crate::cache;
 use crate::compiler;
 use crate::config::{self, ProjectConfig};
-use crate::engine::{self, CheckMode};
 use crate::git;
+use crate::grit::{self, CheckMode};
 use crate::init;
 use crate::model::{PackSourceKind, RuleDefinition, RuleStatus, Severity};
 use crate::pack;
@@ -104,8 +104,6 @@ enum RuleCommand {
     New {
         id: String,
         title: String,
-        #[arg(long, default_value = "grit")]
-        engine: String,
         #[arg(long)]
         language: Option<String>,
     },
@@ -253,8 +251,7 @@ fn run_check(
         if let Some(cached) = cache::load(&root, &key)? {
             cached
         } else {
-            let mut diagnostics = engine::run_grit(&root, &compiled, &paths, mode)?;
-            diagnostics.extend(engine::run_builtin(&root, &active_rules, &paths)?);
+            let diagnostics = grit::run_grit(&root, &compiled, &paths, mode)?;
             cache::store(&root, &key, diagnostics.clone())?;
             diagnostics
         }
@@ -262,9 +259,7 @@ fn run_check(
         if command.refresh_cache {
             cache::clear(&root)?;
         }
-        let mut diagnostics = engine::run_grit(&root, &compiled, &paths, mode)?;
-        diagnostics.extend(engine::run_builtin(&root, &active_rules, &paths)?);
-        diagnostics
+        grit::run_grit(&root, &compiled, &paths, mode)?
     };
     report::report_diagnostics(&diagnostics, format)?;
     if diagnostics
@@ -391,10 +386,9 @@ fn run_rule(
         RuleCommand::New {
             id,
             title,
-            engine,
             language,
         } => {
-            let draft = authoring::new_rule(&root, &id, &title, &engine, language.as_deref())?;
+            let draft = authoring::new_rule(&root, &id, &title, language.as_deref())?;
             println!(
                 "Created rule draft `{}` at {}",
                 draft.id,

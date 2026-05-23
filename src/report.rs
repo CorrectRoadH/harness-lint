@@ -113,7 +113,7 @@ fn rules_to_json(rules: &[RuleDefinition]) -> Vec<serde_json::Value> {
             serde_json::json!({
                 "id": rule.id,
                 "title": rule.title,
-                "engine": format!("{:?}", rule.engine),
+                "language": rule.language,
                 "level": format!("{:?}", rule.level),
                 "status": format!("{:?}", rule.status),
                 "source_path": rule.source_path,

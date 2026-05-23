@@ -34,7 +34,7 @@
 ## 4. 定义规则文件协议
 
 - [x] 采用 Markdown + YAML frontmatter 作为用户可读规则格式。
-- [x] 定义 frontmatter 字段：id、title、engine、language、level、status、tags、fixable。
+- [x] 定义 frontmatter 字段：id、title、language、level、status、tags、fixable。
 - [x] 定义正文结构：说明、GritQL 代码块、Bad examples、Good examples。
 - [x] 定义 draft 规则允许缺少完整 GritQL，但不能进入 enforced。
 - [x] 定义规则测试样例的解析规则。
@@ -57,7 +57,7 @@
 
 - [x] 定义 `RuleSource`：负责安装、解析、更新规则包。
 - [x] 定义 `RuleCompiler`：负责把 harness 规则编译为 Grit 可执行配置。
-- [x] 定义 `RuleEngine`：负责执行检查和修复。
+- [x] 定义 `GritRunner`：负责通过 Grit 执行检查和修复。
 - [x] 定义 `RuleAuthoring`：负责从用户反馈创建或更新规则草稿。
 - [x] 定义 `Reporter`：负责输出终端、JSON、Markdown 等格式。
 - [x] 定义错误类型与错误码。
@@ -132,7 +132,7 @@
 - [x] 处理 disabled rules。
 - [x] 处理只包含 draft 的规则，不进入 Grit check。
 
-## 14. 实现 Grit engine adapter
+## 14. 实现 Grit adapter
 
 - [x] 检测 `grit` CLI 是否安装。
 - [x] 检测 Grit 版本兼容性。
@@ -151,12 +151,12 @@
 - [x] 支持 untracked 文件。
 - [x] 支持指定 base：`--base origin/main`。
 - [x] 按规则的 language 与 glob 过滤文件。
-- [x] 按规则包和 engine 分组执行。
+- [x] 按规则 language/glob 过滤后交给 Grit 执行。
 - [x] 避免把 `.harness/`、`.git/`、依赖目录传给 Grit。
 
 ## 16. 实现缓存
 
-- [x] 设计 cache key：文件内容 hash + 规则 hash + engine version + config hash。
+- [x] 设计 cache key：文件内容 hash + 规则 hash + Grit version + config hash。
 - [x] 存储每个文件每组规则的诊断结果。
 - [x] 支持规则变更后自动失效。
 - [x] 支持配置变更后自动失效。
@@ -166,9 +166,9 @@
 
 ## 17. 实现 check / fix 命令
 
-- [x] 实现 `harness check`。
-- [x] 实现 `harness check --changed`。
-- [x] 实现 `harness check --staged`。
+- [x] 实现 `harness-lint check`。
+- [x] 实现 `harness-lint check --changed`。
+- [x] 实现 `harness-lint check --staged`。
 - [x] 实现 `harness fix`。
 - [x] 实现 `harness fix --changed`。
 - [x] 实现根据 severity 决定退出码。
@@ -187,19 +187,19 @@
 
 ## 19. 实现 rule 查询命令
 
-- [x] 实现 `harness rule list`。
-- [x] 实现 `harness rule explain <rule-id>`。
-- [x] 实现 `harness rule enable <rule-id>`。
-- [x] 实现 `harness rule disable <rule-id>`。
-- [x] 实现 `harness rule set-level <rule-id> <level>`。
+- [x] 实现 `harness-lint rule list`。
+- [x] 实现 `harness-lint rule explain <rule-id>`。
+- [x] 实现 `harness-lint rule enable <rule-id>`。
+- [x] 实现 `harness-lint rule disable <rule-id>`。
+- [x] 实现 `harness-lint rule set-level <rule-id> <level>`。
 - [x] 实现按 tag、pack、language 过滤规则。
 
 ## 20. 实现用户反馈到规则草稿
 
-- [x] `harness rule suggest` 基于项目语言/library 搜索计划中的规则后端。
+- [x] `harness-lint rule suggest` 基于项目语言/library 搜索计划中的规则后端。
 - [x] 找到已有规则时提示安装对应 rule pack，而不是直接生成本地规则。
-- [x] 实现 `harness rule new` 交互式创建。
-- [x] 实现 `harness rule suggest "<feedback>"`。
+- [x] 实现 `harness-lint rule new` 交互式创建。
+- [x] 实现 `harness-lint rule suggest "<feedback>"`。
 - [x] 从 feedback 中生成 rule id、title、description、examples。
 - [x] 生成 Markdown 规则草稿到 `harness/rules/local/`。
 - [x] 标记新规则为 `status = "draft"`。
@@ -209,18 +209,18 @@
 
 ## 21. 实现规则草稿验证
 
-- [x] 实现 `harness rule test <rule-id>`。
+- [x] 实现 `harness-lint rule test <rule-id>`。
 - [x] 使用 Bad examples 验证规则能命中。
 - [x] 使用 Good examples 验证规则不误报。
-- [ ] 对可修复规则验证修复输出。当前先验证 text/regex examples，Grit autofix 需接真实 Grit test runner。
+- [ ] 对可修复规则验证修复输出。当前先做规则结构验证，Grit examples 需接真实 Grit test runner。
 - [x] 规则测试通过后允许从 draft 提升到 warn。
 - [x] enforced 规则必须有至少一个 Bad 和一个 Good example。
 
 ## 22. 实现 AI agent 集成协议
 
 - [x] 生成可插入 `CLAUDE.md` / `AGENTS.md` 的短协议。
-- [x] 约定 AI 在用户反馈编码偏好时运行 `harness rule suggest`。
-- [x] 约定 AI 在结束前运行 `harness check --changed`。
+- [x] 约定 AI 在用户反馈编码偏好时运行 `harness-lint rule suggest`。
+- [x] 约定 AI 在结束前运行 `harness-lint check --changed`。
 - [x] 约定 AI 优先修复 lint，而不是删除或降级规则。
 - [x] 为 AI-readable Markdown reporter 提供稳定格式。
 

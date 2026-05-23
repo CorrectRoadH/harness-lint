@@ -150,13 +150,7 @@ fn run_check(
         let key = cache::cache_key(
             &root,
             &paths,
-            &cache::fingerprint(
-                &compiled
-                    .grit_rules
-                    .iter()
-                    .map(|rule| &rule.id)
-                    .collect::<Vec<_>>(),
-            ),
+            &cache::fingerprint(&format!("{:?}", compiled.grit_rules)),
             &cache::fingerprint(&format!(
                 "{:?}{:?}{:?}",
                 config.overrides, config.disabled, config.ignore

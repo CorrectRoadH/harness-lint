@@ -15,7 +15,7 @@ harness-lint is a thin GritQL ecosystem CLI. It owns project configuration, rule
 harness.toml
   -> load local rules and installed packs
   -> parse Markdown rule files
-  -> compile active GritQL rules into .harness/generated/grit/
+  -> compile active GritQL rules into .harness/generated/.grit/
   -> run grit check
   -> print human or JSON diagnostics
 ```
@@ -39,7 +39,7 @@ harness.toml
 harness.lock
 harness/rules/local/*.md
 .harness/packs/
-.harness/generated/grit/
+.harness/generated/.grit/
 .harness/cache/
 ```
 

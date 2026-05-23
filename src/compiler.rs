@@ -15,9 +15,7 @@ struct GritYaml {
 }
 
 #[derive(Debug, Serialize)]
-struct GritPatternEntry {
-    name: String,
-}
+struct GritPatternEntry {}
 
 pub fn compile_grit_rules(
     root: &Path,
@@ -62,12 +60,7 @@ pub fn compile_grit_rules(
 
     let yaml = GritYaml {
         version: "0.0.2".to_string(),
-        patterns: grit_rules
-            .iter()
-            .map(|rule| GritPatternEntry {
-                name: rule.id.clone(),
-            })
-            .collect(),
+        patterns: Vec::new(),
     };
     let yaml = serde_yaml::to_string(&yaml).context("failed to serialize generated grit.yaml")?;
     fs::write(grit_dir.join("grit.yaml"), yaml)
@@ -116,16 +109,26 @@ fn write_grit_pattern(patterns_dir: &Path, rule: &RuleDefinition) -> Result<()> 
 }
 
 fn safe_pattern_filename(rule_id: &str) -> String {
-    rule_id
+    let filename: String = rule_id
         .chars()
         .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+            if ch.is_ascii_alphanumeric() || ch == '_' {
                 ch
             } else {
                 '_'
             }
         })
-        .collect()
+        .collect();
+    if filename
+        .chars()
+        .next()
+        .map(|ch| ch.is_ascii_alphabetic() || ch == '_')
+        .unwrap_or(false)
+    {
+        filename
+    } else {
+        format!("rule_{filename}")
+    }
 }
 
 pub fn generated_grit_yaml_path(root: &Path) -> PathBuf {
@@ -181,5 +184,7 @@ mod tests {
         assert_eq!(compiled.grit_rules.len(), 1);
         assert_eq!(compiled.skipped_drafts.len(), 1);
         assert!(generated_grit_yaml_path(tempdir.path()).exists());
+        let yaml = std::fs::read_to_string(generated_grit_yaml_path(tempdir.path())).unwrap();
+        assert!(yaml.contains("patterns: []"));
     }
 }

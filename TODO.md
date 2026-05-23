@@ -38,7 +38,7 @@ This is the single required path, in dependency order.
 
 ## Lint
 
-- [x] Compile active rules into `.harness/generated/grit/`.
+- [x] Compile active rules into `.harness/generated/.grit/`.
 - [x] Run `grit check`.
 - [x] Support full, changed, staged, and explicit path checks.
 - [x] Filter files by rule language and project ignore patterns.

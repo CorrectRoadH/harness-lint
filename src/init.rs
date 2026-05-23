@@ -39,7 +39,7 @@ pub fn init_project(root: &Path, force: bool) -> Result<()> {
 
     if root.join(".grit").exists() {
         eprintln!(
-            "harness-lint: existing .grit directory detected; harness generated files will stay under .harness/generated/grit"
+            "harness-lint: existing .grit directory detected; harness generated files will stay under .harness/generated/.grit"
         );
     }
 

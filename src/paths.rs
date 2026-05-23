@@ -120,7 +120,7 @@ mod tests {
             vec![
                 PathBuf::from("src/main.py"),
                 PathBuf::from("src/main.rs"),
-                PathBuf::from(".harness/generated/grit/grit.yaml"),
+                PathBuf::from(".harness/generated/.grit/grit.yaml"),
             ],
             &[],
             &[rule],

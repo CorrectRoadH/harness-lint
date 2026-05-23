@@ -17,7 +17,7 @@ All executable harness-lint rules require the Grit CLI.
 harness-lint does not overwrite `.grit`. Generated Grit files are written to:
 
 ```text
-.harness/generated/grit/
+.harness/generated/.grit/
 ```
 
 ## Registry Candidate Is Wrong

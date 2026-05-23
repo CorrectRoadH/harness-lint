@@ -12,7 +12,7 @@ pub const LOCK_FILE: &str = "harness.lock";
 pub const USER_RULE_DIR: &str = "harness/rules/local";
 pub const WORK_DIR: &str = ".harness";
 pub const PACKS_DIR: &str = ".harness/packs";
-pub const GENERATED_GRIT_DIR: &str = ".harness/generated/grit";
+pub const GENERATED_GRIT_DIR: &str = ".harness/generated/.grit";
 pub const CACHE_DIR: &str = ".harness/cache";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

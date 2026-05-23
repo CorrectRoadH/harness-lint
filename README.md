@@ -52,7 +52,10 @@ Run `harness-lint rule list` and summarize the result.
 ## CLI
 
 ```sh
-harness-lint check [--changed|--staged] [paths...]
+harness-lint check --changed
+harness-lint check --staged
+harness-lint check [paths...]
+harness-lint check --all
 harness-lint pack add <id> <local:PATH|github:OWNER/REPO@TAG>
 harness-lint pack update
 harness-lint pack list

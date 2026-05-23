@@ -56,6 +56,8 @@ struct InitCommand {
 #[derive(Debug, Args)]
 struct CheckCommand {
     #[arg(long)]
+    all: bool,
+    #[arg(long)]
     changed: bool,
     #[arg(long)]
     staged: bool,
@@ -143,6 +145,10 @@ fn run_check(
             active_rules.len(),
             paths.len()
         );
+    }
+    if paths.is_empty() || active_rules.is_empty() {
+        report::report_diagnostics(&[], format)?;
+        return Ok(());
     }
     let compiled =
         compiler::compile_grit_rules(&root, packs, &config.overrides, &config.disabled.rules)?;
@@ -326,6 +332,8 @@ fn select_paths(
     command: &CheckCommand,
     rules: &[RuleDefinition],
 ) -> Result<Vec<PathBuf>> {
+    let is_implicit_full_scan =
+        command.paths.is_empty() && !command.changed && !command.staged && !command.all;
     let paths = if !command.paths.is_empty() {
         command.paths.clone()
     } else if command.staged {
@@ -336,7 +344,14 @@ fn select_paths(
     } else {
         paths::discover_all_files(root, &config.ignore.paths)?
     };
-    paths::filter_paths(paths, &config.ignore.paths, rules)
+    let paths = paths::filter_paths(paths, &config.ignore.paths, rules)?;
+    if is_implicit_full_scan && paths.len() > 1000 {
+        bail!(
+            "refusing implicit full scan of {} files; use `harness-lint check --changed`, pass paths, or run `harness-lint check --all` to force it",
+            paths.len()
+        );
+    }
+    Ok(paths)
 }
 
 fn load_rule_packs(

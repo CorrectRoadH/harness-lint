@@ -1,0 +1,20 @@
+[project]
+name = "harness-lint"
+
+[lint]
+default_level = "warn"
+changed_base = "origin/main"
+cache = true
+
+[rules]
+local = ["harness/rules/local"]
+
+[packs]
+
+[overrides]
+
+[disabled]
+rules = []
+
+[ignore]
+paths = []

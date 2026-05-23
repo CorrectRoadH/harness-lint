@@ -1,0 +1,13 @@
+{
+  "name": "harness-lint",
+  "version": "0.1.0",
+  "description": "GritQL rule ecosystem and AI feedback linter",
+  "bin": {
+    "harness-lint": "bin/harness-lint.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "license": "MIT"
+}
+

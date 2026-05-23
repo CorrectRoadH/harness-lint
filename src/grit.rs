@@ -6,12 +6,6 @@ use serde::Deserialize;
 
 use crate::model::{CompiledRules, Diagnostic, Severity};
 
-#[derive(Debug, Clone, Copy)]
-pub enum CheckMode {
-    Check,
-    Fix,
-}
-
 pub fn ensure_grit_available() -> Result<String> {
     let output = Command::new("grit")
         .arg("version")
@@ -34,7 +28,6 @@ pub fn run_grit(
     root: &Path,
     compiled: &CompiledRules,
     paths: &[PathBuf],
-    mode: CheckMode,
 ) -> Result<Vec<Diagnostic>> {
     if compiled.grit_rules.is_empty() {
         return Ok(Vec::new());
@@ -50,10 +43,6 @@ pub fn run_grit(
         .arg(&compiled.grit_dir)
         .arg("--jsonl")
         .arg("check");
-
-    if matches!(mode, CheckMode::Fix) {
-        command.arg("--fix");
-    }
 
     if paths.is_empty() {
         command.arg(".");

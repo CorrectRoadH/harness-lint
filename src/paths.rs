@@ -110,7 +110,6 @@ mod tests {
             level: Severity::Warn,
             status: RuleStatus::Warn,
             tags: vec![],
-            fixable: false,
             description: String::new(),
             body: RuleBody::Grit(String::new()),
             examples: vec![],

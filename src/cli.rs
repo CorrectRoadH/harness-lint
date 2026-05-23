@@ -9,17 +9,16 @@ use crate::cache;
 use crate::compiler;
 use crate::config::{self, ProjectConfig};
 use crate::git;
-use crate::grit::{self, CheckMode};
+use crate::grit;
 use crate::init;
-use crate::model::{PackSourceKind, RuleDefinition, RuleStatus, Severity};
+use crate::model::{PackSourceKind, RuleDefinition};
 use crate::pack;
 use crate::paths;
 use crate::registry;
 use crate::report::{self, ReportFormat};
-use crate::rule_test;
 
 #[derive(Debug, Parser)]
-#[command(name = "harness")]
+#[command(name = "harness-lint")]
 #[command(about = "GritQL rule ecosystem and AI feedback linter")]
 pub struct Cli {
     #[arg(long)]
@@ -28,14 +27,6 @@ pub struct Cli {
     cwd: Option<PathBuf>,
     #[arg(long)]
     json: bool,
-    #[arg(long)]
-    markdown: bool,
-    #[arg(long)]
-    jsonl: bool,
-    #[arg(long)]
-    github: bool,
-    #[arg(long)]
-    sarif: bool,
     #[arg(long, short)]
     verbose: bool,
     #[command(subcommand)]
@@ -46,7 +37,6 @@ pub struct Cli {
 enum Command {
     Init(InitCommand),
     Check(CheckCommand),
-    Fix(CheckCommand),
     Pack {
         #[command(subcommand)]
         command: PackCommand,
@@ -54,10 +44,6 @@ enum Command {
     Rule {
         #[command(subcommand)]
         command: RuleCommand,
-    },
-    Cache {
-        #[command(subcommand)]
-        command: CacheCommand,
     },
 }
 
@@ -76,10 +62,6 @@ struct CheckCommand {
     #[arg(long)]
     base: Option<String>,
     #[arg(long)]
-    no_cache: bool,
-    #[arg(long)]
-    refresh_cache: bool,
-    #[arg(long)]
     rule: Vec<String>,
     #[arg(long)]
     tag: Vec<String>,
@@ -92,7 +74,6 @@ enum PackCommand {
     Add { id: String, spec: String },
     Update,
     List,
-    Remove { id: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -112,49 +93,12 @@ enum RuleCommand {
         #[arg(long)]
         local: bool,
     },
-    Test {
-        rule_id: String,
-    },
-    Enable {
-        rule_id: String,
-    },
-    Disable {
-        rule_id: String,
-    },
-    SetLevel {
-        rule_id: String,
-        level: Severity,
-    },
-    SetStatus {
-        rule_id: String,
-        status: RuleStatus,
-    },
-    AddExample {
-        rule_id: String,
-        kind: String,
-        #[arg(long, default_value = "text")]
-        language: String,
-        code: String,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum CacheCommand {
-    Clear,
 }
 
 pub fn run() -> Result<ExitCode> {
     let cli = Cli::parse();
     let format = if cli.json {
         ReportFormat::Json
-    } else if cli.jsonl {
-        ReportFormat::Jsonl
-    } else if cli.markdown {
-        ReportFormat::Markdown
-    } else if cli.github {
-        ReportFormat::Github
-    } else if cli.sarif {
-        ReportFormat::Sarif
     } else {
         ReportFormat::Human
     };
@@ -172,45 +116,19 @@ pub fn run() -> Result<ExitCode> {
             println!("\nAI agent instructions:\n{}", init::AI_AGENT_INSTRUCTIONS);
             Ok(())
         }
-        Command::Check(command) => run_check(
-            &cwd,
-            cli.config.as_deref(),
-            command,
-            CheckMode::Check,
-            format,
-            cli.verbose,
-        ),
-        Command::Fix(command) => run_check(
-            &cwd,
-            cli.config.as_deref(),
-            command,
-            CheckMode::Fix,
-            format,
-            cli.verbose,
-        ),
+        Command::Check(command) => {
+            run_check(&cwd, cli.config.as_deref(), command, format, cli.verbose)
+        }
         Command::Pack { command } => run_pack(&cwd, cli.config.as_deref(), command, format),
         Command::Rule { command } => run_rule(&cwd, cli.config.as_deref(), command, format),
-        Command::Cache { command } => run_cache(&cwd, command),
     }
     .map(|_| ExitCode::SUCCESS)
-}
-
-fn run_cache(cwd: &PathBuf, command: CacheCommand) -> Result<()> {
-    let root = config::find_project_root(cwd)?;
-    match command {
-        CacheCommand::Clear => {
-            cache::clear(&root)?;
-            println!("Cleared harness-lint cache.");
-        }
-    }
-    Ok(())
 }
 
 fn run_check(
     cwd: &PathBuf,
     config_path: Option<&std::path::Path>,
     command: CheckCommand,
-    mode: CheckMode,
     format: ReportFormat,
     verbose: bool,
 ) -> Result<()> {
@@ -228,11 +146,7 @@ fn run_check(
     }
     let compiled =
         compiler::compile_grit_rules(&root, packs, &config.overrides, &config.disabled.rules)?;
-    let diagnostics = if matches!(mode, CheckMode::Check)
-        && config.lint.cache
-        && !command.no_cache
-        && !command.refresh_cache
-    {
+    let diagnostics = if config.lint.cache {
         let key = cache::cache_key(
             &root,
             &paths,
@@ -251,15 +165,12 @@ fn run_check(
         if let Some(cached) = cache::load(&root, &key)? {
             cached
         } else {
-            let diagnostics = grit::run_grit(&root, &compiled, &paths, mode)?;
+            let diagnostics = grit::run_grit(&root, &compiled, &paths)?;
             cache::store(&root, &key, diagnostics.clone())?;
             diagnostics
         }
     } else {
-        if command.refresh_cache {
-            cache::clear(&root)?;
-        }
-        grit::run_grit(&root, &compiled, &paths, mode)?
+        grit::run_grit(&root, &compiled, &paths)?
     };
     report::report_diagnostics(&diagnostics, format)?;
     if diagnostics
@@ -332,29 +243,6 @@ fn run_pack(
             }
             for (id, spec) in config.packs {
                 println!("{id}\t{spec}");
-            }
-        }
-        PackCommand::Remove { id } => {
-            let mut config = config::load_config(&root, config_path)?;
-            if config.packs.remove(&id).is_some() {
-                let mut lock = config::load_lock(&root)?;
-                if let Some(entry) = lock.packs.remove(&id) {
-                    let path = if entry.local_path.is_absolute() {
-                        entry.local_path
-                    } else {
-                        root.join(entry.local_path)
-                    };
-                    if path.starts_with(root.join(config::PACKS_DIR)) && path.exists() {
-                        std::fs::remove_dir_all(&path).with_context(|| {
-                            format!("failed to remove cached pack {}", path.display())
-                        })?;
-                    }
-                }
-                config::write_lock(&root, &lock)?;
-                config::write_config(&root, &config)?;
-                println!("Removed pack `{id}`");
-            } else {
-                bail!("pack `{id}` is not configured");
             }
         }
     }
@@ -433,65 +321,6 @@ fn run_rule(
                 draft.id,
                 draft.path.display()
             );
-        }
-        RuleCommand::Test { rule_id } => {
-            let config = config::load_config(&root, config_path)?;
-            let rules = load_rules(&root, &config)?;
-            let rule = rules
-                .iter()
-                .find(|rule| rule.id == rule_id)
-                .ok_or_else(|| anyhow!("rule `{rule_id}` was not found"))?;
-            rule_test::test_rule(&root, rule)?;
-            println!("Rule `{rule_id}` passed structural tests.");
-        }
-        RuleCommand::Enable { rule_id } => {
-            let mut config = config::load_config(&root, config_path)?;
-            config.disabled.rules.retain(|id| id != &rule_id);
-            config::write_config(&root, &config)?;
-            println!("Enabled rule `{rule_id}`");
-        }
-        RuleCommand::Disable { rule_id } => {
-            let mut config = config::load_config(&root, config_path)?;
-            if !config.disabled.rules.iter().any(|id| id == &rule_id) {
-                config.disabled.rules.push(rule_id.clone());
-                config.disabled.rules.sort();
-            }
-            config::write_config(&root, &config)?;
-            println!("Disabled rule `{rule_id}`");
-        }
-        RuleCommand::SetLevel { rule_id, level } => {
-            let mut config = config::load_config(&root, config_path)?;
-            config.overrides.insert(rule_id.clone(), level);
-            config::write_config(&root, &config)?;
-            println!("Set rule `{rule_id}` level to `{level:?}`");
-        }
-        RuleCommand::SetStatus { rule_id, status } => {
-            let config = config::load_config(&root, config_path)?;
-            let rules = load_rules(&root, &config)?;
-            let rule = rules
-                .iter()
-                .find(|rule| rule.id == rule_id)
-                .ok_or_else(|| anyhow!("rule `{rule_id}` was not found"))?;
-            if status == RuleStatus::Enforced {
-                rule_test::test_rule(&root, rule)?;
-            }
-            authoring::set_rule_status(rule, status)?;
-            println!("Set rule `{rule_id}` status to `{status}`");
-        }
-        RuleCommand::AddExample {
-            rule_id,
-            kind,
-            language,
-            code,
-        } => {
-            let config = config::load_config(&root, config_path)?;
-            let rules = load_rules(&root, &config)?;
-            let rule = rules
-                .iter()
-                .find(|rule| rule.id == rule_id)
-                .ok_or_else(|| anyhow!("rule `{rule_id}` was not found"))?;
-            authoring::add_example(rule, &kind, &language, &code)?;
-            println!("Added {kind} example to `{rule_id}`");
         }
     }
     Ok(())

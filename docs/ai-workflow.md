@@ -16,14 +16,9 @@ Example:
 harness-lint rule suggest "Python validation should prefer pydantic models"
 ```
 
-This creates a draft rule in `harness/rules/local/`. The draft can be edited, tested, and promoted:
+This creates a draft rule in `harness/rules/local/`. The draft should be edited as Markdown/GritQL and reviewed by the user before it becomes active.
 
-```sh
-harness-lint rule test local.python-validation-should-prefer-pydantic-models
-harness-lint rule set-status local.python-validation-should-prefer-pydantic-models warn
-```
-
-Agents should not delete rules, downgrade levels, or disable checks to make a task pass unless the user explicitly asks for that.
+Agents should not delete rules or weaken checks to make a task pass unless the user explicitly asks for that.
 
 ## Installation Conversion
 

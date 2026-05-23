@@ -19,8 +19,6 @@ struct RuleFrontmatter {
     status: RuleStatus,
     #[serde(default)]
     tags: Vec<String>,
-    #[serde(default)]
-    fixable: bool,
 }
 
 pub fn discover_rules(dir: &Path, pack_id: Option<&str>) -> Result<Vec<RuleDefinition>> {
@@ -69,7 +67,6 @@ pub fn parse_rule(
         level: frontmatter.level,
         status: frontmatter.status,
         tags: frontmatter.tags,
-        fixable: frontmatter.fixable,
         description,
         body,
         examples,
@@ -217,7 +214,6 @@ language: python
 level: warn
 status: warn
 tags: [python]
-fixable: false
 ---
 
 # Prefer Pydantic

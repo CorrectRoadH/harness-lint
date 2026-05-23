@@ -12,7 +12,6 @@ language: python
 level: warn
 status: warn
 tags: [python, debug]
-fixable: false
 ---
 
 # Avoid print debugging

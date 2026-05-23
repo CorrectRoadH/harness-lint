@@ -33,12 +33,3 @@ Then edit the draft in `harness/rules/local/`.
 ## Rule Pack Install Fails
 
 Pack installs clone into a temporary directory first. Failed installs are rolled back before touching the active cached pack.
-
-## Cache Looks Stale
-
-Run:
-
-```sh
-harness-lint cache clear
-harness-lint check --refresh-cache
-```

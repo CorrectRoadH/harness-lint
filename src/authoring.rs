@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use heck::{ToKebabCase, ToTitleCase};
 
 use crate::config::USER_RULE_DIR;
-use crate::model::{RuleDefinition, RuleDraft, RuleStatus};
+use crate::model::RuleDraft;
 
 pub fn suggest_rule(root: &Path, feedback: &str) -> Result<RuleDraft> {
     let id_tail = feedback
@@ -32,7 +32,6 @@ title: {title:?}
 level: warn
 status: draft
 tags: [local, ai-feedback]
-fixable: false
 ---
 
 # {title}
@@ -92,7 +91,6 @@ title: {title:?}
 {language_line}level: warn
 status: draft
 tags: [local]
-fixable: false
 ---
 
 # {title}
@@ -127,50 +125,6 @@ TODO: Add an example that should be allowed.
         path,
         content,
     })
-}
-
-pub fn set_rule_status(rule: &RuleDefinition, status: RuleStatus) -> Result<()> {
-    let content = fs::read_to_string(&rule.source_path)
-        .with_context(|| format!("failed to read {}", rule.source_path.display()))?;
-    let mut changed = false;
-    let mut lines = Vec::new();
-    for line in content.lines() {
-        if line.trim_start().starts_with("status:") {
-            lines.push(format!("status: {status}"));
-            changed = true;
-        } else {
-            lines.push(line.to_string());
-        }
-    }
-    let next = if changed {
-        lines.join("\n") + "\n"
-    } else if let Some(index) = content.find("\n---\n") {
-        let mut next = content.clone();
-        next.insert_str(index, &format!("\nstatus: {status}"));
-        next
-    } else {
-        content
-    };
-    fs::write(&rule.source_path, next)
-        .with_context(|| format!("failed to write {}", rule.source_path.display()))?;
-    Ok(())
-}
-
-pub fn add_example(rule: &RuleDefinition, kind: &str, language: &str, code: &str) -> Result<()> {
-    let heading = match kind {
-        "bad" | "Bad" => "Bad",
-        "good" | "Good" => "Good",
-        _ => "Bad",
-    };
-    let mut content = fs::read_to_string(&rule.source_path)
-        .with_context(|| format!("failed to read {}", rule.source_path.display()))?;
-    if !content.ends_with('\n') {
-        content.push('\n');
-    }
-    content.push_str(&format!("\n## {heading}\n\n```{language}\n{code}\n```\n"));
-    fs::write(&rule.source_path, content)
-        .with_context(|| format!("failed to write {}", rule.source_path.display()))?;
-    Ok(())
 }
 
 #[cfg(test)]

@@ -143,7 +143,6 @@ pub struct RuleDefinition {
     pub level: Severity,
     pub status: RuleStatus,
     pub tags: Vec<String>,
-    pub fixable: bool,
     pub description: String,
     pub body: RuleBody,
     pub examples: Vec<RuleExample>,
@@ -181,12 +180,6 @@ pub struct Diagnostic {
     pub end_line: Option<u32>,
     pub end_column: Option<u32>,
     pub fix_available: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct FixResult {
-    pub diagnostics: Vec<Diagnostic>,
-    pub changed_files: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

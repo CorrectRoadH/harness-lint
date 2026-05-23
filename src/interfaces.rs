@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::model::{
-    CompiledRules, Diagnostic, FixResult, LockEntry, PackSpec, ProjectContext, RegistryCandidate,
+    CompiledRules, Diagnostic, LockEntry, PackSpec, ProjectContext, RegistryCandidate,
     RegistryQuery, ResolvedPack, RuleDraft, RulePack,
 };
 
@@ -18,7 +18,6 @@ pub trait RuleCompiler {
 
 pub trait GritRunner {
     fn check(&self, rules: CompiledRules, files: Vec<PathBuf>) -> Result<Vec<Diagnostic>>;
-    fn fix(&self, rules: CompiledRules, files: Vec<PathBuf>) -> Result<FixResult>;
 }
 
 pub trait RuleAuthoring {

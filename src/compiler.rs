@@ -23,15 +23,47 @@ pub fn compile_grit_rules(
     overrides: &BTreeMap<String, Severity>,
     disabled: &[String],
 ) -> Result<CompiledRules> {
+    let rules = collect_grit_rules(packs, overrides, disabled);
+    compile_rule_set(root, rules)
+}
+
+pub fn compile_rule_set(root: &Path, rules: Vec<RuleDefinition>) -> Result<CompiledRules> {
     let grit_dir = root.join(GENERATED_GRIT_DIR);
     let patterns_dir = grit_dir.join("patterns");
-    if patterns_dir.exists() {
-        fs::remove_dir_all(&patterns_dir)
-            .with_context(|| format!("failed to clear {}", patterns_dir.display()))?;
-    }
     fs::create_dir_all(&patterns_dir)
         .with_context(|| format!("failed to create {}", patterns_dir.display()))?;
 
+    let mut grit_rules = Vec::new();
+    let mut skipped_drafts = Vec::new();
+    let mut expected_files = std::collections::BTreeSet::new();
+    for rule in rules {
+        if rule.status == RuleStatus::Draft {
+            skipped_drafts.push(rule);
+            continue;
+        }
+        if matches!(rule.body, RuleBody::Grit(_)) {
+            let filename = format!("{}.md", safe_pattern_filename(&rule.id));
+            write_grit_pattern(&patterns_dir, &filename, &rule)?;
+            expected_files.insert(filename);
+            grit_rules.push(rule);
+        }
+    }
+
+    remove_stale_patterns(&patterns_dir, &expected_files)?;
+    write_if_changed(&grit_dir.join("grit.yaml"), &grit_yaml()?)?;
+
+    Ok(CompiledRules {
+        grit_dir,
+        grit_rules,
+        skipped_drafts,
+    })
+}
+
+fn collect_grit_rules(
+    packs: Vec<RulePack>,
+    overrides: &BTreeMap<String, Severity>,
+    disabled: &[String],
+) -> Vec<RuleDefinition> {
     let mut by_id: BTreeMap<String, RuleDefinition> = BTreeMap::new();
     for pack in packs {
         for mut rule in pack.rules {
@@ -44,37 +76,19 @@ pub fn compile_grit_rules(
             by_id.insert(rule.id.clone(), rule);
         }
     }
+    by_id.into_values().collect()
+}
 
-    let mut grit_rules = Vec::new();
-    let mut skipped_drafts = Vec::new();
-    for rule in by_id.into_values() {
-        if rule.status == RuleStatus::Draft {
-            skipped_drafts.push(rule);
-            continue;
-        }
-        if matches!(rule.body, RuleBody::Grit(_)) {
-            write_grit_pattern(&patterns_dir, &rule)?;
-            grit_rules.push(rule);
-        }
-    }
-
+fn grit_yaml() -> Result<String> {
     let yaml = GritYaml {
         version: "0.0.2".to_string(),
         patterns: Vec::new(),
     };
-    let yaml = serde_yaml::to_string(&yaml).context("failed to serialize generated grit.yaml")?;
-    fs::write(grit_dir.join("grit.yaml"), yaml)
-        .with_context(|| format!("failed to write {}", grit_dir.join("grit.yaml").display()))?;
-
-    Ok(CompiledRules {
-        grit_dir,
-        grit_rules,
-        skipped_drafts,
-    })
+    serde_yaml::to_string(&yaml).context("failed to serialize generated grit.yaml")
 }
 
-fn write_grit_pattern(patterns_dir: &Path, rule: &RuleDefinition) -> Result<()> {
-    let path = patterns_dir.join(format!("{}.md", safe_pattern_filename(&rule.id)));
+fn write_grit_pattern(patterns_dir: &Path, filename: &str, rule: &RuleDefinition) -> Result<()> {
+    let path = patterns_dir.join(filename);
     let body = match &rule.body {
         RuleBody::Grit(body) => body,
         _ => return Ok(()),
@@ -104,7 +118,34 @@ fn write_grit_pattern(patterns_dir: &Path, rule: &RuleDefinition) -> Result<()> 
         rule.description,
         body
     );
-    fs::write(&path, content).with_context(|| format!("failed to write {}", path.display()))?;
+    write_if_changed(&path, &content)?;
+    Ok(())
+}
+
+fn write_if_changed(path: &Path, content: &str) -> Result<()> {
+    if fs::read_to_string(path).ok().as_deref() == Some(content) {
+        return Ok(());
+    }
+    fs::write(path, content).with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn remove_stale_patterns(
+    patterns_dir: &Path,
+    expected_files: &std::collections::BTreeSet<String>,
+) -> Result<()> {
+    for entry in fs::read_dir(patterns_dir)
+        .with_context(|| format!("failed to read {}", patterns_dir.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to read {}", patterns_dir.display()))?;
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+        let filename = entry.file_name().to_string_lossy().to_string();
+        if filename.ends_with(".md") && !expected_files.contains(&filename) {
+            fs::remove_file(entry.path())
+                .with_context(|| format!("failed to remove {}", entry.path().display()))?;
+        }
+    }
     Ok(())
 }
 

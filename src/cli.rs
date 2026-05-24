@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -150,27 +151,23 @@ fn run_check(
         report::report_diagnostics(&[], format)?;
         return Ok(());
     }
-    let compiled =
-        compiler::compile_grit_rules(&root, packs, &config.overrides, &config.disabled.rules)?;
+    let compiled = compiler::compile_rule_set(&root, active_rules.clone())?;
     let diagnostics = if config.lint.cache {
-        let key = cache::cache_key(
+        let rule_fingerprint = cache::fingerprint(&format!("{:?}", compiled.grit_rules));
+        let config_fingerprint = cache::fingerprint(&format!(
+            "{:?}{:?}{:?}{:?}{:?}",
+            command.rule, command.tag, config.overrides, config.disabled, config.ignore
+        ));
+        run_cached_check(
             &root,
+            &compiled,
             &paths,
-            &cache::fingerprint(&format!("{:?}", compiled.grit_rules)),
-            &cache::fingerprint(&format!(
-                "{:?}{:?}{:?}",
-                config.overrides, config.disabled, config.ignore
-            )),
-        )?;
-        if let Some(cached) = cache::load(&root, &key)? {
-            cached
-        } else {
-            let diagnostics = grit::run_grit(&root, &compiled, &paths)?;
-            cache::store(&root, &key, diagnostics.clone())?;
-            diagnostics
-        }
+            &rule_fingerprint,
+            &config_fingerprint,
+            verbose,
+        )?
     } else {
-        grit::run_grit(&root, &compiled, &paths)?
+        normalize_diagnostics(&root, grit::run_grit(&root, &compiled, &paths)?)
     };
     report::report_diagnostics(&diagnostics, format)?;
     if diagnostics
@@ -180,6 +177,73 @@ fn run_check(
         bail!("harness-lint found error-level diagnostics");
     }
     Ok(())
+}
+
+fn run_cached_check(
+    root: &Path,
+    compiled: &crate::model::CompiledRules,
+    paths: &[PathBuf],
+    rule_fingerprint: &str,
+    config_fingerprint: &str,
+    verbose: bool,
+) -> Result<Vec<crate::model::Diagnostic>> {
+    let mut diagnostics = Vec::new();
+    let mut misses = Vec::new();
+    let mut miss_keys = BTreeMap::new();
+
+    for path in paths {
+        let file_hash = cache::file_hash(root, path)?;
+        let key = cache::file_cache_key(path, &file_hash, rule_fingerprint, config_fingerprint);
+        if let Some(cached) = cache::load_file(root, &key)? {
+            diagnostics.extend(cached);
+        } else {
+            misses.push(path.clone());
+            miss_keys.insert(path.clone(), key);
+        }
+    }
+
+    if verbose {
+        eprintln!(
+            "harness-lint: {} cache hit(s), {} cache miss(es)",
+            paths.len().saturating_sub(misses.len()),
+            misses.len()
+        );
+    }
+
+    for batch in misses.chunks(8192) {
+        let batch_paths = batch.to_vec();
+        let fresh = normalize_diagnostics(root, grit::run_grit(root, compiled, &batch_paths)?);
+        let mut by_path = cache::group_by_path(root, fresh);
+        for path in batch {
+            let path_diagnostics = by_path.remove(path).unwrap_or_default();
+            if let Some(key) = miss_keys.get(path) {
+                cache::store_file(root, key, path_diagnostics.clone())?;
+            }
+            diagnostics.extend(path_diagnostics);
+        }
+    }
+
+    diagnostics.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.start_line.cmp(&right.start_line))
+            .then(left.start_column.cmp(&right.start_column))
+            .then(left.rule_id.cmp(&right.rule_id))
+    });
+    Ok(diagnostics)
+}
+
+fn normalize_diagnostics(
+    root: &Path,
+    diagnostics: Vec<crate::model::Diagnostic>,
+) -> Vec<crate::model::Diagnostic> {
+    diagnostics
+        .into_iter()
+        .map(|mut diagnostic| {
+            diagnostic.path = cache::normalize_path(root, &diagnostic.path);
+            diagnostic
+        })
+        .collect()
 }
 
 fn run_pack(

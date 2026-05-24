@@ -39,9 +39,10 @@ External packs are configured in `harness.toml`:
 
 ```toml
 [packs]
-python = "github:harness-lint/rules-python@v1.2.0"
+python = "github:CorrectRoadH/harness-lint@v1.2.0#packs/python"
 local_python = "local:../harness-rules-python"
 ```
 
-Installed pack versions are recorded in `harness.lock`.
+Use `harness-lint pack search <query>` and `harness-lint pack inspect <id>` before installing. Git and local specs may point at a pack subdirectory with `#path/to/pack`; if no subdirectory is given, harness-lint also checks `packs/<id>` in the source repository.
 
+Installed pack versions are recorded in `harness.lock`.

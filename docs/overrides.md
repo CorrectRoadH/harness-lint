@@ -20,7 +20,7 @@ rules = ["python.no-print-debug"]
 Local rules live in:
 
 ```text
-harness/rules/local/
+harness/rules/
 ```
 
 External packs are cached in:
@@ -30,4 +30,3 @@ External packs are cached in:
 ```
 
 Only `harness/`, `harness.toml`, and `harness.lock` are intended to be committed.
-

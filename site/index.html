@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>harness-lint rules</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <nav>
+        <strong>harness-lint</strong>
+        <a href="../docs/ecosystem.md">Ecosystem docs</a>
+      </nav>
+      <section>
+        <p class="eyebrow">GritQL rule packs for AI-assisted codebases</p>
+        <h1>Search, inspect, install, then lint.</h1>
+        <p class="lede">
+          harness-lint keeps custom feedback local while shared Python, Go, and TypeScript conventions
+          install as versioned GritQL packs.
+        </p>
+        <div class="command">harness-lint pack search "python typing"</div>
+      </section>
+    </header>
+
+    <main>
+      <section class="toolbar" aria-label="Catalog search">
+        <label for="search">Find rule packs</label>
+        <input id="search" type="search" placeholder="python, go, typescript, pydantic, context..." />
+      </section>
+
+      <section class="catalog" id="catalog" aria-live="polite"></section>
+    </main>
+
+    <template id="pack-template">
+      <article class="pack">
+        <div>
+          <p class="language"></p>
+          <h2></h2>
+          <p class="description"></p>
+        </div>
+        <ul></ul>
+        <div class="install"></div>
+      </article>
+    </template>
+
+    <script src="./catalog.js"></script>
+  </body>
+</html>

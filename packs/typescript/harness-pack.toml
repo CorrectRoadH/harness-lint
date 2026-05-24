@@ -1,0 +1,11 @@
+[pack]
+id = "typescript"
+name = "TypeScript Application Conventions"
+version = "0.1.0"
+description = "GritQL rules for TypeScript and JavaScript application code."
+license = "MIT"
+
+[compat]
+harness = ">=0.1.0"
+grit = ">=0.1.0"
+languages = ["typescript", "javascript"]

@@ -6,13 +6,13 @@ This is the single required path, in dependency order.
 
 - [x] Only execute GritQL rules.
 - [x] Provide lint checks, not code fixes.
-- [x] Keep the CLI small: init, check, pack install/update/list, rule suggest/new/list/explain.
+- [x] Keep the CLI small: init, check, pack search/inspect/install/update/list, rule suggest/new/list/explain.
 - [x] Treat `language` as target metadata, not an execution engine.
 
 ## Project Setup
 
 - [x] Create `harness.toml`.
-- [x] Create `harness/rules/local/`.
+- [x] Create `harness/rules/`.
 - [x] Create `.harness/` for generated Grit files, pack cache, and diagnostics cache.
 - [x] Print short agent installation instructions.
 - [x] Document that existing `CLAUDE.md`, `AGENTS.md`, `.cursor/rules`, and README constraints are converted by an LLM during installation, not by `init`.
@@ -25,6 +25,11 @@ This is the single required path, in dependency order.
 - [x] Update installed packs.
 - [x] List configured packs.
 - [x] Record installed packs in `harness.lock`.
+- [x] Search catalog candidates from language, library, and feedback signals.
+- [x] Inspect a pack before installing it.
+- [x] Support Git pack subdirectories such as `github:CorrectRoadH/harness-lint@main#packs/python`.
+- [x] Seed Python, Go, and TypeScript GritQL rule packs.
+- [x] Provide a static landing/search UI scaffold for the catalog.
 
 ## Rules
 

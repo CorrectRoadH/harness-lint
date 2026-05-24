@@ -226,3 +226,14 @@ pub struct RegistryCandidate {
     pub score: u32,
     pub reason: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryPack {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub pack_spec: String,
+    pub languages: Vec<String>,
+    pub keywords: Vec<String>,
+    pub rules: Vec<RegistryCandidate>,
+}

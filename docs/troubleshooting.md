@@ -28,7 +28,7 @@ Use:
 harness-lint rule suggest --local "<constraint>"
 ```
 
-Then edit the draft in `harness/rules/local/`.
+Then edit the draft in `harness/rules/`.
 
 ## Rule Pack Install Fails
 

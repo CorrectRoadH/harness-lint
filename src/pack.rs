@@ -67,13 +67,26 @@ pub fn parse_pack_spec(id: &str, spec: &str) -> PackSpec {
         (PackSourceKind::Local, spec)
     };
 
-    let (spec, version_req) = split_version(rest);
+    let (rest, fragment) = split_fragment(rest);
+    let (mut spec, version_req) = split_version(rest);
+    if let Some(fragment) = fragment {
+        spec = format!("{spec}#{fragment}");
+    }
     PackSpec {
         id: id.to_string(),
         source,
         spec,
         version_req,
     }
+}
+
+fn split_fragment(value: &str) -> (&str, Option<&str>) {
+    if let Some((left, right)) = value.split_once('#') {
+        if !right.is_empty() {
+            return (left, Some(right));
+        }
+    }
+    (value, None)
 }
 
 fn split_version(value: &str) -> (String, Option<String>) {
@@ -86,14 +99,16 @@ fn split_version(value: &str) -> (String, Option<String>) {
 }
 
 pub fn resolve_local_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
-    let local_path = if Path::new(&spec.spec).is_absolute() {
-        PathBuf::from(&spec.spec)
+    let (pack_path, fragment) = split_spec_path(&spec.spec);
+    let local_path = if Path::new(pack_path).is_absolute() {
+        PathBuf::from(pack_path)
     } else {
-        root.join(&spec.spec)
+        root.join(pack_path)
     };
     if !local_path.exists() {
         bail!("local pack path does not exist: {}", local_path.display());
     }
+    let local_path = resolve_pack_root(&local_path, &spec.id, fragment)?;
     Ok(ResolvedPack {
         spec,
         local_path,
@@ -116,7 +131,8 @@ pub fn install_git_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
     fs::create_dir_all(target.parent().expect("pack target has parent"))
         .with_context(|| format!("failed to create {}", root.join(PACKS_DIR).display()))?;
 
-    let url = git_url(&spec.spec);
+    let (git_spec, fragment) = split_spec_path(&spec.spec);
+    let url = git_url(git_spec);
     let mut command = Command::new("git");
     command.arg("clone").arg("--depth").arg("1");
     if let Some(version) = &spec.version_req {
@@ -141,10 +157,11 @@ pub fn install_git_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
         )
     })?;
 
+    let local_path = resolve_pack_root(&target, &spec.id, fragment)?;
     let commit = git_commit(&target).ok();
     Ok(ResolvedPack {
         spec,
-        local_path: target,
+        local_path,
         version: commit,
         checksum: None,
     })
@@ -185,7 +202,7 @@ pub fn update_git_pack(root: &Path, lock: &LockEntry) -> Result<ResolvedPack> {
             spec: lock.spec.clone(),
             version_req: lock.version.clone(),
         },
-        local_path: target,
+        local_path: resolve_pack_root(&target, &lock.id, split_spec_path(&lock.spec).1)?,
         version: commit,
         checksum: None,
     })
@@ -280,6 +297,35 @@ fn git_url(spec: &str) -> String {
     }
 }
 
+fn split_spec_path(spec: &str) -> (&str, Option<&str>) {
+    if let Some((left, right)) = spec.split_once('#') {
+        (left, Some(right))
+    } else {
+        (spec, None)
+    }
+}
+
+fn resolve_pack_root(path: &Path, id: &str, fragment: Option<&str>) -> Result<PathBuf> {
+    if let Some(fragment) = fragment {
+        let candidate = path.join(fragment);
+        if candidate.join(PACK_MANIFEST).exists() {
+            return Ok(candidate);
+        }
+        bail!("pack `{id}` subdirectory `{fragment}` does not contain {PACK_MANIFEST}");
+    }
+    if path.join(PACK_MANIFEST).exists() {
+        return Ok(path.to_path_buf());
+    }
+    let candidate = path.join("packs").join(id);
+    if candidate.join(PACK_MANIFEST).exists() {
+        return Ok(candidate);
+    }
+    bail!(
+        "pack `{id}` does not contain {PACK_MANIFEST} at {} or packs/{id}",
+        path.display()
+    )
+}
+
 fn git_commit(path: &Path) -> Result<String> {
     let output = Command::new("git")
         .current_dir(path)
@@ -302,5 +348,16 @@ mod tests {
         assert_eq!(spec.source, PackSourceKind::Git);
         assert_eq!(spec.spec, "harness-lint/rules-python");
         assert_eq!(spec.version_req.as_deref(), Some("1.2.0"));
+    }
+
+    #[test]
+    fn parses_github_pack_spec_with_subdirectory() {
+        let spec = parse_pack_spec(
+            "python",
+            "github:CorrectRoadH/harness-lint@main#packs/python",
+        );
+        assert_eq!(spec.source, PackSourceKind::Git);
+        assert_eq!(spec.spec, "CorrectRoadH/harness-lint#packs/python");
+        assert_eq!(spec.version_req.as_deref(), Some("main"));
     }
 }

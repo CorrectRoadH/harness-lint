@@ -7,7 +7,7 @@ changed_base = "origin/main"
 cache = true
 
 [rules]
-local = ["harness/rules/local"]
+local = ["harness/rules"]
 
 [packs]
 

@@ -29,7 +29,7 @@ This creates:
 
 ```text
 harness.toml
-harness/rules/local/
+harness/rules/
 .harness/
 ```
 
@@ -56,6 +56,8 @@ harness-lint check --changed
 harness-lint check --staged
 harness-lint check [paths...]
 harness-lint check --all
+harness-lint pack search "python typing"
+harness-lint pack inspect python
 harness-lint pack add <id> <local:PATH|github:OWNER/REPO@TAG>
 harness-lint pack update
 harness-lint pack list
@@ -67,6 +69,27 @@ harness-lint rule explain <rule-id>
 ```
 
 Use `--json` with `check` or `rule list` when another tool needs structured output.
+
+## Rule Packs
+
+The intended ecosystem flow is:
+
+```sh
+harness-lint pack search "pydantic typed service rules"
+harness-lint pack inspect python
+harness-lint pack add python github:CorrectRoadH/harness-lint@main#packs/python
+harness-lint check --changed
+```
+
+Search uses local project signals such as `pyproject.toml`, `go.mod`, `package.json`, `tsconfig.json`, and common library names, then prints install commands. `inspect` shows the pack before it mutates the project. Installed pack origins are recorded in `harness.lock`.
+
+This repository includes seed packs under `packs/python`, `packs/go`, and `packs/typescript`. For local development:
+
+```sh
+harness-lint pack add python local:/Users/ctrdh/Code/harness-lint/packs/python
+```
+
+Custom project rules live directly in `harness/rules/*.md`.
 
 ## Rule File
 

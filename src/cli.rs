@@ -75,6 +75,8 @@ struct CheckCommand {
 #[derive(Debug, Subcommand)]
 enum PackCommand {
     Add { id: String, spec: String },
+    Search { query: Vec<String> },
+    Inspect { id: String },
     Update,
     List,
 }
@@ -272,6 +274,45 @@ fn run_pack(
             println!(
                 "Added pack `{id}` = `{spec}` ({} rules)",
                 loaded.rules.len()
+            );
+        }
+        PackCommand::Search { query } => {
+            let mut registry_query = registry::infer_project_context(&root);
+            registry_query.feedback = query.join(" ");
+            let candidates = registry::search_registry(&registry_query, None)?;
+            if candidates.is_empty() {
+                println!("No matching packs found.");
+                return Ok(());
+            }
+            println!("Matching rule packs:");
+            for candidate in candidates {
+                println!(
+                    "- {}: {} ({}) score={}",
+                    candidate.pack_id, candidate.title, candidate.rule_id, candidate.score
+                );
+                println!("  {}", candidate.reason);
+                println!("  inspect: harness-lint pack inspect {}", candidate.pack_id);
+                println!(
+                    "  install: harness-lint pack add {} {}",
+                    candidate.pack_id, candidate.pack_spec
+                );
+            }
+        }
+        PackCommand::Inspect { id } => {
+            let pack = registry::inspect_pack(&id)
+                .ok_or_else(|| anyhow!("pack `{id}` was not found in the catalog"))?;
+            println!("{} ({})", pack.title, pack.id);
+            println!("{}", pack.description);
+            println!("languages: {}", pack.languages.join(", "));
+            println!("rules:");
+            for rule in &pack.rules {
+                println!("- {}: {}", rule.rule_id, rule.title);
+                println!("  {}", rule.reason);
+            }
+            println!();
+            println!(
+                "install: harness-lint pack add {} {}",
+                pack.id, pack.pack_spec
             );
         }
         PackCommand::Update => {

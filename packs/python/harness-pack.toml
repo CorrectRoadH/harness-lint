@@ -1,0 +1,11 @@
+[pack]
+id = "python"
+name = "Python Application Conventions"
+version = "0.1.0"
+description = "GritQL rules for typed Python application code."
+license = "MIT"
+
+[compat]
+harness = ">=0.1.0"
+grit = ">=0.1.0"
+languages = ["python"]

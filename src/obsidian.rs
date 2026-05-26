@@ -415,18 +415,21 @@ fn is_markdown(path: &Path) -> bool {
 
 fn is_orphan_candidate(path: &Path, config: &ObsidianSection) -> bool {
     config
-        .note_roots
-        .iter()
-        .any(|root| path.starts_with(root) && is_markdown(path))
-        || config
-            .flat_attachment_dir
-            .as_ref()
-            .map(|root| path.starts_with(root))
-            .unwrap_or(false)
+        .flat_attachment_dir
+        .as_ref()
+        .map(|root| path.starts_with(root) && !is_obsidian_content_file(path))
+        .unwrap_or(false)
 }
 
 fn is_note_path(path: &Path, config: &ObsidianSection) -> bool {
     config.note_roots.iter().any(|root| path.starts_with(root))
+}
+
+fn is_obsidian_content_file(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|extension| extension.to_str()),
+        Some("md" | "base" | "canvas")
+    )
 }
 
 fn is_nested_attachment(path: &Path, config: &ObsidianSection) -> bool {
@@ -605,6 +608,46 @@ mod tests {
             diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.rule_id == "obsidian.attachment-flat")
+        );
+    }
+
+    #[test]
+    fn orphan_files_only_reports_non_content_attachments() {
+        let tempdir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tempdir.path().join("Weekly")).unwrap();
+        fs::create_dir_all(tempdir.path().join("Index")).unwrap();
+        fs::create_dir_all(tempdir.path().join("Attachments")).unwrap();
+        fs::write(tempdir.path().join("Weekly/2026-18W.md"), "").unwrap();
+        fs::write(tempdir.path().join("Index/Product.base"), "").unwrap();
+        fs::write(tempdir.path().join("Attachments/unused.png"), "").unwrap();
+        fs::write(tempdir.path().join("Attachments/board.canvas"), "").unwrap();
+        let config = ObsidianSection {
+            markdown_links: false,
+            orphan_files: true,
+            flat_attachment_dir: Some(PathBuf::from("Attachments")),
+            note_roots: vec![PathBuf::from("Weekly"), PathBuf::from("Index")],
+            content_roots: Vec::new(),
+            content_extensions: Vec::new(),
+            require_capitalized_dirs: false,
+        };
+        let diagnostics = run_checks(
+            tempdir.path(),
+            &config,
+            &[
+                PathBuf::from("Weekly/2026-18W.md"),
+                PathBuf::from("Index/Product.base"),
+                PathBuf::from("Attachments/unused.png"),
+                PathBuf::from("Attachments/board.canvas"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.rule_id == "obsidian.orphan-file")
+                .map(|diagnostic| diagnostic.path.clone())
+                .collect::<Vec<_>>(),
+            vec![PathBuf::from("Attachments/unused.png")]
         );
     }
 

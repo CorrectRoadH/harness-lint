@@ -248,6 +248,9 @@ fn check_markdown_references(
         .with_context(|| format!("failed to read {}", root.join(path).display()))?;
     let mut diagnostics = Vec::new();
     for reference in extract_references(&content) {
+        if !should_report_missing_target(&reference.target) {
+            continue;
+        }
         if index
             .resolve_from(&reference.target, path.parent())
             .is_none()
@@ -354,6 +357,16 @@ fn should_check_markdown_target(target: &str) -> bool {
             .extension()
             .and_then(|extension| extension.to_str())
             .is_some()
+}
+
+fn should_report_missing_target(target: &str) -> bool {
+    let Some(target) = normalize_target(target) else {
+        return false;
+    };
+    Path::new(&target)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some()
 }
 
 fn normalize_target(raw_target: &str) -> Option<String> {
@@ -497,7 +510,7 @@ mod tests {
     fn reports_missing_links() {
         let tempdir = tempfile::tempdir().unwrap();
         fs::create_dir(tempdir.path().join("Notes")).unwrap();
-        fs::write(tempdir.path().join("Notes/A.md"), "[[Missing]]").unwrap();
+        fs::write(tempdir.path().join("Notes/A.md"), "[[Missing.png]]").unwrap();
         let config = ObsidianSection {
             markdown_links: true,
             orphan_files: false,
@@ -511,6 +524,29 @@ mod tests {
             run_checks(tempdir.path(), &config, &[PathBuf::from("Notes/A.md")]).unwrap();
         assert!(
             diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.rule_id == "obsidian.missing-link")
+        );
+    }
+
+    #[test]
+    fn ignores_missing_concept_wikilinks_without_file_suffix() {
+        let tempdir = tempfile::tempdir().unwrap();
+        fs::create_dir(tempdir.path().join("Notes")).unwrap();
+        fs::write(tempdir.path().join("Notes/A.md"), "[[项目建议书]]").unwrap();
+        let config = ObsidianSection {
+            markdown_links: true,
+            orphan_files: false,
+            flat_attachment_dir: None,
+            note_roots: vec![PathBuf::from("Notes")],
+            content_roots: Vec::new(),
+            content_extensions: Vec::new(),
+            require_capitalized_dirs: false,
+        };
+        let diagnostics =
+            run_checks(tempdir.path(), &config, &[PathBuf::from("Notes/A.md")]).unwrap();
+        assert!(
+            !diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.rule_id == "obsidian.missing-link")
         );

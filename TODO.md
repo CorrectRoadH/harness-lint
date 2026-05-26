@@ -12,7 +12,7 @@ This is the single required path, in dependency order.
 ## Project Setup
 
 - [x] Create `harness.toml`.
-- [x] Create `rules/`.
+- [x] Create `Rules/`.
 - [x] Create `.harness/` for generated Grit files, pack cache, and diagnostics cache.
 - [x] Print short agent installation instructions.
 - [x] Document that existing `CLAUDE.md`, `AGENTS.md`, `.cursor/rules`, and README constraints are converted by an LLM during installation, not by `init`.

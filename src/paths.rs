@@ -90,6 +90,7 @@ fn is_internal_path(path: &Path) -> bool {
         || path.starts_with(PACKS_DIR)
         || path.starts_with(GENERATED_GRIT_DIR)
         || path.starts_with(CACHE_DIR)
+        || path.starts_with("Rules")
         || path.starts_with("rules")
         || path.starts_with("harness/rules")
         || path.starts_with("target")

@@ -20,7 +20,7 @@ rules = ["python.no-print-debug"]
 Local rules live in:
 
 ```text
-rules/
+Rules/
 ```
 
 External packs are cached in:

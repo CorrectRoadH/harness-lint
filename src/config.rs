@@ -9,7 +9,7 @@ use crate::model::{HarnessLock, Severity};
 
 pub const CONFIG_FILE: &str = "harness.toml";
 pub const LOCK_FILE: &str = "harness.lock";
-pub const USER_RULE_DIR: &str = "rules";
+pub const USER_RULE_DIR: &str = "Rules";
 pub const WORK_DIR: &str = ".harness";
 pub const PACKS_DIR: &str = ".harness/packs";
 pub const GENERATED_GRIT_DIR: &str = ".harness/generated/.grit";
@@ -200,10 +200,10 @@ changed_base = "main"
 cache = false
 
 [rules]
-local = ["rules"]
+local = ["Rules"]
 
 [packs]
-python = "local:../rules"
+python = "local:../Rules"
 
 [overrides]
 "python.x" = "warn"
@@ -218,8 +218,8 @@ paths = ["dist/**"]
         .unwrap();
         assert_eq!(config.project.name.as_deref(), Some("demo"));
         assert_eq!(config.lint.default_level, Severity::Error);
-        assert_eq!(config.rules.local, vec![PathBuf::from("rules")]);
-        assert_eq!(config.packs["python"], "local:../rules");
+        assert_eq!(config.rules.local, vec![PathBuf::from("Rules")]);
+        assert_eq!(config.packs["python"], "local:../Rules");
         assert_eq!(config.disabled.rules, vec!["python.y"]);
     }
 }

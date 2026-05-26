@@ -15,7 +15,7 @@ harness-lint pack update
 - Origins are explicit. Specs use prefixes such as `local:` and `github:` and installs are written to `harness.lock`.
 - Subdirectories are first-class. A single catalog repository can expose `packs/python`, `packs/go`, and `packs/typescript`.
 - Publishing should be dry-run first. The planned backend API should validate manifest metadata, listed files, source URL, license, and GritQL-only rule bodies before accepting a release.
-- Installed project rules stay user-owned. Custom feedback rules live flat under `rules/*.md`.
+- Installed project rules stay user-owned. Custom feedback rules live flat under `Rules/*.md`.
 
 ## Pack Authoring
 
@@ -23,7 +23,7 @@ Each pack contains:
 
 ```text
 harness-pack.toml
-rules/*.md
+Rules/*.md
 README.md
 ```
 

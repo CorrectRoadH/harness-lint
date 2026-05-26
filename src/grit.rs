@@ -8,6 +8,7 @@ use crate::model::{CompiledRules, Diagnostic, Severity};
 
 pub fn ensure_grit_available() -> Result<String> {
     let output = Command::new("grit")
+        .env("GRIT_TELEMETRY_DISABLED", "true")
         .arg("--version")
         .output()
         .context("failed to run `grit --version`; install Grit CLI before running checks")?;
@@ -43,6 +44,7 @@ pub fn run_grit(
     let grit_work_dir = compiled.grit_dir.parent().unwrap_or(root);
     command
         .current_dir(grit_work_dir)
+        .env("GRIT_TELEMETRY_DISABLED", "true")
         .env("GRIT_CACHE_DIR", &grit_cache_dir)
         .arg("--json")
         .arg("check");

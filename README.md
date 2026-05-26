@@ -29,11 +29,11 @@ This creates:
 
 ```text
 harness.toml
-harness/rules/
+rules/
 .harness/
 ```
 
-Commit `harness.toml` and `harness/rules/`. Ignore `.harness/`.
+Commit `harness.toml` and `rules/`. Ignore `.harness/`.
 
 ## Agent Install Prompt
 
@@ -89,7 +89,7 @@ This repository includes seed packs under `packs/python`, `packs/go`, and `packs
 harness-lint pack add python local:/Users/ctrdh/Code/harness-lint/packs/python
 ```
 
-Custom project rules live directly in `harness/rules/*.md`.
+Custom project rules live directly in `rules/*.md`.
 
 ## Rule File
 

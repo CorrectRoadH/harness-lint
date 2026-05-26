@@ -16,7 +16,7 @@ Example:
 harness-lint rule suggest "Python validation should prefer pydantic models"
 ```
 
-This creates a draft rule in `harness/rules/`. The draft should be edited as Markdown/GritQL and reviewed by the user before it becomes active.
+This creates a draft rule in `rules/`. The draft should be edited as Markdown/GritQL and reviewed by the user before it becomes active.
 
 Agents should not delete rules or weaken checks to make a task pass unless the user explicitly asks for that.
 
@@ -27,7 +27,7 @@ When installing harness-lint in a project that already has agent instructions, u
 ```text
 install harness: read CLAUDE.md, AGENTS.md, .cursor/rules, README.md, and relevant docs.
 Run `harness-lint init`.
-Convert existing durable coding constraints into local harness-lint draft rules under `harness/rules/`.
+Convert existing durable coding constraints into local harness-lint draft rules under `rules/`.
 Use `harness-lint rule suggest "<constraint>"` for each preference that can become a rule.
 The command should search the harness registry using the detected project languages and libraries.
 If a suitable existing rule exists, ask the user whether to install its rule pack.

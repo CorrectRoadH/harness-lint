@@ -28,7 +28,7 @@ feedback
   -> search registry
   -> inspect candidate pack metadata
   -> suggest pack install when a match exists
-  -> otherwise write harness/rules/*.md draft
+  -> otherwise write rules/*.md draft
 ```
 
 Installation conversion is intentionally LLM-driven. The install prompt asks the agent to read `CLAUDE.md`, `AGENTS.md`, `.cursor/rules`, README, and relevant docs, then turn durable constraints into reviewable GritQL draft rules.
@@ -38,7 +38,7 @@ Installation conversion is intentionally LLM-driven. The install prompt asks the
 ```text
 harness.toml
 harness.lock
-harness/rules/*.md
+rules/*.md
 .harness/packs/
 .harness/generated/.grit/
 .harness/cache/
@@ -71,7 +71,7 @@ The pack UX follows the same shape as a package marketplace:
 - `add` installs a local or Git pack and records origin in `harness.lock`.
 - `update` refreshes existing origins without changing user-owned local rules.
 
-Git specs can point at a pack subdirectory, for example `github:CorrectRoadH/harness-lint@main#packs/python`. This keeps a one-repo catalog possible while custom project rules remain flat in `harness/rules/`.
+Git specs can point at a pack subdirectory, for example `github:CorrectRoadH/harness-lint@main#packs/python`. This keeps a one-repo catalog possible while custom project rules remain flat in `rules/`.
 
 ## Rule File
 

@@ -86,6 +86,7 @@ fn build_ignore_set(patterns: &[String]) -> Result<GlobSet> {
 
 fn is_internal_path(path: &Path) -> bool {
     path.starts_with(".git")
+        || path.starts_with(".obsidian")
         || path.starts_with(WORK_DIR)
         || path.starts_with(PACKS_DIR)
         || path.starts_with(GENERATED_GRIT_DIR)

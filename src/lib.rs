@@ -9,6 +9,7 @@ pub mod grit;
 pub mod init;
 pub mod interfaces;
 pub mod model;
+pub mod obsidian;
 pub mod pack;
 pub mod paths;
 pub mod registry;

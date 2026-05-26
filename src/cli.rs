@@ -13,10 +13,13 @@ use crate::git;
 use crate::grit;
 use crate::init;
 use crate::model::{PackSourceKind, RuleDefinition};
+use crate::obsidian;
 use crate::pack;
 use crate::paths;
 use crate::registry;
 use crate::report::{self, ReportFormat};
+
+const GRIT_BATCH_SIZE: usize = 256;
 
 #[derive(Debug, Parser)]
 #[command(name = "harness-lint")]
@@ -141,36 +144,53 @@ fn run_check(
     let config = config::load_config(&root, config_path)?;
     let packs = load_rule_packs(&root, &config)?;
     let active_rules = collect_effective_rules(&packs, &config, &command);
-    let paths = select_paths(&root, &config, &command, &active_rules)?;
+    let selected_paths = select_paths(&root, &config, &command, &active_rules)?;
     if verbose {
         eprintln!(
-            "harness-lint: {} active rule(s), {} selected path(s)",
+            "harness-lint: {} active rule(s), {} GritQL path(s), {} Obsidian path(s)",
             active_rules.len(),
-            paths.len()
+            selected_paths.grit.len(),
+            selected_paths.obsidian.len()
         );
     }
-    if paths.is_empty() || active_rules.is_empty() {
+    if selected_paths.grit.is_empty() && selected_paths.obsidian.is_empty() {
         report::report_diagnostics(&[], format)?;
         return Ok(());
     }
-    let compiled = compiler::compile_rule_set(&root, active_rules.clone())?;
-    let diagnostics = if config.lint.cache {
-        let rule_fingerprint = cache::fingerprint(&format!("{:?}", compiled.grit_rules));
-        let config_fingerprint = cache::fingerprint(&format!(
-            "{:?}{:?}{:?}{:?}{:?}",
-            command.rule, command.tag, config.overrides, config.disabled, config.ignore
-        ));
-        run_cached_check(
-            &root,
-            &compiled,
-            &paths,
-            &rule_fingerprint,
-            &config_fingerprint,
-            verbose,
-        )?
+    let mut diagnostics = if active_rules.is_empty() || selected_paths.grit.is_empty() {
+        Vec::new()
     } else {
-        normalize_diagnostics(&root, grit::run_grit(&root, &compiled, &paths)?)
+        let compiled = compiler::compile_rule_set(&root, active_rules.clone())?;
+        if config.lint.cache {
+            let rule_fingerprint = cache::fingerprint(&format!("{:?}", compiled.grit_rules));
+            let config_fingerprint = cache::fingerprint(&format!(
+                "{:?}{:?}{:?}{:?}{:?}",
+                command.rule, command.tag, config.overrides, config.disabled, config.ignore
+            ));
+            run_cached_check(
+                &root,
+                &compiled,
+                &selected_paths.grit,
+                &rule_fingerprint,
+                &config_fingerprint,
+                verbose,
+            )?
+        } else {
+            run_uncached_check(&root, &compiled, &selected_paths.grit)?
+        }
     };
+    diagnostics.extend(obsidian::run_checks(
+        &root,
+        &config.obsidian,
+        &selected_paths.obsidian,
+    )?);
+    diagnostics.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.start_line.cmp(&right.start_line))
+            .then(left.start_column.cmp(&right.start_column))
+            .then(left.rule_id.cmp(&right.rule_id))
+    });
     report::report_diagnostics(&diagnostics, format)?;
     if diagnostics
         .iter()
@@ -212,7 +232,15 @@ fn run_cached_check(
         );
     }
 
-    for batch in misses.chunks(8192) {
+    for (index, batch) in misses.chunks(GRIT_BATCH_SIZE).enumerate() {
+        if verbose {
+            eprintln!(
+                "harness-lint: running GritQL batch {}/{} ({} file(s))",
+                index + 1,
+                misses.len().div_ceil(GRIT_BATCH_SIZE),
+                batch.len()
+            );
+        }
         let batch_paths = batch.to_vec();
         let fresh = normalize_diagnostics(root, grit::run_grit(root, compiled, &batch_paths)?);
         let mut by_path = cache::group_by_path(root, fresh);
@@ -232,6 +260,21 @@ fn run_cached_check(
             .then(left.start_column.cmp(&right.start_column))
             .then(left.rule_id.cmp(&right.rule_id))
     });
+    Ok(diagnostics)
+}
+
+fn run_uncached_check(
+    root: &Path,
+    compiled: &crate::model::CompiledRules,
+    paths: &[PathBuf],
+) -> Result<Vec<crate::model::Diagnostic>> {
+    let mut diagnostics = Vec::new();
+    for batch in paths.chunks(GRIT_BATCH_SIZE) {
+        diagnostics.extend(normalize_diagnostics(
+            root,
+            grit::run_grit(root, compiled, batch)?,
+        ));
+    }
     Ok(diagnostics)
 }
 
@@ -436,10 +479,10 @@ fn select_paths(
     config: &ProjectConfig,
     command: &CheckCommand,
     rules: &[RuleDefinition],
-) -> Result<Vec<PathBuf>> {
+) -> Result<SelectedPaths> {
     let is_implicit_full_scan =
         command.paths.is_empty() && !command.changed && !command.staged && !command.all;
-    let paths = if !command.paths.is_empty() {
+    let raw_paths = if !command.paths.is_empty() {
         command.paths.clone()
     } else if command.staged {
         git::staged_files(root)?
@@ -447,16 +490,44 @@ fn select_paths(
         let base = command.base.as_deref().unwrap_or(&config.lint.changed_base);
         git::changed_files(root, base)?
     } else {
-        paths::discover_all_files(root, &config.ignore.paths)?
+        paths::discover_all_files(root, &[])?
     };
-    let paths = paths::filter_paths(paths, &config.ignore.paths, rules)?;
-    if is_implicit_full_scan && paths.len() > 1000 {
+    let grit_paths = paths::filter_paths(raw_paths.clone(), &config.ignore.paths, rules)?;
+    let mut obsidian_paths = paths::filter_paths(raw_paths.clone(), &config.ignore.paths, &[])?;
+    let mut obsidian_extra_roots = config.obsidian.content_roots.clone();
+    obsidian_extra_roots.extend(config.obsidian.note_roots.clone());
+    if let Some(root) = &config.obsidian.flat_attachment_dir {
+        obsidian_extra_roots.push(root.clone());
+    }
+    if !obsidian_extra_roots.is_empty() {
+        let mut extra_paths: Vec<_> = raw_paths
+            .into_iter()
+            .filter(|path| {
+                obsidian_extra_roots
+                    .iter()
+                    .any(|root| path.starts_with(root))
+            })
+            .collect();
+        obsidian_paths.append(&mut extra_paths);
+        obsidian_paths.sort();
+        obsidian_paths.dedup();
+    }
+    if is_implicit_full_scan && grit_paths.len() > 1000 {
         bail!(
             "refusing implicit full scan of {} files; use `harness-lint check --changed`, pass paths, or run `harness-lint check --all` to force it",
-            paths.len()
+            grit_paths.len()
         );
     }
-    Ok(paths)
+    Ok(SelectedPaths {
+        grit: grit_paths,
+        obsidian: obsidian_paths,
+    })
+}
+
+#[derive(Debug)]
+struct SelectedPaths {
+    grit: Vec<PathBuf>,
+    obsidian: Vec<PathBuf>,
 }
 
 fn load_rule_packs(

@@ -33,6 +33,8 @@ pub struct ProjectConfig {
     pub ignore: IgnoreSection,
     #[serde(default)]
     pub registry: RegistrySection,
+    #[serde(default)]
+    pub obsidian: ObsidianSection,
 }
 
 impl Default for ProjectConfig {
@@ -46,6 +48,7 @@ impl Default for ProjectConfig {
             disabled: DisabledSection::default(),
             ignore: IgnoreSection::default(),
             registry: RegistrySection::default(),
+            obsidian: ObsidianSection::default(),
         }
     }
 }
@@ -114,6 +117,23 @@ impl Default for RegistrySection {
             url: Some("https://registry.harness-lint.dev".to_string()),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ObsidianSection {
+    #[serde(default)]
+    pub markdown_links: bool,
+    #[serde(default)]
+    pub orphan_files: bool,
+    pub flat_attachment_dir: Option<PathBuf>,
+    #[serde(default)]
+    pub note_roots: Vec<PathBuf>,
+    #[serde(default)]
+    pub content_roots: Vec<PathBuf>,
+    #[serde(default)]
+    pub content_extensions: Vec<String>,
+    #[serde(default)]
+    pub require_capitalized_dirs: bool,
 }
 
 pub fn find_project_root(start: &Path) -> Result<PathBuf> {
@@ -213,6 +233,15 @@ rules = ["python.y"]
 
 [ignore]
 paths = ["dist/**"]
+
+[obsidian]
+markdown_links = true
+orphan_files = true
+flat_attachment_dir = "Attachments"
+note_roots = ["Notes"]
+content_roots = ["Notes"]
+content_extensions = ["md", "base", "canvas"]
+require_capitalized_dirs = true
 "#,
         )
         .unwrap();
@@ -221,5 +250,12 @@ paths = ["dist/**"]
         assert_eq!(config.rules.local, vec![PathBuf::from("Rules")]);
         assert_eq!(config.packs["python"], "local:../Rules");
         assert_eq!(config.disabled.rules, vec!["python.y"]);
+        assert!(config.obsidian.markdown_links);
+        assert!(config.obsidian.orphan_files);
+        assert_eq!(
+            config.obsidian.flat_attachment_dir,
+            Some(PathBuf::from("Attachments"))
+        );
+        assert!(config.obsidian.require_capitalized_dirs);
     }
 }

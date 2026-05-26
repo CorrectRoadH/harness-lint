@@ -91,6 +91,20 @@ harness-lint pack add python local:/Users/ctrdh/Code/harness-lint/packs/python
 
 Custom project rules live directly in `Rules/*.md`.
 
+## Obsidian Vault Checks
+
+GritQL stays the only executable rule language. For vault-wide checks that need a repository index, opt in with `harness.toml`:
+
+```toml
+[obsidian]
+markdown_links = true
+orphan_files = true
+flat_attachment_dir = "Attachments"
+note_roots = ["Notes"]
+```
+
+This adds lint diagnostics for missing Markdown/Wikilink targets, orphan note or attachment files, and nested attachments under the configured attachment directory.
+
 ## Rule File
 
 ````markdown

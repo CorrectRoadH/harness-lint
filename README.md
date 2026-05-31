@@ -2,6 +2,8 @@
 
 Tiny CLI for a GritQL rule ecosystem.
 
+[中文 README](README.zh.md)
+
 harness-lint does three things:
 
 - initialize a project for GritQL rules
@@ -31,6 +33,8 @@ brew install getgrit/tap/grit
 
 ## Project Setup
 
+For first-time setup by an AI coding agent, copy [INIT.md](INIT.md) into the agent. It walks the agent through installing `harness-lint`, initializing the repository, updating `AGENTS.md` or `CLAUDE.md`, and drafting initial rules from the repository's existing instructions.
+
 ```sh
 harness-lint init
 ```
@@ -47,7 +51,7 @@ Commit `harness.toml` and `rules/`. Ignore `.harness/`.
 
 ## Agent Install Prompt
 
-Give this to an LLM coding agent:
+For a full first-time setup flow, give [INIT.md](INIT.md) to an LLM coding agent. For a shorter install prompt, use:
 
 ```text
 install harness: read CLAUDE.md, AGENTS.md, .cursor/rules, README.md, and relevant docs.

@@ -1,81 +1,30 @@
-# harness-lint
+# harness lint
 
-一个很小的 GritQL 规则生态 CLI，用来把反复出现的代码反馈变成可运行的 lint 规则。
+harness-lint 是一个用于 Harness Enginnering 的新时代 Lint 工具。在 vibe coding中，经常 AI 会不按你的要求来做，就算你反复批评，写在AGENTS.md里面也不遵守。该工具解决了这个问题，使用 Lint Drive Development 的方式。当用户告诉 AI Agent 不要做什么的时候，总是把要求先转换成固定的 lint。通过快速、高速、严格的检查防止你的 AI 犯错。
 
-harness-lint 主要做三件事：
-
-- 初始化项目里的 GritQL 规则目录
-- 安装和更新规则包
-- 运行 lint，并帮助 agent 把反馈转成规则草稿
-
-它不自动修代码。可执行规则只使用 GritQL。
+对比传统的 lint，harness lint 的规则是高度人类可读的、可理解的。并且适配 AI Coding 工作流与最佳实践。
 
 ## 安装
 
 ```sh
+brew install getgrit/tap/grit
 brew install CorrectRoadH/tap/harness-lint
 ```
 
-`check` 需要单独安装 `grit`：
-
-```sh
-brew install getgrit/tap/grit
+## init harness lint for your repo For Agent
+```
+READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/INIT.md and install harness lint for this code repo
 ```
 
-检查环境：
-
-```sh
-harness-lint doctor
-```
-
-## 第一次接入仓库
-
-如果你想让 AI coding agent 帮一个仓库第一次接入 harness-lint，把 [INIT.md](INIT.md) 的内容复制给 agent。
-
-它会引导 agent 完成：
-
-- 检查并安装 `harness-lint` 和 `grit`
-- 运行 `harness-lint init`
-- 把 harness-lint 标识块写入用户仓库的 `AGENTS.md` 或 `CLAUDE.md`
-- 根据项目语言和已有 agent 指令生成初始规则草稿
-
-手动初始化也可以：
-
-```sh
-harness-lint init
-```
-
-这会创建：
-
-```text
-harness.toml
-rules/
-.harness/
-```
-
-提交 `harness.toml` 和 `rules/`，忽略 `.harness/`。
 
 ## 常用命令
 
 ```sh
-harness-lint doctor
 harness-lint check --changed
-harness-lint check --staged
-harness-lint check [paths...]
 harness-lint check --all
-harness-lint pack search "python typing"
-harness-lint pack inspect python
-harness-lint pack add <id> <source>
-harness-lint pack update
-harness-lint pack list
-harness-lint rule suggest "<feedback>"
-harness-lint rule suggest --local "<feedback>"
-harness-lint rule new <id> <title> --language <language>
 harness-lint rule list
-harness-lint rule explain <rule-id>
 ```
 
-当其他工具需要结构化输出时，可以对 `check`、`rule list` 和 `doctor` 使用 `--json`。
 
 ## 本地规则
 
@@ -122,18 +71,3 @@ print(user)
 logger.info("user=%s", user)
 ```
 ````
-
-## Agent 工作流
-
-当用户反馈或 code review 指向一个反复出现的代码质量问题时，不要只修当前实例。先创建或更新一条 `harness-lint` 规则，让 lint 能报告问题，再改代码直到 lint 通过。
-
-推荐流程：
-
-```sh
-harness-lint rule suggest "<feedback>"
-harness-lint check --changed
-# 修代码或完善规则
-harness-lint check --changed
-```
-
-如果 registry 里有合适规则包，先询问用户是否安装；如果没有，再创建本地规则草稿。

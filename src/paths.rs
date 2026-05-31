@@ -7,7 +7,11 @@ use ignore::WalkBuilder;
 use crate::config::{CACHE_DIR, GENERATED_GRIT_DIR, PACKS_DIR, WORK_DIR};
 use crate::model::RuleDefinition;
 
-pub fn discover_all_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<PathBuf>> {
+pub fn discover_all_files(
+    root: &Path,
+    ignore_patterns: &[String],
+    rule_dirs: &[PathBuf],
+) -> Result<Vec<PathBuf>> {
     let ignore_set = build_ignore_set(ignore_patterns)?;
     let mut files = Vec::new();
     for entry in WalkBuilder::new(root)
@@ -26,7 +30,7 @@ pub fn discover_all_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec
         }
         let path = entry.path();
         let relative = path.strip_prefix(root).unwrap_or(path);
-        if is_internal_path(relative) || ignore_set.is_match(relative) {
+        if is_internal_path(relative, rule_dirs) || ignore_set.is_match(relative) {
             continue;
         }
         files.push(relative.to_path_buf());
@@ -39,11 +43,12 @@ pub fn filter_paths(
     paths: Vec<PathBuf>,
     ignore_patterns: &[String],
     rules: &[RuleDefinition],
+    rule_dirs: &[PathBuf],
 ) -> Result<Vec<PathBuf>> {
     let ignore_set = build_ignore_set(ignore_patterns)?;
     let mut filtered = Vec::new();
     for path in paths {
-        if is_internal_path(&path) || ignore_set.is_match(&path) {
+        if is_internal_path(&path, rule_dirs) || ignore_set.is_match(&path) {
             continue;
         }
         if rules.is_empty() || rules.iter().any(|rule| rule_matches_path(rule, &path)) {
@@ -84,19 +89,22 @@ fn build_ignore_set(patterns: &[String]) -> Result<GlobSet> {
     builder.build().context("failed to compile ignore patterns")
 }
 
-fn is_internal_path(path: &Path) -> bool {
+fn is_internal_path(path: &Path, rule_dirs: &[PathBuf]) -> bool {
     path.starts_with(".git")
         || path.starts_with(".obsidian")
         || path.starts_with(WORK_DIR)
         || path.starts_with(PACKS_DIR)
         || path.starts_with(GENERATED_GRIT_DIR)
         || path.starts_with(CACHE_DIR)
-        || path.starts_with("Rules")
         || path.starts_with("rules")
         || path.starts_with("harness/rules")
         || path.starts_with("target")
         || path.starts_with("node_modules")
         || path.starts_with(".venv")
+        || rule_dirs
+            .iter()
+            .filter(|dir| !dir.is_absolute())
+            .any(|dir| path.starts_with(dir))
 }
 
 #[cfg(test)]
@@ -112,6 +120,7 @@ mod tests {
             language: Some("python".to_string()),
             level: Severity::Warn,
             status: RuleStatus::Warn,
+            skill: None,
             tags: vec![],
             description: String::new(),
             body: RuleBody::Grit(String::new()),
@@ -127,6 +136,7 @@ mod tests {
             ],
             &[],
             &[rule],
+            &[],
         )
         .unwrap();
         assert_eq!(paths, vec![PathBuf::from("src/main.py")]);

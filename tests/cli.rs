@@ -22,7 +22,7 @@ fn cli_init_and_rule_suggest_local_work() {
     assert!(
         tempdir
             .path()
-            .join("Rules/prefer-pydantic-models.md")
+            .join("rules/prefer-pydantic-models.md")
             .exists()
     );
 }

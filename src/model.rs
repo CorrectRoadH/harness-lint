@@ -142,6 +142,7 @@ pub struct RuleDefinition {
     pub language: Option<String>,
     pub level: Severity,
     pub status: RuleStatus,
+    pub skill: Option<String>,
     pub tags: Vec<String>,
     pub description: String,
     pub body: RuleBody,

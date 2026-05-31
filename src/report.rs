@@ -81,6 +81,7 @@ fn rules_to_json(rules: &[RuleDefinition]) -> Vec<serde_json::Value> {
                 "language": rule.language,
                 "level": format!("{:?}", rule.level),
                 "status": format!("{:?}", rule.status),
+                "skill": rule.skill,
                 "source_path": rule.source_path,
                 "pack_id": rule.pack_id,
             })

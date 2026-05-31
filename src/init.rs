@@ -7,9 +7,13 @@ use crate::config::{
     CACHE_DIR, CONFIG_FILE, GENERATED_GRIT_DIR, PACKS_DIR, USER_RULE_DIR, WORK_DIR, default_config,
 };
 
-pub const AI_AGENT_INSTRUCTIONS: &str = r#"When the user expresses a recurring coding preference, create or update a
-harness-lint rule instead of only changing the current code.
-Run `harness-lint check --changed` before finishing."#;
+pub const AI_AGENT_INSTRUCTIONS: &str = r#"When user feedback or a code review points to a recurring code-quality issue,
+do not fix only the current instance first. Create or update a harness-lint rule
+that captures the issue, run the lint so it reports the problem, and then change
+the code until the lint passes.
+If a rule should trigger a specific Codex skill, add `skill: <skill-name>` to the
+rule frontmatter.
+Run `harness-lint check --changed` again before finishing."#;
 
 pub fn init_project(root: &Path, force: bool) -> Result<()> {
     fs::create_dir_all(root.join(USER_RULE_DIR))

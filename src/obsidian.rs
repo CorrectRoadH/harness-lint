@@ -45,6 +45,7 @@ pub fn run_checks(
             continue;
         }
         if config.require_capitalized_dirs
+            && !is_excalidraw_markdown(path)
             && let Some(directory) = first_lowercase_directory(path)
         {
             diagnostics.push(Diagnostic {
@@ -193,9 +194,30 @@ impl ObsidianIndex {
         let target = normalize_target(raw_target)?;
         let target_path = PathBuf::from(&target);
         if target.contains('/') {
+            if self.files.contains(&target_path) {
+                return Some(target_path);
+            }
+            if let Some(extension) = target_path
+                .extension()
+                .and_then(|extension| extension.to_str())
+            {
+                let markdown_path = target_path.with_extension(format!("{extension}.md"));
+                if self.files.contains(&markdown_path) {
+                    return Some(markdown_path);
+                }
+            }
             let target_path = normalize_relative_path(source_parent, &target_path);
             if self.files.contains(&target_path) {
                 return Some(target_path);
+            }
+            if let Some(extension) = target_path
+                .extension()
+                .and_then(|extension| extension.to_str())
+            {
+                let markdown_path = target_path.with_extension(format!("{extension}.md"));
+                if self.files.contains(&markdown_path) {
+                    return Some(markdown_path);
+                }
             }
             if target_path.extension().is_none() {
                 let markdown_path = target_path.with_extension("md");
@@ -210,21 +232,19 @@ impl ObsidianIndex {
             return Some(target_path);
         }
 
-        if target_path.extension().is_none() {
-            let markdown_path = PathBuf::from(format!("{target}.md"));
-            if self.files.contains(&markdown_path) {
-                return Some(markdown_path);
-            }
-        }
-
         if !target.contains('/') {
             if let Some(matches) = self.by_basename.get(&target) {
                 return matches.first().cloned();
             }
-            if target_path.extension().is_none() {
-                if let Some(matches) = self.by_stem.get(&target) {
-                    return matches.first().cloned();
-                }
+            if let Some(matches) = self.by_stem.get(&target) {
+                return matches.first().cloned();
+            }
+        }
+
+        if target_path.extension().is_none() {
+            let markdown_path = PathBuf::from(format!("{target}.md"));
+            if self.files.contains(&markdown_path) {
+                return Some(markdown_path);
             }
         }
 
@@ -274,7 +294,16 @@ fn check_markdown_references(
 fn extract_references(content: &str) -> Vec<Reference> {
     let mut references = Vec::new();
     let mut in_code_fence = false;
+    let mut in_frontmatter = false;
     for (line_index, line) in content.lines().enumerate() {
+        if line_index == 0 && line == "---" {
+            in_frontmatter = true;
+            continue;
+        }
+        if in_frontmatter && line == "---" {
+            in_frontmatter = false;
+            continue;
+        }
         if line.trim_start().starts_with("```") {
             in_code_fence = !in_code_fence;
             continue;
@@ -284,6 +313,9 @@ fn extract_references(content: &str) -> Vec<Reference> {
         }
         references.extend(extract_wikilinks(line, line_index as u32 + 1));
         references.extend(extract_markdown_links(line, line_index as u32 + 1));
+        if in_frontmatter {
+            references.extend(extract_frontmatter_value_links(line, line_index as u32 + 1));
+        }
     }
     references
 }
@@ -322,7 +354,12 @@ fn extract_markdown_links(line: &str, line_number: u32) -> Vec<Reference> {
     let mut references = Vec::new();
     let mut offset = 0;
     while let Some(label_end) = line[offset..].find("](") {
-        let open = offset + label_end + 2;
+        let label_end = offset + label_end;
+        if label_end > 0 && line.as_bytes()[label_end - 1] == b']' {
+            offset = label_end + 2;
+            continue;
+        }
+        let open = label_end + 2;
         let Some(close) = line[open..].find(')') else {
             break;
         };
@@ -340,18 +377,53 @@ fn extract_markdown_links(line: &str, line_number: u32) -> Vec<Reference> {
     references
 }
 
+fn extract_frontmatter_value_links(line: &str, line_number: u32) -> Vec<Reference> {
+    let Some((key, value)) = line.split_once(':') else {
+        return Vec::new();
+    };
+    if key.trim().is_empty()
+        || key.starts_with(char::is_whitespace)
+        || !key
+            .chars()
+            .all(|ch| ch.is_alphanumeric() || matches!(ch, '_' | '-' | ' '))
+    {
+        return Vec::new();
+    }
+    let target = value.trim().trim_matches('"').trim_matches('\'');
+    if target.starts_with('[') || target.starts_with("![") {
+        return Vec::new();
+    }
+    if !should_check_markdown_target(target) {
+        return Vec::new();
+    }
+    vec![Reference {
+        target: target.to_string(),
+        line: line_number,
+        column: line.find(value).unwrap_or(0) as u32 + 1,
+    }]
+}
+
+fn is_excalidraw_markdown(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.ends_with(".excalidraw.md"))
+        .unwrap_or(false)
+}
+
 fn should_check_markdown_target(target: &str) -> bool {
-    if target.is_empty()
+    let trimmed = clean_wrapping_markers(target);
+    if trimmed.is_empty()
         || target.starts_with('#')
-        || target.starts_with("http://")
-        || target.starts_with("https://")
-        || target.starts_with("mailto:")
-        || target.starts_with("obsidian://")
-        || target.starts_with("tel:")
+        || trimmed.starts_with('#')
+        || trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("//")
+        || trimmed.starts_with("mailto:")
+        || trimmed.starts_with("obsidian://")
+        || trimmed.starts_with("tel:")
     {
         return false;
     }
-    let trimmed = target.trim_matches('<').trim_matches('>');
     trimmed.contains('/')
         || Path::new(trimmed)
             .extension()
@@ -363,22 +435,44 @@ fn should_report_missing_target(target: &str) -> bool {
     let Some(target) = normalize_target(target) else {
         return false;
     };
-    Path::new(&target)
+    let Some(extension) = Path::new(&target)
         .extension()
         .and_then(|extension| extension.to_str())
-        .is_some()
+    else {
+        return false;
+    };
+    target.contains('/') || is_missing_link_checked_extension(extension)
+}
+
+fn is_missing_link_checked_extension(extension: &str) -> bool {
+    matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "md" | "base"
+            | "canvas"
+            | "png"
+            | "jpg"
+            | "jpeg"
+            | "webp"
+            | "gif"
+            | "svg"
+            | "pdf"
+            | "doc"
+            | "docx"
+            | "mp3"
+            | "m4a"
+            | "mp4"
+            | "mov"
+            | "wav"
+    )
 }
 
 fn normalize_target(raw_target: &str) -> Option<String> {
-    let target = raw_target
-        .trim()
-        .trim_matches('<')
-        .trim_matches('>')
-        .trim_start_matches('/');
+    let target = clean_wrapping_markers(raw_target).trim_start_matches('/');
     if target.is_empty()
         || target.starts_with('#')
         || target.starts_with("http://")
         || target.starts_with("https://")
+        || target.starts_with("//")
         || target.starts_with("mailto:")
         || target.starts_with("obsidian://")
         || target.starts_with("tel:")
@@ -386,6 +480,17 @@ fn normalize_target(raw_target: &str) -> Option<String> {
         return None;
     }
     Some(target.replace("%20", " "))
+}
+
+fn clean_wrapping_markers(target: &str) -> &str {
+    target
+        .trim()
+        .trim_matches('<')
+        .trim_matches('>')
+        .trim_matches('\\')
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim_matches('\\')
 }
 
 fn normalize_relative_path(source_parent: Option<&Path>, target: &Path) -> PathBuf {
@@ -436,7 +541,7 @@ fn is_nested_attachment(path: &Path, config: &ObsidianSection) -> bool {
     let Some(root) = config.flat_attachment_dir.as_ref() else {
         return false;
     };
-    path.starts_with(root) && path.parent() != Some(root.as_path())
+    path.starts_with(root) && path.parent() != Some(root.as_path()) && !is_excalidraw_markdown(path)
 }
 
 fn is_disallowed_content_file(path: &Path, config: &ObsidianSection) -> bool {
@@ -480,7 +585,6 @@ fn is_internal_or_metadata(path: &Path) -> bool {
         || path.starts_with(".git")
         || path.starts_with(".harness")
         || path.starts_with(".obsidian")
-        || path.starts_with("Rules")
         || path.starts_with("rules")
         || path.starts_with("target")
         || path.starts_with("node_modules")
@@ -556,6 +660,37 @@ mod tests {
     }
 
     #[test]
+    fn resolves_bare_wikilinks_with_dots_as_note_stems() {
+        let tempdir = tempfile::tempdir().unwrap();
+        fs::create_dir(tempdir.path().join("Notes")).unwrap();
+        fs::write(tempdir.path().join("Notes/A.md"), "[[Donald E.Knuth]]").unwrap();
+        fs::write(tempdir.path().join("Notes/Donald E.Knuth.md"), "").unwrap();
+        let config = ObsidianSection {
+            markdown_links: true,
+            orphan_files: false,
+            flat_attachment_dir: None,
+            note_roots: vec![PathBuf::from("Notes")],
+            content_roots: Vec::new(),
+            content_extensions: Vec::new(),
+            require_capitalized_dirs: false,
+        };
+        let diagnostics =
+            run_checks(tempdir.path(), &config, &[PathBuf::from("Notes/A.md")]).unwrap();
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.rule_id == "obsidian.missing-link")
+        );
+    }
+
+    #[test]
+    fn ignores_parenthetical_text_after_wikilink() {
+        let refs = extract_references("[[谢雯婷]](我不喜欢她,为什么她有,很奇怪..)");
+        let targets: Vec<_> = refs.into_iter().map(|reference| reference.target).collect();
+        assert_eq!(targets, vec!["谢雯婷"]);
+    }
+
+    #[test]
     fn resolves_relative_attachment_paths() {
         let tempdir = tempfile::tempdir().unwrap();
         fs::create_dir(tempdir.path().join("Daily")).unwrap();
@@ -582,6 +717,118 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.rule_id == "obsidian.missing-link")
         );
+    }
+
+    #[test]
+    fn treats_frontmatter_attachment_values_as_inbound_references() {
+        let tempdir = tempfile::tempdir().unwrap();
+        fs::create_dir(tempdir.path().join("Notes")).unwrap();
+        fs::create_dir(tempdir.path().join("Attachments")).unwrap();
+        fs::write(
+            tempdir.path().join("Notes/A.md"),
+            "---\ncover: ../Attachments/book.jpg\nimage: local.png\n---\n",
+        )
+        .unwrap();
+        fs::write(tempdir.path().join("Notes/local.png"), "").unwrap();
+        fs::write(tempdir.path().join("Attachments/book.jpg"), "").unwrap();
+        let config = ObsidianSection {
+            markdown_links: true,
+            orphan_files: true,
+            flat_attachment_dir: Some(PathBuf::from("Attachments")),
+            note_roots: vec![PathBuf::from("Notes")],
+            content_roots: Vec::new(),
+            content_extensions: Vec::new(),
+            require_capitalized_dirs: false,
+        };
+        let diagnostics = run_checks(
+            tempdir.path(),
+            &config,
+            &[
+                PathBuf::from("Notes/A.md"),
+                PathBuf::from("Attachments/book.jpg"),
+            ],
+        )
+        .unwrap();
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.rule_id == "obsidian.orphan-file")
+        );
+    }
+
+    #[test]
+    fn does_not_treat_body_colons_as_frontmatter_references() {
+        let refs = extract_references("- 21:56 ![427x189](../Attachments/a.png)");
+        let targets: Vec<_> = refs.into_iter().map(|reference| reference.target).collect();
+        assert_eq!(targets, vec!["../Attachments/a.png"]);
+    }
+
+    #[test]
+    fn ignores_escaped_quoted_urls_in_frontmatter_values() {
+        let refs = extract_references(
+            "---\nbanner: \"\\\"https://images.unsplash.com/photo.jpg?ixid=1\\\"\"\n---\n",
+        );
+        assert!(refs.is_empty());
+    }
+
+    #[test]
+    fn allows_nested_excalidraw_markdown_files() {
+        let tempdir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tempdir.path().join("Attachments/draws")).unwrap();
+        fs::write(
+            tempdir
+                .path()
+                .join("Attachments/draws/2024-03-22.excalidraw.md"),
+            "",
+        )
+        .unwrap();
+        let config = ObsidianSection {
+            markdown_links: false,
+            orphan_files: false,
+            flat_attachment_dir: Some(PathBuf::from("Attachments")),
+            note_roots: Vec::new(),
+            content_roots: Vec::new(),
+            content_extensions: Vec::new(),
+            require_capitalized_dirs: true,
+        };
+        let diagnostics = run_checks(
+            tempdir.path(),
+            &config,
+            &[PathBuf::from("Attachments/draws/2024-03-22.excalidraw.md")],
+        )
+        .unwrap();
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn resolves_excalidraw_links_without_markdown_suffix() {
+        let tempdir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tempdir.path().join("Notes")).unwrap();
+        fs::create_dir_all(tempdir.path().join("Attachments/draws")).unwrap();
+        fs::write(
+            tempdir.path().join("Notes/A.md"),
+            "[[Attachments/draws/2024-03-22.excalidraw]]",
+        )
+        .unwrap();
+        fs::write(
+            tempdir
+                .path()
+                .join("Attachments/draws/2024-03-22.excalidraw.md"),
+            "",
+        )
+        .unwrap();
+        let config = ObsidianSection {
+            markdown_links: true,
+            orphan_files: false,
+            flat_attachment_dir: Some(PathBuf::from("Attachments")),
+            note_roots: vec![PathBuf::from("Notes")],
+            content_roots: Vec::new(),
+            content_extensions: Vec::new(),
+            require_capitalized_dirs: false,
+        };
+        let diagnostics =
+            run_checks(tempdir.path(), &config, &[PathBuf::from("Notes/A.md")]).unwrap();
+        assert!(diagnostics.is_empty());
     }
 
     #[test]

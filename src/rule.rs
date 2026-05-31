@@ -18,6 +18,8 @@ struct RuleFrontmatter {
     #[serde(default)]
     status: RuleStatus,
     #[serde(default)]
+    skill: Option<String>,
+    #[serde(default)]
     tags: Vec<String>,
 }
 
@@ -66,6 +68,7 @@ pub fn parse_rule(
         language: frontmatter.language,
         level: frontmatter.level,
         status: frontmatter.status,
+        skill: frontmatter.skill,
         tags: frontmatter.tags,
         description,
         body,
@@ -213,6 +216,7 @@ title: Prefer Pydantic
 language: python
 level: warn
 status: warn
+skill: tdd
 tags: [python]
 ---
 

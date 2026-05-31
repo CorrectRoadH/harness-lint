@@ -7,7 +7,7 @@ changed_base = "origin/main"
 cache = true
 
 [rules]
-local = ["Rules"]
+local = ["rules"]
 
 [packs]
 

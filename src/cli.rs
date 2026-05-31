@@ -40,6 +40,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     Init(InitCommand),
+    Doctor,
     Check(CheckCommand),
     Pack {
         #[command(subcommand)]
@@ -124,6 +125,7 @@ pub fn run() -> Result<ExitCode> {
             println!("\nAI agent instructions:\n{}", init::AI_AGENT_INSTRUCTIONS);
             Ok(())
         }
+        Command::Doctor => run_doctor(&cwd, cli.config.as_deref(), format),
         Command::Check(command) => {
             run_check(&cwd, cli.config.as_deref(), command, format, cli.verbose)
         }
@@ -197,6 +199,194 @@ fn run_check(
         .any(|diagnostic| diagnostic.level.is_failing())
     {
         bail!("harness-lint found error-level diagnostics");
+    }
+    Ok(())
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DoctorFinding {
+    status: DoctorStatus,
+    check: &'static str,
+    message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+enum DoctorStatus {
+    Ok,
+    Warn,
+    Error,
+}
+
+fn run_doctor(
+    cwd: &PathBuf,
+    config_path: Option<&std::path::Path>,
+    format: ReportFormat,
+) -> Result<()> {
+    let mut findings = Vec::new();
+    let root = match config::find_project_root(cwd) {
+        Ok(root) => {
+            findings.push(doctor_ok(
+                "project-root",
+                format!("found project root at {}", root.display()),
+            ));
+            root
+        }
+        Err(error) => {
+            findings.push(doctor_error("project-root", error.to_string()));
+            report_doctor(&findings, format)?;
+            bail!("harness-lint doctor found error-level issues");
+        }
+    };
+
+    let config_path_display = config_path
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| root.join(config::CONFIG_FILE).display().to_string());
+    let config = match config::load_config(&root, config_path) {
+        Ok(config) => {
+            findings.push(doctor_ok(
+                "config",
+                format!("loaded configuration from {config_path_display}"),
+            ));
+            config
+        }
+        Err(error) => {
+            findings.push(doctor_error("config", error.to_string()));
+            report_doctor(&findings, format)?;
+            bail!("harness-lint doctor found error-level issues");
+        }
+    };
+
+    if config.rules.local.is_empty() {
+        findings.push(doctor_warn(
+            "local-rules",
+            "no local rule directories are configured".to_string(),
+        ));
+    }
+    for dir in &config.rules.local {
+        let path = if dir.is_absolute() {
+            dir.clone()
+        } else {
+            root.join(dir)
+        };
+        if path.exists() {
+            findings.push(doctor_ok(
+                "local-rules",
+                format!("local rule directory exists at {}", path.display()),
+            ));
+        } else {
+            findings.push(doctor_warn(
+                "local-rules",
+                format!("local rule directory does not exist: {}", path.display()),
+            ));
+        }
+    }
+
+    match load_rule_packs(&root, &config) {
+        Ok(packs) => {
+            let rule_count: usize = packs.iter().map(|pack| pack.rules.len()).sum();
+            findings.push(doctor_ok(
+                "rules",
+                format!("loaded {} pack(s) with {} rule(s)", packs.len(), rule_count),
+            ));
+        }
+        Err(error) => findings.push(doctor_error("rules", error.to_string())),
+    }
+
+    match std::process::Command::new("grit").arg("--version").output() {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout);
+            let version = version.trim();
+            let message = if version.is_empty() {
+                "grit is installed".to_string()
+            } else {
+                format!("grit is installed: {version}")
+            };
+            findings.push(doctor_ok("grit", message));
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            findings.push(doctor_error(
+                "grit",
+                format!("grit --version failed: {}", stderr.trim()),
+            ));
+        }
+        Err(error) => {
+            findings.push(doctor_error(
+                "grit",
+                format!("grit is required for `check` but was not found: {error}"),
+            ));
+        }
+    }
+
+    match std::process::Command::new("git")
+        .current_dir(&root)
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .output()
+    {
+        Ok(output) if output.status.success() => findings.push(doctor_ok(
+            "git",
+            "git repository is available for changed/staged checks".to_string(),
+        )),
+        Ok(_) => findings.push(doctor_warn(
+            "git",
+            "not inside a git worktree; changed/staged checks may be unavailable".to_string(),
+        )),
+        Err(error) => findings.push(doctor_warn(
+            "git",
+            format!("git command is unavailable: {error}"),
+        )),
+    }
+
+    report_doctor(&findings, format)?;
+    if findings
+        .iter()
+        .any(|finding| finding.status == DoctorStatus::Error)
+    {
+        bail!("harness-lint doctor found error-level issues");
+    }
+    Ok(())
+}
+
+fn doctor_ok(check: &'static str, message: String) -> DoctorFinding {
+    DoctorFinding {
+        status: DoctorStatus::Ok,
+        check,
+        message,
+    }
+}
+
+fn doctor_warn(check: &'static str, message: String) -> DoctorFinding {
+    DoctorFinding {
+        status: DoctorStatus::Warn,
+        check,
+        message,
+    }
+}
+
+fn doctor_error(check: &'static str, message: String) -> DoctorFinding {
+    DoctorFinding {
+        status: DoctorStatus::Error,
+        check,
+        message,
+    }
+}
+
+fn report_doctor(findings: &[DoctorFinding], format: ReportFormat) -> Result<()> {
+    match format {
+        ReportFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(findings)?);
+        }
+        ReportFormat::Human => {
+            for finding in findings {
+                let status = match finding.status {
+                    DoctorStatus::Ok => "ok",
+                    DoctorStatus::Warn => "warn",
+                    DoctorStatus::Error => "error",
+                };
+                println!("[{status}] {}: {}", finding.check, finding.message);
+            }
+        }
     }
     Ok(())
 }
@@ -424,7 +614,9 @@ fn run_rule(
             title,
             language,
         } => {
-            let draft = authoring::new_rule(&root, &id, &title, language.as_deref())?;
+            let config = config::load_config(&root, config_path)?;
+            let draft =
+                authoring::new_rule(&root, &config.rules.local, &id, &title, language.as_deref())?;
             println!(
                 "Created rule draft `{}` at {}",
                 draft.id,
@@ -463,7 +655,7 @@ fn run_rule(
                     return Ok(());
                 }
             }
-            let draft = authoring::suggest_rule(&root, &feedback)?;
+            let draft = authoring::suggest_rule(&root, &config.rules.local, &feedback)?;
             println!(
                 "Created rule draft `{}` at {}",
                 draft.id,
@@ -490,10 +682,20 @@ fn select_paths(
         let base = command.base.as_deref().unwrap_or(&config.lint.changed_base);
         git::changed_files(root, base)?
     } else {
-        paths::discover_all_files(root, &[])?
+        paths::discover_all_files(root, &[], &config.rules.local)?
     };
-    let grit_paths = paths::filter_paths(raw_paths.clone(), &config.ignore.paths, rules)?;
-    let mut obsidian_paths = paths::filter_paths(raw_paths.clone(), &config.ignore.paths, &[])?;
+    let grit_paths = paths::filter_paths(
+        raw_paths.clone(),
+        &config.ignore.paths,
+        rules,
+        &config.rules.local,
+    )?;
+    let mut obsidian_paths = paths::filter_paths(
+        raw_paths.clone(),
+        &config.ignore.paths,
+        &[],
+        &config.rules.local,
+    )?;
     let mut obsidian_extra_roots = config.obsidian.content_roots.clone();
     obsidian_extra_roots.extend(config.obsidian.note_roots.clone());
     if let Some(root) = &config.obsidian.flat_attachment_dir {

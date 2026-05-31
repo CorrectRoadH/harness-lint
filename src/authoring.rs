@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use heck::{ToKebabCase, ToTitleCase};
@@ -7,7 +7,7 @@ use heck::{ToKebabCase, ToTitleCase};
 use crate::config::USER_RULE_DIR;
 use crate::model::RuleDraft;
 
-pub fn suggest_rule(root: &Path, feedback: &str) -> Result<RuleDraft> {
+pub fn suggest_rule(root: &Path, local_rule_dirs: &[PathBuf], feedback: &str) -> Result<RuleDraft> {
     let id_tail = feedback
         .chars()
         .filter(|ch| ch.is_ascii_alphanumeric() || ch.is_whitespace() || *ch == '-' || *ch == '_')
@@ -24,13 +24,14 @@ pub fn suggest_rule(root: &Path, feedback: &str) -> Result<RuleDraft> {
     };
     let id = format!("local.{id_tail}");
     let title = id_tail.replace('-', " ").to_title_case();
-    let path = root.join(USER_RULE_DIR).join(format!("{id_tail}.md"));
+    let path = target_rule_dir(root, local_rule_dirs).join(format!("{id_tail}.md"));
     let content = format!(
         r#"---
 id: {id}
 title: {title:?}
 level: warn
 status: draft
+skill:
 tags: [local, ai-feedback]
 ---
 
@@ -70,12 +71,18 @@ TODO: Add an example that should be allowed.
     })
 }
 
-pub fn new_rule(root: &Path, id: &str, title: &str, language: Option<&str>) -> Result<RuleDraft> {
+pub fn new_rule(
+    root: &Path,
+    local_rule_dirs: &[PathBuf],
+    id: &str,
+    title: &str,
+    language: Option<&str>,
+) -> Result<RuleDraft> {
     let filename = id
         .strip_prefix("local.")
         .unwrap_or(id)
         .replace(['.', '/'], "-");
-    let path = root.join(USER_RULE_DIR).join(format!("{filename}.md"));
+    let path = target_rule_dir(root, local_rule_dirs).join(format!("{filename}.md"));
     let language_line = language
         .map(|language| format!("language: {language}\n"))
         .unwrap_or_default();
@@ -90,6 +97,7 @@ id: {id}
 title: {title:?}
 {language_line}level: warn
 status: draft
+skill:
 tags: [local]
 ---
 
@@ -127,6 +135,18 @@ TODO: Add an example that should be allowed.
     })
 }
 
+fn target_rule_dir(root: &Path, local_rule_dirs: &[PathBuf]) -> PathBuf {
+    let dir = local_rule_dirs
+        .first()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from(USER_RULE_DIR));
+    if dir.is_absolute() {
+        dir
+    } else {
+        root.join(dir)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,9 +154,19 @@ mod tests {
     #[test]
     fn suggest_rule_creates_draft_file() {
         let tempdir = tempfile::tempdir().unwrap();
-        let draft = suggest_rule(tempdir.path(), "Prefer pydantic models").unwrap();
+        let draft = suggest_rule(
+            tempdir.path(),
+            &[PathBuf::from("custom-rules")],
+            "Prefer pydantic models",
+        )
+        .unwrap();
         assert_eq!(draft.id, "local.prefer-pydantic-models");
-        assert!(draft.path.exists());
+        assert_eq!(
+            draft.path,
+            tempdir
+                .path()
+                .join("custom-rules/prefer-pydantic-models.md")
+        );
         assert!(draft.content.contains("status: draft"));
     }
 }

@@ -13,11 +13,21 @@ It does not fix code. GritQL is the only executable rule language.
 ## Install
 
 ```sh
-cargo build
-target/debug/harness-lint --help
+brew install CorrectRoadH/tap/harness-lint
 ```
 
-`grit` must be installed separately for `check`.
+Or install from a custom tap checkout:
+
+```sh
+brew tap CorrectRoadH/tap
+brew install harness-lint
+```
+
+`grit` must be installed separately for `check`:
+
+```sh
+brew install getgrit/tap/grit
+```
 
 ## Project Setup
 
@@ -29,11 +39,11 @@ This creates:
 
 ```text
 harness.toml
-Rules/
+rules/
 .harness/
 ```
 
-Commit `harness.toml` and `Rules/`. Ignore `.harness/`.
+Commit `harness.toml` and `rules/`. Ignore `.harness/`.
 
 ## Agent Install Prompt
 
@@ -42,10 +52,12 @@ Give this to an LLM coding agent:
 ```text
 install harness: read CLAUDE.md, AGENTS.md, .cursor/rules, README.md, and relevant docs.
 Run `harness-lint init`.
-For each durable coding constraint, run `harness-lint rule suggest "<constraint>"`.
+For each durable coding constraint or recurring code review comment, run `harness-lint rule suggest "<constraint>"`.
 If registry candidates exist, ask before installing the rule pack.
 If no good pack exists, create a local draft rule.
 Rules must be GritQL; uncertain rules stay draft.
+For code-related fixes, write or update the lint first, run it to identify the problem, fix the code, then run `harness-lint check --changed` again.
+If a rule should trigger a specific Codex skill, add `skill: <skill-name>` to the rule frontmatter.
 Run `harness-lint rule list` and summarize the result.
 ```
 
@@ -56,9 +68,10 @@ harness-lint check --changed
 harness-lint check --staged
 harness-lint check [paths...]
 harness-lint check --all
+harness-lint doctor
 harness-lint pack search "python typing"
 harness-lint pack inspect python
-harness-lint pack add <id> <local:PATH|github:OWNER/REPO@TAG>
+harness-lint pack add <id> <source>
 harness-lint pack update
 harness-lint pack list
 harness-lint rule suggest "<feedback>"
@@ -70,6 +83,8 @@ harness-lint rule explain <rule-id>
 
 Use `--json` with `check` or `rule list` when another tool needs structured output.
 
+`doctor` checks the project root, configuration, local rule directories, rule packs, Git availability, and the `grit` binary used by `check`.
+
 ## Rule Packs
 
 The intended ecosystem flow is:
@@ -77,19 +92,13 @@ The intended ecosystem flow is:
 ```sh
 harness-lint pack search "pydantic typed service rules"
 harness-lint pack inspect python
-harness-lint pack add python github:CorrectRoadH/harness-lint@main#packs/python
+# Run the install command printed by search or inspect.
 harness-lint check --changed
 ```
 
 Search uses local project signals such as `pyproject.toml`, `go.mod`, `package.json`, `tsconfig.json`, and common library names, then prints install commands. `inspect` shows the pack before it mutates the project. Installed pack origins are recorded in `harness.lock`.
 
-This repository includes seed packs under `packs/python`, `packs/go`, and `packs/typescript`. For local development:
-
-```sh
-harness-lint pack add python local:/Users/ctrdh/Code/harness-lint/packs/python
-```
-
-Custom project rules live directly in `Rules/*.md`.
+Custom project rules live directly in `rules/*.md` by default. To place them somewhere else, set `[rules].local` in `harness.toml`; authoring commands write new local drafts to the first configured directory.
 
 ## Obsidian Vault Checks
 
@@ -114,6 +123,7 @@ title: Avoid print debugging
 language: python
 level: warn
 status: draft
+skill: tdd
 tags: [local, python]
 ---
 

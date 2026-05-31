@@ -11,16 +11,20 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
             artifact: harness-lint-linux-x86_64
           - os: macos-latest
+            target: aarch64-apple-darwin
             artifact: harness-lint-macos-aarch64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release
-      - run: cp target/release/harness-lint ${{ matrix.artifact }}
+      - run: cargo build --release --target ${{ matrix.target }}
+      - run: cp target/${{ matrix.target }}/release/harness-lint ${{ matrix.artifact }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -39,3 +43,83 @@ jobs:
         with:
           files: artifacts/**/*
 
+  update-homebrew-tap:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Compute release metadata
+        id: release
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mac_sha="$(sha256sum "$(find artifacts -type f -name harness-lint-macos-aarch64)" | awk '{print $1}')"
+          linux_sha="$(sha256sum "$(find artifacts -type f -name harness-lint-linux-x86_64)" | awk '{print $1}')"
+
+          {
+            echo "version=${version}"
+            echo "mac_sha=${mac_sha}"
+            echo "linux_sha=${linux_sha}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: CorrectRoadH/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        shell: bash
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          MAC_SHA: ${{ steps.release.outputs.mac_sha }}
+          LINUX_SHA: ${{ steps.release.outputs.linux_sha }}
+        run: |
+          mkdir -p homebrew-tap/Formula
+          cat > homebrew-tap/Formula/harness-lint.rb <<EOF
+          class HarnessLint < Formula
+            desc "GritQL rule ecosystem and AI feedback linter"
+            homepage "https://github.com/CorrectRoadH/harness-lint"
+            version "${VERSION}"
+
+            if OS.mac? && Hardware::CPU.arm?
+              url "https://github.com/CorrectRoadH/harness-lint/releases/download/v${VERSION}/harness-lint-macos-aarch64"
+              sha256 "${MAC_SHA}"
+            elsif OS.linux? && Hardware::CPU.intel?
+              url "https://github.com/CorrectRoadH/harness-lint/releases/download/v${VERSION}/harness-lint-linux-x86_64"
+              sha256 "${LINUX_SHA}"
+            else
+              odie "harness-lint currently publishes macOS arm64 and Linux x86_64 binaries only"
+            end
+
+            def install
+              if OS.mac?
+                bin.install "harness-lint-macos-aarch64" => "harness-lint"
+              else
+                bin.install "harness-lint-linux-x86_64" => "harness-lint"
+              end
+            end
+
+            test do
+              system "#{bin}/harness-lint", "--help"
+            end
+          end
+          EOF
+
+      - name: Commit formula update
+        working-directory: homebrew-tap
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/harness-lint.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date."
+          else
+            git commit -m "Update harness-lint to ${GITHUB_REF_NAME}"
+            git push
+          fi

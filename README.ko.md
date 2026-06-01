@@ -8,25 +8,24 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-harness-lint 是一个用于 Harness Engineering 的新时代 Lint 工具。在 vibe coding 中，AI 经常不按你的要求来做，就算你反复纠正，或者把要求写进 `AGENTS.md`，它也可能不遵守。该工具用 Lint Driven Development 解决这个问题：当用户告诉 AI Agent 不要做什么时，先把要求转换成固定的 lint 规则，再用快速、严格的检查防止 AI 重复犯错。
+harness-lint는 Harness Engineering을 위한 차세대 lint 도구입니다. vibe coding에서는 여러 번 고쳐 말하거나 `AGENTS.md`에 지시를 적어 두어도 AI가 그 지시를 무시하는 일이 자주 생깁니다. 이 도구는 Lint Driven Development 방식으로 그 문제를 해결합니다. 사용자가 AI Agent에게 하지 말아야 할 일을 말하면, 먼저 그 요구를 고정된 lint 규칙으로 바꾸고, 빠르고 엄격한 검사로 AI가 같은 실수를 반복하지 못하게 합니다.
 
-对比传统的 lint，harness lint 的规则是高度人类可读的、可理解的。并且适配 AI Coding 工作流与最佳实践。
+기존 lint 도구와 비교하면 harness lint의 규칙은 사람이 읽고 이해하기 쉽게 작성됩니다. 또한 AI coding 워크플로와 베스트 프랙티스에 맞게 설계되어 있습니다.
 
-## 安装
+## 설치
 
 ```sh
 brew install getgrit/tap/grit
 brew install CorrectRoadH/tap/harness-lint
 ```
 
-## 为 Agent 初始化当前仓库
+## Agent용 리포지토리 초기화
 
 ```text
 READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/INIT.md and install harness lint for this code repo
 ```
 
-
-## 常用命令
+## 자주 쓰는 명령
 
 ```sh
 harness-lint check --changed
@@ -41,19 +40,18 @@ harness-lint update
 harness-lint remove python
 ```
 
+## 로컬 규칙
 
-## 本地规则
-
-自定义项目规则默认放在 `rules/*.md`。如果想放在别的位置，可以在 `harness.toml` 中配置：
+프로젝트별 커스텀 규칙은 기본적으로 `rules/*.md`에 둡니다. 다른 위치를 사용하려면 `harness.toml`에서 설정할 수 있습니다.
 
 ```toml
 [rules]
 local = ["custom-rules"]
 ```
 
-`harness-lint rule create` 会把新规则写入第一个配置的本地规则目录。
+`harness-lint rule create`는 설정된 첫 번째 로컬 규칙 디렉터리에 새 규칙을 작성합니다.
 
-规则文件示例：
+규칙 파일 예시:
 
 ````markdown
 ---

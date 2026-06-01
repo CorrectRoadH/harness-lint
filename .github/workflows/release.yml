@@ -23,7 +23,28 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
+      - name: Sync Cargo version from tag
+        shell: bash
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          version="${VERSION#v}"
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tags must look like v1.2.3 or v1.2.3-rc.1; got ${VERSION}" >&2
+            exit 1
+          fi
+
+          RELEASE_VERSION="${version}" perl -0pi -e 's/(\[package\].*?^version = ")[^"]+(")/$1$ENV{RELEASE_VERSION}$2/ms' Cargo.toml
+          RELEASE_VERSION="${version}" perl -0pi -e 's/(name = "harness-lint"\nversion = ")[^"]+(")/$1$ENV{RELEASE_VERSION}$2/ms' Cargo.lock
+          cargo metadata --no-deps --format-version 1 | jq -e --arg version "${version}" '.packages[] | select(.name == "harness-lint").version == $version'
       - run: cargo build --release --target ${{ matrix.target }}
+      - name: Verify binary version
+        shell: bash
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          version="${VERSION#v}"
+          target/${{ matrix.target }}/release/harness-lint --version | grep -F "${version}"
       - run: cp target/${{ matrix.target }}/release/harness-lint ${{ matrix.artifact }}
       - uses: actions/upload-artifact@v7
         with:

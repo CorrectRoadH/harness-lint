@@ -104,10 +104,19 @@ fn extract_description(markdown: &str) -> String {
 
 fn extract_body(markdown: &str) -> RuleBody {
     if let Some((_, code)) = fenced_codes(markdown, Some("grit")).into_iter().next() {
-        return RuleBody::Grit(code);
+        if has_executable_grit(&code) {
+            return RuleBody::Grit(code);
+        }
     }
 
     RuleBody::Missing
+}
+
+fn has_executable_grit(code: &str) -> bool {
+    code.lines().any(|line| {
+        let trimmed = line.trim();
+        !trimmed.is_empty() && !trimmed.starts_with("//")
+    })
 }
 
 fn extract_examples(markdown: &str) -> Vec<RuleExample> {
@@ -263,6 +272,26 @@ title: Some Rule
 # Some Rule
 
 TODO.
+"#;
+
+        let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();
+        assert!(matches!(rule.body, RuleBody::Missing));
+    }
+
+    #[test]
+    fn warn_rule_with_comment_only_grit_block_is_missing_body() {
+        let content = r#"---
+id: ai.some-rule
+title: Some Rule
+---
+
+# Some Rule
+
+TODO.
+
+```grit
+// TODO: write this GritQL once the target code stabilizes.
+```
 "#;
 
         let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();

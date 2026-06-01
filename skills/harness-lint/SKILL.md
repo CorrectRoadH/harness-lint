@@ -42,10 +42,10 @@ When user feedback or review comments describe a recurring issue, capture the pr
 1. Read existing project guidance such as `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, README files, and review docs.
 2. Detect project languages and frameworks from files such as `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, and source extensions.
 3. Run `harness-lint rule list` to inspect existing lint rules and decide whether to update one.
-4. If a new rule is needed, create the local draft skeleton and rule filename with the CLI:
+4. If a new rule is needed, create the local rule skeleton and rule filename with the CLI:
 
 ```sh
-harness-lint rule draft "<constraint>"
+harness-lint rule create "<constraint>"
 ```
 
 5. Edit the created file under the configured local rule directory, usually `rules/`.
@@ -139,6 +139,5 @@ harness-lint check --all
 harness-lint check --changed --rule <rule-id>
 harness-lint rule list
 harness-lint rule explain <rule-id>
-harness-lint rule new <id> "<title>" --language <language>
-harness-lint rule draft "<constraint>"
+harness-lint rule create "<constraint>"
 ```

@@ -4,7 +4,7 @@
 创建本地规则时，请使用以下流程：
 
 1. 运行 `harness-lint rule list` 查看已有 lint，判断是否应该更新现有规则。
-2. 如果需要新规则，运行 `harness-lint rule draft "<feedback>"` 创建本地 draft 骨架和规则文件名。
+2. 如果需要新规则，运行 `harness-lint rule create "<feedback>"` 创建本地规则骨架和规则文件名。
 3. 编辑生成的规则文件，补充 `language`、规则说明、GritQL、Bad / Good 示例。
 4. 运行 `harness-lint doctor` 确认配置、规则和 Grit 环境正常。
 5. 运行 `harness-lint check --changed` 执行 lint，确认规则能被加载并按预期工作。

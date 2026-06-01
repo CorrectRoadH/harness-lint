@@ -43,7 +43,7 @@ Custom project rules live in `rules/*.md` by default. To put them somewhere else
 local = ["custom-rules"]
 ```
 
-`rule draft` and `rule new` write new rules to the first configured local rule directory.
+`rule create` writes new rules to the first configured local rule directory.
 
 Rule file example:
 

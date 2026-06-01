@@ -115,15 +115,8 @@ enum RuleCommand {
     List,
     #[command(about = "Explain a loaded rule")]
     Explain { rule_id: String },
-    #[command(about = "Create a local rule draft")]
-    New {
-        id: String,
-        title: String,
-        #[arg(long)]
-        language: Option<String>,
-    },
-    #[command(about = "Create a local rule draft from feedback")]
-    Draft { feedback: String },
+    #[command(about = "Create a local rule from feedback")]
+    Create { feedback: String },
     #[command(about = "Find existing rule candidates from feedback")]
     Suggest { feedback: String },
 }
@@ -835,28 +828,10 @@ fn run_rule(
                 .ok_or_else(|| anyhow!("rule `{rule_id}` was not found"))?;
             report::print_rule_explain(rule);
         }
-        RuleCommand::New {
-            id,
-            title,
-            language,
-        } => {
-            let config = config::load_config(&root, config_path)?;
-            let draft =
-                authoring::new_rule(&root, &config.rules.local, &id, &title, language.as_deref())?;
-            println!(
-                "Created rule draft `{}` at {}",
-                draft.id,
-                draft.path.display()
-            );
-        }
-        RuleCommand::Draft { feedback } => {
+        RuleCommand::Create { feedback } => {
             let config = config::load_config(&root, config_path)?;
             let draft = authoring::suggest_rule(&root, &config.rules.local, &feedback)?;
-            println!(
-                "Created rule draft `{}` at {}",
-                draft.id,
-                draft.path.display()
-            );
+            println!("Created rule `{}` at {}", draft.id, draft.path.display());
         }
         RuleCommand::Suggest { feedback } => {
             let config = config::load_config(&root, config_path)?;
@@ -883,13 +858,13 @@ fn run_rule(
                     best.pack_id, best.pack_spec
                 );
                 println!(
-                    "To create a local draft instead, run:\n  harness-lint rule draft {:?}",
+                    "To create a local rule instead, run:\n  harness-lint rule create {:?}",
                     feedback
                 );
             } else {
                 println!("No existing rule candidates found.");
                 println!(
-                    "To create a local draft, run:\n  harness-lint rule draft {:?}",
+                    "To create a local rule, run:\n  harness-lint rule create {:?}",
                     feedback
                 );
             }

@@ -83,10 +83,10 @@ rules/
 
 从用户已有的 `AGENTS.md`、`CLAUDE.md`、`.cursor/rules`、README 和 review 文档中提取稳定、可重复检查的约定，并直接创建或更新本地规则。规则名、标题、描述、Bad / Good 示例和最终给用户的总结，都应该使用用户习惯的语言；如果用户的仓库文档主要是中文，就用中文写规则内容。创建前先运行 `harness-lint rule list` 查看已有 lint，避免重复规则。
 
-不要把一次性任务、模糊偏好或无法检查的愿望强行变成 enforced 规则；不确定的先保持 `draft`。对每条需要新增的可规则化约定，统一用 CLI 创建本地 draft 骨架和规则文件名：
+不要把一次性任务、模糊偏好或无法检查的愿望强行变成 enforced 规则；不确定的先保持 `draft`。对每条需要新增的可规则化约定，统一用 CLI 创建本地规则骨架和规则文件名：
 
 ```sh
-harness-lint rule draft "<constraint>"
+harness-lint rule create "<constraint>"
 ```
 
 然后手动编辑生成的 `rules/*.md`：

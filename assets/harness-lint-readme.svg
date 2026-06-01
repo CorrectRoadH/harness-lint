@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="title desc">
+  <title id="title">harness lint animated README hero</title>
+  <desc id="desc">An AI agent instruction card is guided through a harness lint scanner and becomes a verified patch.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#060706"/>
+      <stop offset="0.54" stop-color="#0c1110"/>
+      <stop offset="1" stop-color="#120a07"/>
+    </linearGradient>
+    <linearGradient id="agentFace" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff62c7"/>
+      <stop offset="0.64" stop-color="#ff3498"/>
+      <stop offset="1" stop-color="#ff5a13"/>
+    </linearGradient>
+    <linearGradient id="ruleFace" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffb03a"/>
+      <stop offset="1" stop-color="#ff4a07"/>
+    </linearGradient>
+    <linearGradient id="patchFace" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#36f5c7"/>
+      <stop offset="0.72" stop-color="#18d69e"/>
+      <stop offset="1" stop-color="#0b8f72"/>
+    </linearGradient>
+    <linearGradient id="gateEdge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#27ffd0"/>
+      <stop offset="0.5" stop-color="#ffe05b"/>
+      <stop offset="1" stop-color="#ff5fba"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#28ffd2" stop-opacity="0"/>
+      <stop offset="0.42" stop-color="#28ffd2" stop-opacity="0.84"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-35%" y="-45%" width="180%" height="210%">
+      <feDropShadow dx="0" dy="15" stdDeviation="8" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .sans {
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: 0;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        letter-spacing: 0;
+      }
+    </style>
+  </defs>
+
+  <rect width="960" height="520" rx="26" fill="url(#bg)"/>
+  <path d="M82 95H878M118 48V442M842 48V442M82 390H878" fill="none" stroke="#f8efe0" stroke-opacity=".08" stroke-width="1.4"/>
+  <path d="M94 318C214 266 310 266 416 304C522 342 620 354 802 286" fill="none" stroke="#ffb342" stroke-opacity=".11" stroke-width="2"/>
+  <path d="M104 183C230 112 338 126 456 188C574 250 688 224 856 139" fill="none" stroke="#20e9be" stroke-opacity=".11" stroke-width="2"/>
+  <ellipse cx="478" cy="365" rx="340" ry="42" fill="#000000" opacity=".54"/>
+
+  <g opacity=".9">
+    <path d="M266 252C330 218 379 220 423 248" fill="none" stroke="#26f5c6" stroke-opacity=".7" stroke-width="3" stroke-linecap="round" stroke-dasharray="12 14">
+      <animate attributeName="stroke-dashoffset" values="0;-156" dur="6s" repeatCount="indefinite"/>
+    </path>
+    <path d="M544 250C590 218 648 218 706 250" fill="none" stroke="#ffd75c" stroke-opacity=".72" stroke-width="3" stroke-linecap="round" stroke-dasharray="12 14">
+      <animate attributeName="stroke-dashoffset" values="0;-156" dur="6s" begin="-1s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <g filter="url(#glow)">
+    <g transform="translate(264 252)">
+      <rect x="-7" y="-7" width="14" height="14" rx="3" fill="#ffe05b" stroke="#050505" stroke-width="1.4"/>
+      <animateMotion path="M0 0C66-34 115-32 159-4" dur="6s" repeatCount="indefinite" keyTimes="0;0.52;1" values="0;1;1"/>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.18;0.64;1" dur="6s" repeatCount="indefinite"/>
+    </g>
+    <g transform="translate(544 250)">
+      <path d="M-8 7L0-8L8 7Z" fill="#2af5c7" stroke="#050505" stroke-width="1.4"/>
+      <animateMotion path="M0 0C46-32 104-32 162 0" dur="6s" begin="-2.2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.18;0.7;1" dur="6s" begin="-2.2s" repeatCount="indefinite"/>
+    </g>
+    <g transform="translate(338 192)">
+      <circle r="4" fill="#ff5fba"/>
+      <animateMotion path="M0 0C50-18 92 6 122 54" dur="6s" begin="-3.1s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.2;0.7;1" dur="6s" begin="-3.1s" repeatCount="indefinite"/>
+    </g>
+  </g>
+
+  <g filter="url(#shadow)">
+    <g transform="translate(143 170)">
+      <animateTransform attributeName="transform" type="translate" values="143 170;143 158;143 170" dur="6s" calcMode="spline" keySplines=".33 0 .67 1;.33 0 .67 1" repeatCount="indefinite"/>
+      <path d="M16 37L122 80Q140 88 141 106L145 213Q145 231 127 224L22 181Q8 175 8 158V49Q8 31 16 37Z" fill="url(#agentFace)" stroke="#050505" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M122 80L143 69Q161 77 162 94L166 201Q166 219 145 213L141 106Q140 88 122 80Z" fill="#a70f62" stroke="#050505" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M16 37L39 25L143 69L122 80Z" fill="#ff8a21" stroke="#050505" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M39 25V60Q39 72 27 67L16 62V37Z" fill="#ff5a13" stroke="#050505" stroke-width="2"/>
+      <path d="M76 93L122 75L101 136Z" fill="#20e3b7" stroke="#050505" stroke-width="2.4"/>
+      <path d="M122 75L103 116L101 136Z" fill="#0c9175" stroke="#050505" stroke-width="1.7"/>
+      <path d="M25 99L39 105L40 132L26 126Z" fill="none" stroke="#fff1fb" stroke-width="1.6"/>
+      <path d="M54 52L72 59L73 76L55 69Z" fill="none" stroke="#fff1fb" stroke-width="1.6"/>
+      <text class="sans" x="36" y="164" fill="#fff7f3" font-size="25" font-weight="900" transform="rotate(21 36 164)">AGENT</text>
+      <text class="mono" x="38" y="190" fill="#fff7f3" font-size="12" font-weight="800" transform="rotate(21 38 190)">AGENTS.md</text>
+      <g transform="translate(118 48)">
+        <circle cx="0" cy="0" r="16" fill="#111815" stroke="#050505" stroke-width="2"/>
+        <path d="M-1-9V2" stroke="#ffd75c" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="-1" cy="8" r="2.5" fill="#ffd75c"/>
+        <animateTransform attributeName="transform" type="translate" values="118 48;118 42;118 48" dur="2.4s" repeatCount="indefinite"/>
+      </g>
+    </g>
+
+    <g transform="translate(315 151)">
+      <animateTransform attributeName="transform" type="translate" values="315 151;315 164;315 151" dur="6s" begin="-.7s" calcMode="spline" keySplines=".33 0 .67 1;.33 0 .67 1" repeatCount="indefinite"/>
+      <path d="M14 20L48 31L54 213L22 200Z" fill="url(#ruleFace)" stroke="#050505" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M48 31L64 23L70 203L54 213Z" fill="#aa2d04" stroke="#050505" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M14 20L30 14L64 23L48 31Z" fill="#ffba43" stroke="#050505" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M28 94L48 102L49 130L30 121Z" fill="#ffd75c" stroke="#050505" stroke-width="1.7"/>
+      <path d="M35 51L50 56L51 78L36 72Z" fill="none" stroke="#ffe5be" stroke-width="1.5"/>
+      <text class="mono" x="29" y="163" fill="#170b05" font-size="14" font-weight="900" transform="rotate(76 29 163)">rules</text>
+    </g>
+  </g>
+
+  <g transform="translate(396 132)" filter="url(#shadow)">
+    <path d="M58 0H178L226 38V206L178 244H58L10 206V38Z" fill="#111715" stroke="#050505" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M69 23H167L199 50V194L167 221H69L37 194V50Z" fill="#080b0a" stroke="url(#gateEdge)" stroke-width="6" stroke-linejoin="round">
+      <animate attributeName="stroke-width" values="6;7.4;6" dur="6s" keyTimes="0;0.48;1" repeatCount="indefinite"/>
+    </path>
+    <path d="M82 61H154L174 79V165L154 184H82L62 165V79Z" fill="#0e1312" stroke="#f4eadb" stroke-opacity=".15" stroke-width="2"/>
+    <path d="M102 84H152M102 118H152M102 152H152" stroke="#24f4c6" stroke-opacity=".42" stroke-width="2.4" stroke-linecap="round"/>
+    <rect x="79" y="45" width="38" height="160" rx="19" fill="url(#beam)" opacity="0">
+      <animate attributeName="x" values="70;132;132" keyTimes="0;0.56;1" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;.9;0" keyTimes="0;.42;1" dur="3s" repeatCount="indefinite"/>
+    </rect>
+    <text class="mono" x="118" y="115" fill="#f7efe6" font-size="23" font-weight="900" text-anchor="middle">lint</text>
+    <text class="mono" x="118" y="143" fill="#ffd75c" font-size="14" font-weight="900" text-anchor="middle">harness</text>
+    <path d="M38 31L13 7M198 31L223 7M38 213L13 238M198 213L223 238" stroke="#f4eadb" stroke-opacity=".18" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="69" cy="49" r="5.5" fill="#303d38">
+      <animate attributeName="fill" values="#303d38;#25f2c4;#303d38" keyTimes="0;0.52;1" dur="6s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="167" cy="195" r="5.5" fill="#303d38">
+      <animate attributeName="fill" values="#303d38;#ff5fba;#303d38" keyTimes="0;0.52;1" dur="6s" begin="-.9s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <g filter="url(#shadow)">
+    <g transform="translate(626 166)">
+      <animateTransform attributeName="transform" type="translate" values="626 166;626 155;626 166" dur="6s" begin="-1.2s" calcMode="spline" keySplines=".33 0 .67 1;.33 0 .67 1" repeatCount="indefinite"/>
+      <path d="M22 34L168 9Q190 5 194 27L214 154Q218 177 195 182L50 207Q27 211 23 188L3 62Q-1 39 22 34Z" fill="url(#patchFace)" stroke="#050505" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M168 9L190 20L214 154Q218 177 195 182L194 27Q190 5 168 9Z" fill="#0a8d72" stroke="#050505" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M39 48L75 42L63 89Q60 103 45 99L15 91L3 62Q-1 39 22 34Z" fill="#9cffdf" stroke="#050505" stroke-width="2"/>
+      <path d="M72 135L165 119M78 157L141 146" stroke="#066553" stroke-width="3" stroke-linecap="round" opacity=".35"/>
+      <text class="mono" x="72" y="181" fill="#083a31" font-size="18" font-weight="900" transform="rotate(-10 72 181)">PATCH</text>
+      <circle cx="166" cy="58" r="25" fill="none" stroke="#eafff8" stroke-width="3"/>
+      <path pathLength="100" d="M153 58L163 68L181 42" fill="none" stroke="#eafff8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="100" stroke-dashoffset="0">
+        <animate attributeName="stroke-dashoffset" values="100;100;0;0;100" keyTimes="0;0.42;0.56;0.88;1" dur="6s" repeatCount="indefinite"/>
+      </path>
+      <g transform="translate(3 116)">
+        <path d="M14 13L36 0L56 15L34 30Z" fill="#ffd75c" stroke="#050505" stroke-width="2"/>
+        <path d="M34 30L56 15V31L34 46Z" fill="#ff8a21" stroke="#050505" stroke-width="2"/>
+        <path d="M14 13L34 30V46L14 29Z" fill="#ffbd33" stroke="#050505" stroke-width="2"/>
+        <animateTransform attributeName="transform" type="translate" values="3 116;12 111;3 116" dur="6s" begin="-2.6s" repeatCount="indefinite"/>
+      </g>
+    </g>
+  </g>
+
+  <g filter="url(#shadow)">
+    <g transform="translate(457 78)">
+      <animateTransform attributeName="transform" type="translate" values="457 78;457 64;457 78" dur="5.5s" repeatCount="indefinite"/>
+      <g transform="rotate(-25)">
+        <path d="M0 16L26 0L52 15L26 32Z" fill="#27f5c6" stroke="#050505" stroke-width="2"/>
+        <path d="M0 16L26 32V58L0 42Z" fill="#ff5fba" stroke="#050505" stroke-width="2"/>
+        <path d="M26 32L52 15V40L26 58Z" fill="#0c9579" stroke="#050505" stroke-width="2"/>
+      </g>
+    </g>
+    <g transform="translate(710 112)">
+      <animateTransform attributeName="transform" type="translate" values="710 112;710 123;710 112" dur="5.8s" begin="-.4s" repeatCount="indefinite"/>
+      <g transform="rotate(8)">
+        <rect x="0" y="0" width="54" height="25" rx="10" fill="#0d9277" stroke="#050505" stroke-width="2"/>
+        <ellipse cx="54" cy="12.5" rx="7" ry="12.5" fill="#ff5fba" stroke="#050505" stroke-width="2"/>
+      </g>
+    </g>
+    <g transform="translate(592 84)">
+      <animateTransform attributeName="transform" type="translate" values="592 84;592 96;592 84" dur="5.1s" begin="-1.8s" repeatCount="indefinite"/>
+      <path d="M0 0L45 28L13 43Z" fill="#ff5fba" stroke="#050505" stroke-width="2.4"/>
+      <path d="M13 43L45 28L28 64Z" fill="#27f5c6" stroke="#050505" stroke-width="2.4"/>
+    </g>
+  </g>
+
+  <g opacity=".86">
+    <path d="M366 96L373 111L389 115L377 124L375 140L364 128L348 127L360 116Z" fill="#ffd75c">
+      <animate attributeName="opacity" values=".35;1;.35" dur="4.4s" repeatCount="indefinite"/>
+    </path>
+    <path d="M787 312L797 332L819 336L802 349L800 371L785 354L763 352L780 338Z" fill="#ff5fba">
+      <animate attributeName="opacity" values=".35;1;.35" dur="4.8s" begin="-1s" repeatCount="indefinite"/>
+    </path>
+    <circle cx="292" cy="122" r="4" fill="#ffd75c">
+      <animate attributeName="opacity" values=".25;1;.25" dur="3.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="657" cy="114" r="3.5" fill="#ffd75c">
+      <animate attributeName="opacity" values="1;.25;1" dur="4.1s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <g>
+    <text class="sans" x="480" y="438" fill="#f8f1e8" font-size="44" font-weight="900" text-anchor="middle">harness lint</text>
+    <text class="mono" x="480" y="470" fill="#c5d1c8" font-size="15" font-weight="800" text-anchor="middle">rules that make AI agents do the right thing</text>
+    <path d="M344 489H616" stroke="#f8efe0" stroke-opacity=".22" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

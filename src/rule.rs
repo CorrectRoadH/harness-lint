@@ -112,6 +112,14 @@ fn extract_body(markdown: &str) -> RuleBody {
     RuleBody::Missing
 }
 
+pub fn has_non_executable_grit_block(markdown: &str) -> bool {
+    let grit_blocks = fenced_codes(markdown, Some("grit"));
+    !grit_blocks.is_empty()
+        && grit_blocks
+            .iter()
+            .all(|(_, code)| !has_executable_grit(code))
+}
+
 fn has_executable_grit(code: &str) -> bool {
     code.lines().any(|line| {
         let trimmed = line.trim();

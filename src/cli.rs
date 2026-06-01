@@ -342,14 +342,23 @@ fn run_doctor(
         }
     }
     match validate_local_rules(&root, &config) {
-        Ok((rule_count, executable_count)) => {
-            let prose_only_count = rule_count.saturating_sub(executable_count);
+        Ok(validation) => {
+            let non_executable_count = validation
+                .rule_count
+                .saturating_sub(validation.executable_count);
             findings.push(doctor_ok(
                 "local-rules",
                 format!(
-                    "validated {rule_count} local rule(s), {executable_count} executable GritQL, {prose_only_count} prose-only"
+                    "validated {} local rule(s), {} executable GritQL, {} without executable GritQL",
+                    validation.rule_count, validation.executable_count, non_executable_count
                 ),
             ));
+            for rule in validation.non_executable_grit_rules {
+                findings.push(doctor_warn(
+                    "local-rules",
+                    non_executable_grit_rule_message(&rule),
+                ));
+            }
         }
         Err(error) => findings.push(doctor_error("local-rules", format!("{error:#}"))),
     }
@@ -463,7 +472,14 @@ fn report_doctor(findings: &[DoctorFinding], format: ReportFormat) -> Result<()>
     Ok(())
 }
 
-fn validate_local_rules(root: &Path, config: &ProjectConfig) -> Result<(usize, usize)> {
+#[derive(Debug)]
+struct LocalRuleValidation {
+    rule_count: usize,
+    executable_count: usize,
+    non_executable_grit_rules: Vec<RuleDefinition>,
+}
+
+fn validate_local_rules(root: &Path, config: &ProjectConfig) -> Result<LocalRuleValidation> {
     let mut rules = Vec::new();
     for dir in &config.rules.local {
         let path = if dir.is_absolute() {
@@ -478,6 +494,14 @@ fn validate_local_rules(root: &Path, config: &ProjectConfig) -> Result<(usize, u
             .with_context(|| format!("invalid local rules in {}", path.display()))?;
         rules.extend(discovered);
     }
+    let non_executable_grit_rules = rules
+        .iter()
+        .filter(|rule| matches!(rule.body, RuleBody::Missing))
+        .filter_map(|rule| {
+            let content = fs::read_to_string(&rule.source_path).ok()?;
+            crate::rule::has_non_executable_grit_block(&content).then(|| rule.clone())
+        })
+        .collect();
     let rule_count = rules.len();
     let executable_count = rules
         .iter()
@@ -487,7 +511,20 @@ fn validate_local_rules(root: &Path, config: &ProjectConfig) -> Result<(usize, u
         validate_local_gritql(root, rules)
             .context("local rule GritQL failed validation during doctor")?;
     }
-    Ok((rule_count, executable_count))
+    Ok(LocalRuleValidation {
+        rule_count,
+        executable_count,
+        non_executable_grit_rules,
+    })
+}
+
+fn non_executable_grit_rule_message(rule: &RuleDefinition) -> String {
+    format!(
+        "rule `{}` ({}) at {} contains a ```grit block but no executable GritQL; remove the fence for a documentation-only rule or replace the TODO/comment with a real GritQL pattern",
+        rule.id,
+        rule.title,
+        rule.source_path.display()
+    )
 }
 
 fn validate_local_gritql(root: &Path, rules: Vec<RuleDefinition>) -> Result<()> {
@@ -504,7 +541,53 @@ fn validate_local_gritql(root: &Path, rules: Vec<RuleDefinition>) -> Result<()> 
         .with_context(|| format!("failed to write {}", probe_path.display()))?;
     let result = grit::run_grit(root, &compiled, std::slice::from_ref(&probe_path)).map(|_| ());
     let _ = fs::remove_file(&probe_path);
-    result
+    if let Err(error) = result {
+        bail!("{}", local_gritql_validation_message(&compiled, &error));
+    }
+    Ok(())
+}
+
+fn local_gritql_validation_message(
+    compiled: &crate::model::CompiledRules,
+    error: &anyhow::Error,
+) -> String {
+    let message = format!("{error:#}");
+    let Some(pattern_name) = extract_grit_pattern_name(&message) else {
+        return message;
+    };
+    let Some(rule) = compiled
+        .grit_rules
+        .iter()
+        .find(|rule| compiler::safe_pattern_filename(&rule.id) == pattern_name)
+    else {
+        return message;
+    };
+
+    format!(
+        "{message}\n\nGrit pattern `{pattern_name}` was generated from rule `{}` ({}) at {}",
+        rule.id,
+        rule.title,
+        rule.source_path.display()
+    )
+}
+
+fn extract_grit_pattern_name(message: &str) -> Option<String> {
+    for marker in [
+        "Unable to compile pattern ",
+        "pattern definition not found: ",
+    ] {
+        let Some((_, rest)) = message.split_once(marker) else {
+            continue;
+        };
+        let pattern: String = rest
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_' || *ch == '-')
+            .collect();
+        if !pattern.is_empty() {
+            return Some(pattern);
+        }
+    }
+    None
 }
 
 fn run_cached_check(
@@ -661,6 +744,73 @@ mod tests {
             diagnostics[0].path,
             PathBuf::from("apps/website/e2e/user-preferences-display.spec.ts")
         );
+    }
+
+    #[test]
+    fn local_gritql_validation_message_reports_source_rule() {
+        let root = tempfile::tempdir().unwrap();
+        let source_path = root.path().join("Rules/playwright-ready.md");
+        let compiled = CompiledRules {
+            grit_dir: root.path().join(".harness/generated/.grit"),
+            grit_rules: vec![RuleDefinition {
+                id: "local.playwright-page-ready-gate".to_string(),
+                title: "Wait for page ready gate".to_string(),
+                language: Some("typescript".to_string()),
+                level: Severity::Warn,
+                skill: None,
+                tags: vec![],
+                description: String::new(),
+                body: RuleBody::Grit("language js\n`page.goto($url)`".to_string()),
+                examples: vec![],
+                source_path: source_path.clone(),
+                pack_id: Some("local".to_string()),
+            }],
+            skipped_rules: vec![],
+        };
+        let error = anyhow!(
+            "`grit check` failed: Error: Unable to compile pattern local_playwright_page_ready_gate:\npattern definition not found: local_playwright_page_ready_gate. Try running grit init."
+        );
+
+        let message = local_gritql_validation_message(&compiled, &error);
+
+        assert!(message.contains("rule `local.playwright-page-ready-gate`"));
+        assert!(message.contains("Wait for page ready gate"));
+        assert!(message.contains(&source_path.display().to_string()));
+    }
+
+    #[test]
+    fn local_rule_validation_reports_non_executable_grit_block() {
+        let root = tempfile::tempdir().unwrap();
+        let rules_dir = root.path().join("Rules");
+        fs::create_dir_all(&rules_dir).unwrap();
+        let rule_path = rules_dir.join("draft.md");
+        fs::write(
+            &rule_path,
+            r#"---
+id: local.draft-rule
+title: Draft Rule
+---
+
+# Draft Rule
+
+```grit
+// TODO: add a real pattern.
+```
+"#,
+        )
+        .unwrap();
+        let mut config = ProjectConfig::default();
+        config.rules.local = vec![PathBuf::from("Rules")];
+
+        let validation = validate_local_rules(root.path(), &config).unwrap();
+
+        assert_eq!(validation.rule_count, 1);
+        assert_eq!(validation.executable_count, 0);
+        assert_eq!(validation.non_executable_grit_rules.len(), 1);
+        let message = non_executable_grit_rule_message(&validation.non_executable_grit_rules[0]);
+        assert!(message.contains("rule `local.draft-rule`"));
+        assert!(message.contains(&rule_path.display().to_string()));
+        assert!(message.contains("contains a ```grit block but no executable GritQL"));
     }
 }
 

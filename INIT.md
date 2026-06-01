@@ -58,7 +58,7 @@ rules/
 
 然后把下面的标识块加入用户已有的 `AGENTS.md` 或 `CLAUDE.md`。优先更新已经存在的 agent 指令文件；如果两个都没有，创建 `AGENTS.md`。如果文件里已经有 `<!--HARNESS LINT START-->` 和 `<!--HARNESS LINT END-->`，只替换标识块内部内容，不要重复插入。
 
-把 `AGENTS-SNIPPET-CN.md` 里的 `<!--HARNESS LINT START-->` 到 `<!--HARNESS LINT END-->` 标识块安装到用户本仓库的 `AGENTS.md` 或 `CLAUDE.md`。如果两个文件有一个是软链接，只安装一次；如果两个都没有，就创建 `AGENTS.md`。
+读取 https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/AGENTS-SNIPPET.md 里的 `<!--HARNESS LINT START-->` 到 `<!--HARNESS LINT END-->` 标识块安装到用户本仓库的 `AGENTS.md` 或 `CLAUDE.md`。如果两个文件有一个是软链接，只安装一次；如果两个都没有，就创建 `AGENTS.md`。
 
 ## 3. 帮用户配置初始规则
 

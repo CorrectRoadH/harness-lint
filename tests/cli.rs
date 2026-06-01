@@ -24,7 +24,7 @@ fn cli_exposes_version_and_command_descriptions() {
 }
 
 #[test]
-fn cli_init_and_rule_suggest_local_work() {
+fn cli_init_and_rule_draft_work() {
     let tempdir = tempfile::tempdir().unwrap();
     let binary = env!("CARGO_BIN_EXE_harness-lint");
     let init = Command::new(binary)
@@ -38,7 +38,7 @@ fn cli_init_and_rule_suggest_local_work() {
     let suggest = Command::new(binary)
         .arg("--cwd")
         .arg(tempdir.path())
-        .args(["rule", "suggest", "--local", "Prefer pydantic models"])
+        .args(["rule", "draft", "Prefer pydantic models"])
         .output()
         .unwrap();
     assert!(suggest.status.success());

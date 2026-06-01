@@ -122,12 +122,10 @@ enum RuleCommand {
         #[arg(long)]
         language: Option<String>,
     },
-    #[command(about = "Find an existing rule or create a local draft from feedback")]
-    Suggest {
-        feedback: String,
-        #[arg(long)]
-        local: bool,
-    },
+    #[command(about = "Create a local rule draft from feedback")]
+    Draft { feedback: String },
+    #[command(about = "Find existing rule candidates from feedback")]
+    Suggest { feedback: String },
 }
 
 pub fn run() -> Result<ExitCode> {
@@ -851,44 +849,50 @@ fn run_rule(
                 draft.path.display()
             );
         }
-        RuleCommand::Suggest { feedback, local } => {
+        RuleCommand::Draft { feedback } => {
             let config = config::load_config(&root, config_path)?;
-            if !local {
-                let mut query = registry::infer_project_context(&root);
-                query.feedback = feedback.clone();
-                let candidates = registry::search_registry(&query, config.registry.url.as_deref())?;
-                if !candidates.is_empty() {
-                    println!("Found existing rule candidates:");
-                    for (index, candidate) in candidates.iter().enumerate() {
-                        println!(
-                            "{}. {} ({}) score={} pack={}",
-                            index + 1,
-                            candidate.title,
-                            candidate.rule_id,
-                            candidate.score,
-                            candidate.pack_spec
-                        );
-                        println!("   {}", candidate.reason);
-                    }
-                    let best = &candidates[0];
-                    println!();
-                    println!(
-                        "To install the best match, run:\n  harness-lint install {} {}",
-                        best.pack_id, best.pack_spec
-                    );
-                    println!(
-                        "To create a local draft instead, run:\n  harness-lint rule suggest --local {:?}",
-                        feedback
-                    );
-                    return Ok(());
-                }
-            }
             let draft = authoring::suggest_rule(&root, &config.rules.local, &feedback)?;
             println!(
                 "Created rule draft `{}` at {}",
                 draft.id,
                 draft.path.display()
             );
+        }
+        RuleCommand::Suggest { feedback } => {
+            let config = config::load_config(&root, config_path)?;
+            let mut query = registry::infer_project_context(&root);
+            query.feedback = feedback.clone();
+            let candidates = registry::search_registry(&query, config.registry.url.as_deref())?;
+            if !candidates.is_empty() {
+                println!("Found existing rule candidates:");
+                for (index, candidate) in candidates.iter().enumerate() {
+                    println!(
+                        "{}. {} ({}) score={} pack={}",
+                        index + 1,
+                        candidate.title,
+                        candidate.rule_id,
+                        candidate.score,
+                        candidate.pack_spec
+                    );
+                    println!("   {}", candidate.reason);
+                }
+                let best = &candidates[0];
+                println!();
+                println!(
+                    "To install the best match, run:\n  harness-lint install {} {}",
+                    best.pack_id, best.pack_spec
+                );
+                println!(
+                    "To create a local draft instead, run:\n  harness-lint rule draft {:?}",
+                    feedback
+                );
+            } else {
+                println!("No existing rule candidates found.");
+                println!(
+                    "To create a local draft, run:\n  harness-lint rule draft {:?}",
+                    feedback
+                );
+            }
         }
     }
     Ok(())

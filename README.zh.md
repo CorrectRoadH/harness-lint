@@ -42,7 +42,7 @@ harness-lint remove python
 local = ["custom-rules"]
 ```
 
-`rule suggest --local` 和 `rule new` 会把新规则写入第一个配置的本地规则目录。
+`rule draft` 和 `rule new` 会把新规则写入第一个配置的本地规则目录。
 
 规则文件示例：
 

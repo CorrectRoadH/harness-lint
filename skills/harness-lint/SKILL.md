@@ -37,33 +37,22 @@ Commit `harness.toml` and `rules/`. Do not commit `.harness/`; it is generated c
 
 ## Core Loop
 
-When user feedback or review comments describe a recurring issue, capture the preference as a rule before or alongside the code fix.
+When user feedback or review comments describe a recurring issue, capture the preference as a local rule.
 
 1. Read existing project guidance such as `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, README files, and review docs.
 2. Detect project languages and frameworks from files such as `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, and source extensions.
-3. Search for an existing pack first:
+3. Run `harness-lint rule list` to inspect existing lint rules and decide whether to update one.
+4. If a new rule is needed, create the local draft skeleton and rule filename with the CLI:
 
 ```sh
-harness-lint rule suggest "<constraint>"
+harness-lint rule draft "<constraint>"
 ```
 
-4. If the suggested external rule pack is suitable, explain it and ask before installing:
+5. Edit the created file under the configured local rule directory, usually `rules/`.
+6. Run `harness-lint doctor`.
+7. Run the lint:
 
 ```sh
-harness-lint install <pack-id>
-```
-
-5. If no suitable pack exists, create a local draft:
-
-```sh
-harness-lint rule suggest --local "<constraint>"
-```
-
-6. Edit the created file under the configured local rule directory, usually `rules/`.
-7. Run:
-
-```sh
-harness-lint rule list
 harness-lint check --changed
 ```
 
@@ -112,7 +101,6 @@ Authoring rules:
 - Use `status: draft` while the rule is uncertain or lacks a reliable GritQL pattern.
 - Use `status: warn` for active advisory checks, and `status: enforced` only after the title, explanation, Bad/Good examples, and GritQL are clear enough to fail builds.
 - Add `skill: <skill-name>` only when a lint hit should trigger a specific Codex skill.
-- Prefer maintained packs over local rules for standard language or framework conventions.
 - If GritQL cannot express the constraint yet, keep a draft with a TODO instead of inventing another execution path.
 
 ## Debugging Lint Failures
@@ -152,14 +140,5 @@ harness-lint check --changed --rule <rule-id>
 harness-lint rule list
 harness-lint rule explain <rule-id>
 harness-lint rule new <id> "<title>" --language <language>
-harness-lint rule suggest "<constraint>"
-harness-lint rule suggest --local "<constraint>"
-harness-lint search "<query>"
-harness-lint inspect <pack-id>
-harness-lint list --available
-harness-lint install <pack-id>
-harness-lint outdated
-harness-lint update
-harness-lint restore
-harness-lint remove <pack-id>
+harness-lint rule draft "<constraint>"
 ```

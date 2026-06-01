@@ -66,13 +66,11 @@ rules/
 
 然后把下面的标识块加入用户已有的 `AGENTS.md` 或 `CLAUDE.md`。优先更新已经存在的 agent 指令文件；如果两个都没有，创建 `AGENTS.md`。如果文件里已经有 `<!--HARNESS LINT START-->` 和 `<!--HARNESS LINT END-->`，只替换标识块内部内容，不要重复插入。
 
-帮下面 AGENTS 指引帮助用户安装到用户本仓库的 AGENTS.md 与 CLAUDE.md (如果有一个是软链接就只用安装一次)。如果没有就不用。把下面的内容插到最后就行。
-
-READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/AGENTS-Install.md
+把 `AGENTS-SNIPPET-CN.md` 里的 `<!--HARNESS LINT START-->` 到 `<!--HARNESS LINT END-->` 标识块安装到用户本仓库的 `AGENTS.md` 或 `CLAUDE.md`。如果两个文件有一个是软链接，只安装一次；如果两个都没有，就创建 `AGENTS.md`。
 
 ## 3. 帮用户配置初始规则
 
-初始化规则分成两个部分：先把用户仓库里已有的 agent 约束沉淀成本地规则，再根据仓库语言和常用库搜索可安装的外部规则包。
+初始化规则的目标是把用户仓库里已有的 agent 约束沉淀成本地规则。
 
 ### 3.1 从用户已有约束初始化本地规则
 
@@ -83,21 +81,21 @@ READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main
 - Go: `go.mod`、`*.go`
 - Rust: `Cargo.toml`、`*.rs`
 
-从用户已有的 `AGENTS.md`、`CLAUDE.md`、`.cursor/rules`、README 和 review 文档中提取稳定、可重复检查的约定，并直接创建或更新本地规则。规则名、标题、描述、Bad / Good 示例和最终给用户的总结，都应该使用用户习惯的语言；如果用户的仓库文档主要是中文，就用中文写规则内容。
+从用户已有的 `AGENTS.md`、`CLAUDE.md`、`.cursor/rules`、README 和 review 文档中提取稳定、可重复检查的约定，并直接创建或更新本地规则。规则名、标题、描述、Bad / Good 示例和最终给用户的总结，都应该使用用户习惯的语言；如果用户的仓库文档主要是中文，就用中文写规则内容。创建前先运行 `harness-lint rule list` 查看已有 lint，避免重复规则。
 
-不要把一次性任务、模糊偏好或无法检查的愿望强行变成 enforced 规则；不确定的先保持 `draft`。对每条可规则化的约定，创建本地草稿：
+不要把一次性任务、模糊偏好或无法检查的愿望强行变成 enforced 规则；不确定的先保持 `draft`。对每条需要新增的可规则化约定，统一用 CLI 创建本地 draft 骨架和规则文件名：
 
 ```sh
-harness-lint rule suggest --local "<constraint>"
+harness-lint rule draft "<constraint>"
 ```
 
-然后编辑生成的 `rules/*.md`：
+然后手动编辑生成的 `rules/*.md`：
 
 - 补充 `language`。
 - 用用户习惯的语言改好 `id`、`title`、正文说明、Bad / Good 示例。
 - 能写 GritQL 时写 GritQL。
 - 还拿不准时保持 `status: draft`。
-- 如果规则适合触发特定 Codex skill，添加 `skill: <skill-name>`。
+- 如果规则适合触发特定 Codex skill，添加精确的 `skill: <skill-name>`；不确定时留空。常见示例：`tdd` 用于测试先行修复，`triage-issue` 用于根因定位和 issue 计划，`codex-security:fix-finding` 用于明确安全漏洞修复，`build-web-apps:frontend-testing-debugging` 用于前端渲染/交互/回归问题，`build-web-apps:react-best-practices` 用于 React / Next.js 性能或最佳实践问题。
 
 完成后用用户的语言告诉用户“我帮你写了哪些规则”，并给一个 one-shot 摘要，不要只说“已创建规则”。
 
@@ -113,47 +111,10 @@ One-shot 示例：
 这些规则现在都还是 `draft`，因为我已经写了说明和 Bad / Good 示例，但其中第 3 条还需要再确认 GritQL 能否稳定覆盖你们的日志封装。
 ```
 
-### 3.2 搜索语言和库相关的外部规则包
-
-再根据仓库实际使用的语言、框架和关键库搜索可能相关的规则包。不要直接安装；先列出候选，并用用户的语言说明“我打算帮你装这些，是否同意”。
-
-使用这些命令发现候选：
-
-```sh
-harness-lint list --available
-harness-lint search "<language-or-library>"
-harness-lint inspect <pack-id>
-```
-
-推荐时要说明：
-
-- 为什么这个 pack 和当前仓库相关。
-- 它大概会检查哪些问题。
-- 是否可能和本地规则重复。
-- 需要用户同意后才执行 `harness-lint install <pack-id>`。
-
-One-shot 示例：
-
-````text
-我检测到这个仓库主要是 Python，并且用了 asyncio 和类型标注。我准备安装下面这些规则包：
-
-1. `python`：基础 Python 代码质量规则，覆盖调试输出、危险动态执行等常见问题。
-2. `python-typing`：类型标注相关规则，适合你们已有 `pyproject.toml` 和类型检查配置的项目。
-3. `python-async`：asyncio 相关规则，能检查未跟踪 task、库代码里直接 `asyncio.run` 等问题。
-
-这些是外部规则包，我还没有安装。你同意的话，我会运行：
-
-```sh
-harness-lint install python
-harness-lint install python-typing
-harness-lint install python-async
-```
-````
-
 最后运行：
 
 ```sh
-harness-lint rule list
+harness-lint doctor
 harness-lint check --changed
 ```
 
@@ -164,4 +125,3 @@ harness-lint check --changed
 - 写入或更新了哪个 agent 指令文件。
 - 发现了哪些语言/框架。
 - 从用户已有约束中创建了哪些本地规则，哪些仍是 draft。
-- 搜索到了哪些语言/库规则包候选，哪些需要用户确认安装。

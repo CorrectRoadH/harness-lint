@@ -258,6 +258,47 @@ pub fn install_git_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
     })
 }
 
+pub fn restore_git_pack(root: &Path, entry: &LockEntry) -> Result<ResolvedPack> {
+    let target = root.join(PACKS_DIR).join(&entry.id);
+    let temp_target = root.join(PACKS_DIR).join(format!("{}.tmp", entry.id));
+    if temp_target.exists() {
+        fs::remove_dir_all(&temp_target)
+            .with_context(|| format!("failed to clear {}", temp_target.display()))?;
+    }
+    fs::create_dir_all(target.parent().expect("pack target has parent"))
+        .with_context(|| format!("failed to create {}", root.join(PACKS_DIR).display()))?;
+
+    clone_git_source_from_lock(entry, &temp_target)?;
+    if target.exists() {
+        fs::remove_dir_all(&target)
+            .with_context(|| format!("failed to clear {}", target.display()))?;
+    }
+    fs::rename(&temp_target, &target).with_context(|| {
+        format!(
+            "failed to move restored pack from {} to {}",
+            temp_target.display(),
+            target.display()
+        )
+    })?;
+
+    let (_, fragment) = split_spec_path(&entry.spec);
+    let local_path = resolve_pack_root(&target, &entry.id, fragment)?;
+    let pack_path = pack_path_from_repo(&target, &local_path)?;
+    let checksum = git_tree_hash(&target, pack_path.as_deref()).ok();
+    Ok(ResolvedPack {
+        spec: PackSpec {
+            id: entry.id.clone(),
+            source: entry.source.clone(),
+            spec: entry.spec.clone(),
+            version_req: entry.requested_ref.clone(),
+        },
+        local_path,
+        pack_path,
+        version: git_commit(&target).ok(),
+        checksum,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackRemoteStatus {
     pub id: String,
@@ -430,6 +471,63 @@ fn clone_git_source(spec: &PackSpec, target: &Path) -> Result<()> {
         let _ = fs::remove_dir_all(target);
         bail!(
             "failed to clone {url}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+fn clone_git_source_from_lock(entry: &LockEntry, target: &Path) -> Result<()> {
+    let (git_spec, _) = split_spec_path(&entry.spec);
+    let url = git_url(git_spec);
+    let mut command = Command::new("git");
+    command
+        .arg("-c")
+        .arg("filter.lfs.required=false")
+        .arg("-c")
+        .arg("filter.lfs.smudge=")
+        .arg("-c")
+        .arg("filter.lfs.clean=")
+        .arg("-c")
+        .arg("filter.lfs.process=")
+        .arg("clone")
+        .arg("--no-checkout")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_LFS_SKIP_SMUDGE", "1")
+        .arg(&url)
+        .arg(target);
+    let output = command
+        .output()
+        .with_context(|| format!("failed to clone {url}"))?;
+    if !output.status.success() {
+        let _ = fs::remove_dir_all(target);
+        bail!(
+            "failed to clone {url}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    if let Some(version) = &entry.version {
+        git_checkout(target, version)?;
+    } else if let Some(requested_ref) = &entry.requested_ref {
+        git_checkout(target, requested_ref)?;
+    } else {
+        git_checkout(target, "HEAD")?;
+    }
+    Ok(())
+}
+
+fn git_checkout(path: &Path, ref_name: &str) -> Result<()> {
+    let output = Command::new("git")
+        .current_dir(path)
+        .args(["checkout", "--detach", ref_name])
+        .output()
+        .with_context(|| format!("failed to checkout {ref_name} in {}", path.display()))?;
+    if !output.status.success() {
+        let _ = fs::remove_dir_all(path);
+        bail!(
+            "failed to checkout {ref_name} in {}: {}",
+            path.display(),
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }

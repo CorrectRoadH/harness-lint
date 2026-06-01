@@ -24,6 +24,7 @@ const GRIT_BATCH_SIZE: usize = 256;
 
 #[derive(Debug, Parser)]
 #[command(name = "harness-lint")]
+#[command(version)]
 #[command(about = "GritQL rule ecosystem and AI feedback linter")]
 pub struct Cli {
     #[arg(long)]
@@ -40,29 +41,32 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    #[command(about = "Create harness.toml and local rule scaffolding")]
     Init(InitCommand),
+    #[command(about = "Diagnose config, rules, grit, and git integration")]
     Doctor,
+    #[command(about = "Run active rules against selected files")]
     Check(CheckCommand),
-    Search {
-        query: Vec<String>,
-    },
-    Inspect {
-        id: String,
-    },
-    Install {
-        id: String,
-        spec: Option<String>,
-    },
+    #[command(about = "Search the rule-pack catalog")]
+    Search { query: Vec<String> },
+    #[command(about = "Show details for a catalog rule pack")]
+    Inspect { id: String },
+    #[command(about = "Install a rule pack")]
+    Install { id: String, spec: Option<String> },
+    #[command(about = "Refresh installed rule packs and rewrite the lock file")]
     Update,
+    #[command(about = "Rebuild the local pack cache from harness.lock")]
     Restore,
+    #[command(about = "Check installed rule packs for updates")]
     Outdated,
-    Remove {
-        id: String,
-    },
+    #[command(about = "Remove an installed rule pack")]
+    Remove { id: String },
+    #[command(about = "List installed or available rule packs")]
     List {
         #[arg(long)]
         available: bool,
     },
+    #[command(about = "List, explain, create, or suggest local rules")]
     Rule {
         #[command(subcommand)]
         command: RuleCommand,
@@ -107,16 +111,18 @@ enum CatalogCommand {
 
 #[derive(Debug, Subcommand)]
 enum RuleCommand {
+    #[command(about = "List loaded rules")]
     List,
-    Explain {
-        rule_id: String,
-    },
+    #[command(about = "Explain a loaded rule")]
+    Explain { rule_id: String },
+    #[command(about = "Create a local rule draft")]
     New {
         id: String,
         title: String,
         #[arg(long)]
         language: Option<String>,
     },
+    #[command(about = "Find an existing rule or create a local draft from feedback")]
     Suggest {
         feedback: String,
         #[arg(long)]
@@ -621,8 +627,8 @@ fn run_catalog(
             println!("source: {}", pack.pack_spec);
             println!("install: harness-lint install {}", pack.id);
         }
-        CatalogCommand::Update => update_configured_packs(&root, config_path, "Updated")?,
-        CatalogCommand::Restore => update_configured_packs(&root, config_path, "Restored")?,
+        CatalogCommand::Update => update_configured_packs(&root, config_path)?,
+        CatalogCommand::Restore => restore_locked_packs(&root, config_path)?,
         CatalogCommand::Outdated => {
             let config = config::load_config(&root, config_path)?;
             let lock = config::load_lock(&root)?;
@@ -730,11 +736,7 @@ fn print_available_packs(registry_url: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-fn update_configured_packs(
-    root: &Path,
-    config_path: Option<&std::path::Path>,
-    verb: &str,
-) -> Result<()> {
+fn update_configured_packs(root: &Path, config_path: Option<&std::path::Path>) -> Result<()> {
     let config = config::load_config(root, config_path)?;
     let mut lock = config::load_lock(root)?;
     let mut updated = 0usize;
@@ -771,7 +773,45 @@ fn update_configured_packs(
         }
     }
     config::write_lock(root, &lock)?;
-    println!("{verb} {updated} of {} pack(s).", config.packs.len());
+    println!("Updated {updated} of {} pack(s).", config.packs.len());
+    Ok(())
+}
+
+fn restore_locked_packs(root: &Path, config_path: Option<&std::path::Path>) -> Result<()> {
+    let config = config::load_config(root, config_path)?;
+    let lock = config::load_lock(root)?;
+    let mut restored = 0usize;
+    for (id, spec) in &config.packs {
+        let Some(entry) = lock.packs.get(id) else {
+            bail!("pack `{id}` is missing from harness.lock; run `harness-lint update` first");
+        };
+        let parsed = pack::parse_pack_spec(id, spec);
+        if parsed.source != entry.source || parsed.spec != entry.spec {
+            bail!(
+                "pack `{id}` differs between harness.toml and harness.lock; run `harness-lint update` to refresh the lock"
+            );
+        }
+        match entry.source {
+            PackSourceKind::Local => {
+                let resolved = pack::resolve_local_pack(root, parsed)?;
+                if entry.checksum.is_some() && entry.checksum != resolved.checksum {
+                    bail!(
+                        "local pack `{id}` differs from harness.lock; run `harness-lint update` if this change is intentional"
+                    );
+                }
+            }
+            PackSourceKind::Git => {
+                let resolved = pack::restore_git_pack(root, entry)?;
+                if entry.checksum.is_some() && entry.checksum != resolved.checksum {
+                    bail!("restored pack `{id}` checksum differs from harness.lock");
+                }
+            }
+            _ => bail!("unsupported pack source for `{id}`"),
+        }
+        restored += 1;
+        println!("Restored pack `{id}`.");
+    }
+    println!("Restored {restored} of {} pack(s).", config.packs.len());
     Ok(())
 }
 

@@ -2,6 +2,28 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+fn cli_exposes_version_and_command_descriptions() {
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let version = Command::new(binary).arg("--version").output().unwrap();
+    assert!(
+        version.status.success(),
+        "{}",
+        String::from_utf8_lossy(&version.stderr)
+    );
+    assert!(String::from_utf8_lossy(&version.stdout).contains(env!("CARGO_PKG_VERSION")));
+
+    let help = Command::new(binary).arg("--help").output().unwrap();
+    assert!(
+        help.status.success(),
+        "{}",
+        String::from_utf8_lossy(&help.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&help.stdout);
+    assert!(stdout.contains("Run active rules against selected files"));
+    assert!(stdout.contains("Rebuild the local pack cache from harness.lock"));
+}
+
+#[test]
 fn cli_init_and_rule_suggest_local_work() {
     let tempdir = tempfile::tempdir().unwrap();
     let binary = env!("CARGO_BIN_EXE_harness-lint");
@@ -187,6 +209,53 @@ language python
         update.status.success(),
         "{}",
         String::from_utf8_lossy(&update.stderr)
+    );
+
+    let restore = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .arg("restore")
+        .output()
+        .unwrap();
+    assert!(
+        restore.status.success(),
+        "{}",
+        String::from_utf8_lossy(&restore.stderr)
+    );
+
+    fs::write(
+        rules_dir.join("no-print.md"),
+        r#"---
+id: demo.no-print
+title: Avoid print
+language: python
+level: warn
+status: warn
+tags: [python]
+---
+
+# Avoid print
+
+Use structured logging instead.
+
+```grit
+language python
+`print($value)`
+```
+"#,
+    )
+    .unwrap();
+
+    let restore_changed_local = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .arg("restore")
+        .output()
+        .unwrap();
+    assert!(!restore_changed_local.status.success());
+    assert!(
+        String::from_utf8_lossy(&restore_changed_local.stderr)
+            .contains("differs from harness.lock")
     );
 
     let remove = Command::new(binary)

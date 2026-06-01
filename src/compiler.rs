@@ -149,7 +149,7 @@ fn remove_stale_patterns(
     Ok(())
 }
 
-fn safe_pattern_filename(rule_id: &str) -> String {
+pub(crate) fn safe_pattern_filename(rule_id: &str) -> String {
     let filename: String = rule_id
         .chars()
         .map(|ch| {

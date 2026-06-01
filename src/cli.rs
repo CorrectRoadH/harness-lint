@@ -467,7 +467,7 @@ fn run_cached_check(
         let file_hash = cache::file_hash(root, path)?;
         let key = cache::file_cache_key(path, &file_hash, rule_fingerprint, config_fingerprint);
         if let Some(cached) = cache::load_file(root, &key)? {
-            diagnostics.extend(cached);
+            diagnostics.extend(normalize_diagnostics(root, compiled, cached));
         } else {
             misses.push(path.clone());
             miss_keys.insert(path.clone(), key);
@@ -492,7 +492,11 @@ fn run_cached_check(
             );
         }
         let batch_paths = batch.to_vec();
-        let fresh = normalize_diagnostics(root, grit::run_grit(root, compiled, &batch_paths)?);
+        let fresh = normalize_diagnostics(
+            root,
+            compiled,
+            grit::run_grit(root, compiled, &batch_paths)?,
+        );
         let mut by_path = cache::group_by_path(root, fresh);
         for path in batch {
             let path_diagnostics = by_path.remove(path).unwrap_or_default();
@@ -522,6 +526,7 @@ fn run_uncached_check(
     for batch in paths.chunks(GRIT_BATCH_SIZE) {
         diagnostics.extend(normalize_diagnostics(
             root,
+            compiled,
             grit::run_grit(root, compiled, batch)?,
         ));
     }
@@ -530,15 +535,80 @@ fn run_uncached_check(
 
 fn normalize_diagnostics(
     root: &Path,
+    compiled: &crate::model::CompiledRules,
     diagnostics: Vec<crate::model::Diagnostic>,
 ) -> Vec<crate::model::Diagnostic> {
+    let rule_ids_by_grit_name: BTreeMap<String, String> = compiled
+        .grit_rules
+        .iter()
+        .map(|rule| (compiler::safe_pattern_filename(&rule.id), rule.id.clone()))
+        .collect();
     diagnostics
         .into_iter()
         .map(|mut diagnostic| {
             diagnostic.path = cache::normalize_path(root, &diagnostic.path);
+            if let Some(rule_id) = rule_ids_by_grit_name.get(&diagnostic.rule_id) {
+                diagnostic.rule_id = rule_id.clone();
+            }
             diagnostic
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{
+        CompiledRules, Diagnostic, RuleBody, RuleDefinition, RuleStatus, Severity,
+    };
+
+    #[test]
+    fn normalize_diagnostics_reports_canonical_rule_ids() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = tempdir.path();
+        let compiled = CompiledRules {
+            grit_dir: root.join(".harness/generated/.grit"),
+            grit_rules: vec![RuleDefinition {
+                id: "local.playwright-no-inflated-assertion-timeouts".to_string(),
+                title: "Avoid inflated Playwright assertion timeouts".to_string(),
+                language: Some("typescript".to_string()),
+                level: Severity::Warn,
+                status: RuleStatus::Warn,
+                skill: None,
+                tags: vec![],
+                description: String::new(),
+                body: RuleBody::Grit(String::new()),
+                examples: vec![],
+                source_path: root.join("Rules/rule.md"),
+                pack_id: Some("local".to_string()),
+            }],
+            skipped_drafts: vec![],
+        };
+        let diagnostics = normalize_diagnostics(
+            root,
+            &compiled,
+            vec![Diagnostic {
+                rule_id: "local_playwright_no_inflated_assertion_timeouts".to_string(),
+                level: Severity::Warn,
+                message: "message".to_string(),
+                path: root.join("apps/website/e2e/user-preferences-display.spec.ts"),
+                start_line: 14,
+                start_column: 5,
+                end_line: None,
+                end_column: None,
+                fix_available: false,
+            }],
+        );
+
+        assert_eq!(
+            diagnostics[0].rule_id,
+            "local.playwright-no-inflated-assertion-timeouts"
+        );
+        assert_eq!(
+            diagnostics[0].path,
+            PathBuf::from("apps/website/e2e/user-preferences-display.spec.ts")
+        );
+    }
 }
 
 fn run_catalog(

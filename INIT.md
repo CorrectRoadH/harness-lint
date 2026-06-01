@@ -25,16 +25,11 @@ command -v grit
 grit --version
 ```
 
-如果 `harness-lint` 不存在，优先建议：
-
-```sh
-brew install CorrectRoadH/tap/harness-lint
-```
-
-如果 `grit` 不存在，建议：
+如果 `harness-lint` 不存在，帮用户安装
 
 ```sh
 brew install getgrit/tap/grit
+brew install CorrectRoadH/tap/harness-lint
 ```
 
 安装后重新运行 `harness-lint doctor`。如果用户的环境不是 macOS/Homebrew，根据项目环境选择等价安装方式，并明确告诉用户你做了什么。
@@ -59,39 +54,9 @@ rules/
 
 然后把下面的标识块加入用户已有的 `AGENTS.md` 或 `CLAUDE.md`。优先更新已经存在的 agent 指令文件；如果两个都没有，创建 `AGENTS.md`。如果文件里已经有 `<!--HARNESS LINT START-->` 和 `<!--HARNESS LINT END-->`，只替换标识块内部内容，不要重复插入。
 
-```markdown
-<!--HARNESS LINT START-->
-When user feedback or a code review points to a recurring code-quality issue, do not fix only the current instance first. Create or update a `harness-lint` rule that captures the issue, run the lint so it reports the problem, and then change the code until the lint passes.
+帮下面 AGENTS 指引帮助用户安装到用户本仓库的 AGENTS.md 与 CLAUDE.md (如果有一个是软链接就只用安装一次)。如果没有就不用。把下面的内容插到最后就行。
 
-For code-related fixes, use this workflow:
-
-1. Convert the feedback into a rule with `harness-lint rule suggest "<feedback>"`, or update an existing rule under `rules/`.
-2. If the rule should trigger a specific Codex skill, add `skill: <skill-name>` to the rule frontmatter.
-3. Run `harness-lint check --changed` and confirm the lint identifies the issue.
-4. Fix the code.
-5. Run `harness-lint check --changed` again before finishing.
-
-Example rule frontmatter:
-
-```yaml
----
-id: local.prefer-pydantic-validation
-title: Prefer Pydantic Validation
-language: python
-level: warn
-status: draft
-skill: tdd
-tags: [local, ai-feedback, python]
----
-```
-<!--HARNESS LINT END-->
-```
-
-完成后运行：
-
-```sh
-harness-lint doctor
-```
+READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/AGENTS-Install.md
 
 ## 3. 帮用户配置初始规则
 

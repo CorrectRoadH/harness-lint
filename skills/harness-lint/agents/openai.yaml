@@ -1,0 +1,7 @@
+interface:
+  display_name: "harness-lint"
+  short_description: "Install, author, and debug harness-lint rules"
+  default_prompt: "Use $harness-lint to install harness-lint in this repo and turn recurring feedback into checked rules."
+
+policy:
+  allow_implicit_invocation: true

@@ -18,7 +18,7 @@ use crate::obsidian;
 use crate::pack;
 use crate::paths;
 use crate::registry;
-use crate::report::{self, ReportFormat};
+use crate::report::{self, DiagnosticReportOptions, ReportFormat};
 
 const GRIT_BATCH_SIZE: usize = 256;
 
@@ -215,7 +215,7 @@ fn run_check(
         );
     }
     if selected_paths.grit.is_empty() && selected_paths.obsidian.is_empty() {
-        report::report_diagnostics(&[], format)?;
+        report::report_diagnostics(&[], format, DiagnosticReportOptions { root: &root })?;
         return Ok(());
     }
     let mut diagnostics = if active_rules.is_empty() || selected_paths.grit.is_empty() {
@@ -252,7 +252,11 @@ fn run_check(
             .then(left.start_column.cmp(&right.start_column))
             .then(left.rule_id.cmp(&right.rule_id))
     });
-    report::report_diagnostics(&diagnostics, format)?;
+    report::report_diagnostics(
+        &diagnostics,
+        format,
+        DiagnosticReportOptions { root: &root },
+    )?;
     if diagnostics
         .iter()
         .any(|diagnostic| diagnostic.level.is_failing())

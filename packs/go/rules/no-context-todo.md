@@ -3,7 +3,6 @@ id: go.no-context-todo
 title: Avoid context.TODO in application flow
 language: go
 level: warn
-status: warn
 tags: [go, context]
 ---
 

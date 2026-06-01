@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::model::{
-    CompiledRules, Diagnostic, LockEntry, PackSpec, ProjectContext, RegistryCandidate,
-    RegistryQuery, ResolvedPack, RuleDraft, RulePack,
+    CompiledRules, CreatedRule, Diagnostic, LockEntry, PackSpec, ProjectContext, RegistryCandidate,
+    RegistryQuery, ResolvedPack, RulePack,
 };
 
 pub trait RuleSource {
@@ -21,7 +21,7 @@ pub trait GritRunner {
 }
 
 pub trait RuleAuthoring {
-    fn suggest_rule(&self, feedback: String, context: ProjectContext) -> Result<RuleDraft>;
+    fn create_rule(&self, feedback: String, context: ProjectContext) -> Result<CreatedRule>;
 }
 
 pub trait Reporter {

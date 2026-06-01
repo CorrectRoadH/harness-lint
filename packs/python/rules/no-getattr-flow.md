@@ -3,7 +3,6 @@ id: python.no-getattr-flow
 title: Avoid getattr in normal application flow
 language: python
 level: warn
-status: warn
 tags: [python, typing, dynamic-access]
 ---
 

@@ -3,7 +3,6 @@ id: go.no-fmt-print-debug
 title: Avoid fmt print debugging
 language: go
 level: warn
-status: warn
 tags: [go, logging]
 ---
 

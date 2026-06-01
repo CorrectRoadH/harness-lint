@@ -3,7 +3,6 @@ id: typescript-react.no-index-key
 title: Avoid array index keys
 language: typescript
 level: warn
-status: warn
 tags: [typescript, react, rendering]
 ---
 

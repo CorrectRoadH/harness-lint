@@ -68,7 +68,6 @@ id: local.no-print-debug
 title: Avoid Print Debugging
 language: python
 level: warn
-status: draft
 skill: tdd
 tags: [local, python, debug]
 ---
@@ -98,10 +97,48 @@ logger.info("user=%s", user)
 Authoring rules:
 
 - Keep one rule focused on one durable preference.
-- Use `status: draft` while the rule is uncertain or lacks a reliable GritQL pattern.
-- Use `status: warn` for active advisory checks, and `status: enforced` only after the title, explanation, Bad/Good examples, and GritQL are clear enough to fail builds.
+- Rule ids and filenames should be readable and stable. Any language is allowed, but avoid punctuation and decorative symbols. Use `-` instead of spaces. For English ids, prefer lowercase kebab-case such as `local.no-print-debug`. For Chinese ids, prefer short plain phrases such as `local.禁止使用UI` or `local.禁止-使用-UI`.
+- Keep `id` and the filename aligned when practical, so `id: local.no-print-debug` lives in `no-print-debug.md`.
+- Use `level: warn` for advisory checks.
+- Use `level: error` only when the title, explanation, Bad/Good examples, and GritQL are clear enough to fail builds.
 - Add `skill: <skill-name>` only when a lint hit should trigger a specific Codex skill.
-- If GritQL cannot express the constraint yet, keep a draft with a TODO instead of inventing another execution path.
+- Use at most one fenced `grit` block per rule file. `harness-lint doctor` rejects multiple GritQL blocks because only one executable pattern belongs to one rule.
+- If GritQL cannot express the constraint yet, leave the GritQL block out and keep a TODO in prose instead of inventing another execution path.
+
+Writing GritQL:
+
+- Start with `language <name>` when the rule targets a specific language, for example `language typescript` or `language python`.
+- Prefer the smallest syntax shape that proves the rule. A narrow pattern with fewer false positives is better than a broad one that guesses intent.
+- Use metavariables such as `$value`, `$name`, or `$body` for parts that may vary.
+- Match the forbidden shape directly first. Add exceptions only after a real false positive appears.
+- If a rule spans files, project configuration, semantic ownership, or intent that GritQL cannot see, keep it prose-only at `level: warn` until there is a reliable executable pattern.
+
+Example patterns:
+
+````markdown
+```grit
+language typescript
+`console.log($value)`
+```
+
+```grit
+language python
+`print($value)`
+```
+
+```grit
+language go
+`context.TODO()`
+```
+````
+
+Bad/Good examples:
+
+- Bad examples must be minimal code that should trigger the rule.
+- Good examples must show the preferred local style, not only “delete the bad code”.
+- Keep examples in the same language as `language`.
+- Include exactly the edge case the rule is about; avoid large unrelated scaffolding.
+- When a rule is `level: error`, Bad/Good examples and executable GritQL are required quality gates.
 
 ## Debugging Lint Failures
 
@@ -124,7 +161,7 @@ harness-lint --json check --changed --rule <rule-id>
 Fixing flow:
 
 1. If the rule correctly describes the project convention, fix the code.
-2. If the rule is ambiguous, improve its title, prose, Bad/Good examples, or GritQL while keeping it as `draft`.
+2. If the rule is ambiguous, improve its title, prose, Bad/Good examples, or GritQL while keeping it at `level: warn`.
 3. If the rule is a false positive, adjust the GritQL pattern and rerun the targeted check.
 4. If the rule should not apply to a path or case, prefer a narrow rule/pattern fix. Use `harness.toml` overrides, disabled rules, or ignore paths only when the project intentionally wants that policy.
 5. Rerun `harness-lint check --changed` before finishing.

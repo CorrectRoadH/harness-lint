@@ -3,7 +3,6 @@ id: python.no-runtime-assert
 title: Avoid assert for runtime validation
 language: python
 level: warn
-status: warn
 tags: [python, validation]
 ---
 

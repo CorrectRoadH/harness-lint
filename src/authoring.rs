@@ -1,36 +1,25 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
-use heck::{ToKebabCase, ToTitleCase};
+use anyhow::{Context, Result, bail};
 
 use crate::config::USER_RULE_DIR;
-use crate::model::RuleDraft;
+use crate::model::CreatedRule;
 
-pub fn suggest_rule(root: &Path, local_rule_dirs: &[PathBuf], feedback: &str) -> Result<RuleDraft> {
-    let id_tail = feedback
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || ch.is_whitespace() || *ch == '-' || *ch == '_')
-        .collect::<String>()
-        .split_whitespace()
-        .take(8)
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_kebab_case();
-    let id_tail = if id_tail.is_empty() {
-        "custom-preference".to_string()
-    } else {
-        id_tail
-    };
+pub fn create_rule(
+    root: &Path,
+    local_rule_dirs: &[PathBuf],
+    feedback: &str,
+) -> Result<CreatedRule> {
+    let id_tail = rule_name_from_feedback(feedback)?;
     let id = format!("local.{id_tail}");
-    let title = id_tail.replace('-', " ").to_title_case();
+    let title = feedback.trim().to_string();
     let path = target_rule_dir(root, local_rule_dirs).join(format!("{id_tail}.md"));
     let content = format!(
         r#"---
 id: {id}
 title: {title:?}
 level: warn
-status: draft
 skill:
 tags: [local, ai-feedback]
 ---
@@ -39,9 +28,7 @@ tags: [local, ai-feedback]
 
 {feedback}
 
-```grit
-// TODO: Add GritQL once the matching shape is clear.
-```
+TODO: Add GritQL once the matching shape is clear.
 
 ## Bad
 
@@ -63,12 +50,35 @@ TODO: Add an example that should be allowed.
     }
     fs::write(&path, &content).with_context(|| format!("failed to write {}", path.display()))?;
 
-    Ok(RuleDraft {
+    Ok(CreatedRule {
         id,
         title,
         path,
         content,
     })
+}
+
+fn rule_name_from_feedback(feedback: &str) -> Result<String> {
+    let trimmed = feedback.trim();
+    if trimmed.is_empty() {
+        bail!("rule feedback is empty; pass a short rule description");
+    }
+
+    for (char_index, (byte_index, ch)) in trimmed.char_indices().enumerate() {
+        if is_forbidden_rule_name_char(ch) {
+            bail!(
+                "rule feedback contains unsupported character `{}` at character {}, byte {}; remove path separators, control characters, and cross-platform filename punctuation",
+                ch,
+                char_index + 1,
+                byte_index
+            );
+        }
+    }
+    Ok(trimmed.to_string())
+}
+
+fn is_forbidden_rule_name_char(ch: char) -> bool {
+    ch.is_control() || matches!(ch, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
 }
 
 fn target_rule_dir(root: &Path, local_rule_dirs: &[PathBuf]) -> PathBuf {
@@ -88,21 +98,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn suggest_rule_creates_draft_file() {
+    fn create_rule_creates_rule_file() {
         let tempdir = tempfile::tempdir().unwrap();
-        let draft = suggest_rule(
+        let created = create_rule(
             tempdir.path(),
             &[PathBuf::from("custom-rules")],
             "Prefer pydantic models",
         )
         .unwrap();
-        assert_eq!(draft.id, "local.prefer-pydantic-models");
+        assert_eq!(created.id, "local.Prefer pydantic models");
         assert_eq!(
-            draft.path,
+            created.path,
             tempdir
                 .path()
-                .join("custom-rules/prefer-pydantic-models.md")
+                .join("custom-rules/Prefer pydantic models.md")
         );
-        assert!(draft.content.contains("status: draft"));
+        assert!(!created.content.contains("status:"));
+    }
+
+    #[test]
+    fn create_rule_preserves_unicode_feedback_in_rule_name() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_rule(
+            tempdir.path(),
+            &[PathBuf::from("Rules")],
+            "你好，不允许使用UI",
+        )
+        .unwrap();
+        assert_eq!(created.id, "local.你好，不允许使用UI");
+        assert_eq!(created.title, "你好，不允许使用UI");
+        assert_eq!(
+            created.path,
+            tempdir.path().join("Rules/你好，不允许使用UI.md")
+        );
+    }
+
+    #[test]
+    fn create_rule_rejects_path_separators() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let error = create_rule(tempdir.path(), &[PathBuf::from("Rules")], "不要用 UI/DOM")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unsupported character `/`"));
     }
 }

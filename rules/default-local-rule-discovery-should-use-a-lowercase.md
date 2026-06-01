@@ -3,7 +3,6 @@ id: local.default-local-rule-discovery-should-use-a-lowercase
 title: "Default Local Rule Discovery Should Use A Lowercase"
 language: rust
 level: warn
-status: warn
 skill:
 tags: [local, ai-feedback]
 ---

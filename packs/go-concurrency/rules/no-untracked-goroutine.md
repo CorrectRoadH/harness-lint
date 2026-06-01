@@ -3,7 +3,6 @@ id: go-concurrency.no-untracked-goroutine
 title: Review untracked goroutines
 language: go
 level: warn
-status: warn
 tags: [go, concurrency, lifecycle]
 ---
 

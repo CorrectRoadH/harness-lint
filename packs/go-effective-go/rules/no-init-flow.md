@@ -3,7 +3,6 @@ id: go-effective-go.no-init-flow
 title: Review init functions
 language: go
 level: warn
-status: warn
 tags: [go, effective-go, package-design]
 ---
 

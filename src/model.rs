@@ -52,44 +52,6 @@ impl fmt::Display for Severity {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum RuleStatus {
-    Draft,
-    Warn,
-    Enforced,
-}
-
-impl Default for RuleStatus {
-    fn default() -> Self {
-        Self::Draft
-    }
-}
-
-impl FromStr for RuleStatus {
-    type Err = String;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.to_ascii_lowercase().as_str() {
-            "draft" => Ok(Self::Draft),
-            "warn" | "warning" => Ok(Self::Warn),
-            "enforced" | "error" => Ok(Self::Enforced),
-            _ => Err(format!("unknown rule status `{value}`")),
-        }
-    }
-}
-
-impl fmt::Display for RuleStatus {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let value = match self {
-            Self::Draft => "draft",
-            Self::Warn => "warn",
-            Self::Enforced => "enforced",
-        };
-        formatter.write_str(value)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PackSourceKind {
@@ -145,7 +107,6 @@ pub struct RuleDefinition {
     pub title: String,
     pub language: Option<String>,
     pub level: Severity,
-    pub status: RuleStatus,
     pub skill: Option<String>,
     pub tags: Vec<String>,
     pub description: String,
@@ -195,7 +156,7 @@ pub struct ProjectContext {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RuleDraft {
+pub struct CreatedRule {
     pub id: String,
     pub title: String,
     pub path: PathBuf,
@@ -206,7 +167,7 @@ pub struct RuleDraft {
 pub struct CompiledRules {
     pub grit_dir: PathBuf,
     pub grit_rules: Vec<RuleDefinition>,
-    pub skipped_drafts: Vec<RuleDefinition>,
+    pub skipped_rules: Vec<RuleDefinition>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

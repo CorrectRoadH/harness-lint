@@ -3,7 +3,6 @@ id: go-concurrency.no-background-context-flow
 title: Avoid context.Background in request flow
 language: go
 level: warn
-status: warn
 tags: [go, concurrency, context]
 ---
 

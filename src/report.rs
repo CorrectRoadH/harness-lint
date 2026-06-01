@@ -119,9 +119,8 @@ pub fn print_rules(rules: &[RuleDefinition], format: ReportFormat) -> Result<()>
             }
             for rule in rules {
                 println!(
-                    "{}\t{:?}\t{:?}\t{}",
+                    "{}\t{:?}\t{}",
                     rule.id,
-                    rule.status,
                     rule.level,
                     rule.source_path.display()
                 );
@@ -134,7 +133,6 @@ pub fn print_rules(rules: &[RuleDefinition], format: ReportFormat) -> Result<()>
 pub fn print_rule_explain(rule: &RuleDefinition) {
     println!("# {}\n", rule.title);
     println!("id: `{}`", rule.id);
-    println!("status: `{:?}`", rule.status);
     println!("level: `{:?}`", rule.level);
     println!("source: `{}`\n", rule.source_path.display());
     if !rule.description.is_empty() {
@@ -151,7 +149,6 @@ fn rules_to_json(rules: &[RuleDefinition]) -> Vec<serde_json::Value> {
                 "title": rule.title,
                 "language": rule.language,
                 "level": format!("{:?}", rule.level),
-                "status": format!("{:?}", rule.status),
                 "skill": rule.skill,
                 "source_path": rule.source_path,
                 "pack_id": rule.pack_id,

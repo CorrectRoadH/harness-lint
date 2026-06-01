@@ -3,7 +3,6 @@ id: go-effective-go.no-empty-interface-api
 title: Avoid empty interface API boundaries
 language: go
 level: warn
-status: warn
 tags: [go, effective-go, api]
 ---
 

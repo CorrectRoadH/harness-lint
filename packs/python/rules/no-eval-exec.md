@@ -3,7 +3,6 @@ id: python.no-eval-exec
 title: Avoid eval and exec
 language: python
 level: warn
-status: warn
 tags: [python, security]
 ---
 

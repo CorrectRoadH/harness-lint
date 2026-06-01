@@ -3,7 +3,6 @@ id: typescript.no-console-log
 title: Avoid committed console.log
 language: typescript
 level: warn
-status: warn
 tags: [typescript, javascript, logging]
 ---
 

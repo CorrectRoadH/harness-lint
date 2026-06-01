@@ -3,7 +3,6 @@ id: python.no-print-debug
 title: Avoid committed print debugging
 language: python
 level: warn
-status: warn
 tags: [python, logging]
 ---
 

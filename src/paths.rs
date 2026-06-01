@@ -110,7 +110,7 @@ fn is_internal_path(path: &Path, rule_dirs: &[PathBuf]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{RuleBody, RuleStatus, Severity};
+    use crate::model::{RuleBody, Severity};
 
     #[test]
     fn filters_by_language_and_internal_paths() {
@@ -119,7 +119,6 @@ mod tests {
             title: "x".to_string(),
             language: Some("python".to_string()),
             level: Severity::Warn,
-            status: RuleStatus::Warn,
             skill: None,
             tags: vec![],
             description: String::new(),

@@ -13,7 +13,7 @@ use crate::config::{self, ProjectConfig};
 use crate::git;
 use crate::grit;
 use crate::init;
-use crate::model::{PackSourceKind, RuleDefinition};
+use crate::model::{PackSourceKind, RuleBody, RuleDefinition};
 use crate::obsidian;
 use crate::pack;
 use crate::paths;
@@ -341,6 +341,18 @@ fn run_doctor(
             ));
         }
     }
+    match validate_local_rules(&root, &config) {
+        Ok((rule_count, executable_count)) => {
+            let prose_only_count = rule_count.saturating_sub(executable_count);
+            findings.push(doctor_ok(
+                "local-rules",
+                format!(
+                    "validated {rule_count} local rule(s), {executable_count} executable GritQL, {prose_only_count} prose-only"
+                ),
+            ));
+        }
+        Err(error) => findings.push(doctor_error("local-rules", format!("{error:#}"))),
+    }
 
     match load_rule_packs(&root, &config) {
         Ok(packs) => {
@@ -451,6 +463,50 @@ fn report_doctor(findings: &[DoctorFinding], format: ReportFormat) -> Result<()>
     Ok(())
 }
 
+fn validate_local_rules(root: &Path, config: &ProjectConfig) -> Result<(usize, usize)> {
+    let mut rules = Vec::new();
+    for dir in &config.rules.local {
+        let path = if dir.is_absolute() {
+            dir.clone()
+        } else {
+            root.join(dir)
+        };
+        if !path.exists() {
+            continue;
+        }
+        let discovered = crate::rule::discover_rules(&path, None)
+            .with_context(|| format!("invalid local rules in {}", path.display()))?;
+        rules.extend(discovered);
+    }
+    let rule_count = rules.len();
+    let executable_count = rules
+        .iter()
+        .filter(|rule| matches!(rule.body, RuleBody::Grit(_)))
+        .count();
+    if executable_count > 0 {
+        validate_local_gritql(root, rules)
+            .context("local rule GritQL failed validation during doctor")?;
+    }
+    Ok((rule_count, executable_count))
+}
+
+fn validate_local_gritql(root: &Path, rules: Vec<RuleDefinition>) -> Result<()> {
+    let compiled = compiler::compile_rule_set(root, rules)?;
+    if compiled.grit_rules.is_empty() {
+        return Ok(());
+    }
+
+    let probe_path = std::env::temp_dir().join(format!(
+        "harness-lint-doctor-probe-{}.ts",
+        std::process::id()
+    ));
+    fs::write(&probe_path, "const harnessLintDoctorProbe = 1;\n")
+        .with_context(|| format!("failed to write {}", probe_path.display()))?;
+    let result = grit::run_grit(root, &compiled, std::slice::from_ref(&probe_path)).map(|_| ());
+    let _ = fs::remove_file(&probe_path);
+    result
+}
+
 fn run_cached_check(
     root: &Path,
     compiled: &crate::model::CompiledRules,
@@ -558,9 +614,7 @@ fn normalize_diagnostics(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{
-        CompiledRules, Diagnostic, RuleBody, RuleDefinition, RuleStatus, Severity,
-    };
+    use crate::model::{CompiledRules, Diagnostic, RuleBody, RuleDefinition, Severity};
 
     #[test]
     fn normalize_diagnostics_reports_canonical_rule_ids() {
@@ -573,7 +627,6 @@ mod tests {
                 title: "Avoid inflated Playwright assertion timeouts".to_string(),
                 language: Some("typescript".to_string()),
                 level: Severity::Warn,
-                status: RuleStatus::Warn,
                 skill: None,
                 tags: vec![],
                 description: String::new(),
@@ -582,7 +635,7 @@ mod tests {
                 source_path: root.join("Rules/rule.md"),
                 pack_id: Some("local".to_string()),
             }],
-            skipped_drafts: vec![],
+            skipped_rules: vec![],
         };
         let diagnostics = normalize_diagnostics(
             root,
@@ -900,8 +953,12 @@ fn run_rule(
         }
         RuleCommand::Create { feedback } => {
             let config = config::load_config(&root, config_path)?;
-            let draft = authoring::suggest_rule(&root, &config.rules.local, &feedback)?;
-            println!("Created rule `{}` at {}", draft.id, draft.path.display());
+            let created = authoring::create_rule(&root, &config.rules.local, &feedback)?;
+            println!(
+                "Created rule `{}` at {}",
+                created.id,
+                created.path.display()
+            );
         }
         RuleCommand::Suggest { feedback } => {
             let config = config::load_config(&root, config_path)?;
@@ -1066,7 +1123,7 @@ fn collect_effective_rules(
     let mut rules = Vec::new();
     for pack in packs {
         for mut rule in pack.rules.clone() {
-            if rule.status == crate::model::RuleStatus::Draft {
+            if !matches!(rule.body, crate::model::RuleBody::Grit(_)) {
                 continue;
             }
             if config.disabled.rules.iter().any(|id| id == &rule.id) {

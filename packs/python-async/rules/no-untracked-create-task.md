@@ -3,7 +3,6 @@ id: python-async.no-untracked-create-task
 title: Avoid untracked create_task calls
 language: python
 level: warn
-status: warn
 tags: [python, async, lifecycle]
 ---
 

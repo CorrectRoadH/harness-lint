@@ -45,7 +45,7 @@ fn cli_init_and_rule_create_work() {
     assert!(
         tempdir
             .path()
-            .join("rules/prefer-pydantic-models.md")
+            .join("rules/Prefer pydantic models.md")
             .exists()
     );
 }
@@ -75,7 +75,6 @@ id: demo.no-print
 title: Avoid print
 language: python
 level: warn
-status: warn
 tags: [python]
 ---
 
@@ -170,7 +169,6 @@ id: demo.no-print
 title: Avoid print
 language: python
 level: warn
-status: warn
 tags: [python]
 ---
 
@@ -230,7 +228,6 @@ id: demo.no-print
 title: Avoid print
 language: python
 level: warn
-status: warn
 tags: [python]
 ---
 

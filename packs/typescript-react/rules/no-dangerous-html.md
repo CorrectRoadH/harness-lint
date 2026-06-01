@@ -3,7 +3,6 @@ id: typescript-react.no-dangerous-html
 title: Review dangerous HTML rendering
 language: typescript
 level: warn
-status: warn
 tags: [typescript, react, security]
 ---
 

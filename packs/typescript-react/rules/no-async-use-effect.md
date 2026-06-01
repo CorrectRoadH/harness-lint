@@ -3,7 +3,6 @@ id: typescript-react.no-async-use-effect
 title: Avoid async useEffect callbacks
 language: typescript
 level: warn
-status: warn
 tags: [typescript, react, effects]
 ---
 

@@ -406,12 +406,11 @@ dependencies = [
 
 [[package]]
 name = "harness-lint"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "clap",
  "globset",
- "heck",
  "ignore",
  "reqwest",
  "serde",

@@ -3,7 +3,6 @@ id: python-async.no-asyncio-run-library
 title: Avoid asyncio.run inside library flow
 language: python
 level: warn
-status: warn
 tags: [python, async, api]
 ---
 

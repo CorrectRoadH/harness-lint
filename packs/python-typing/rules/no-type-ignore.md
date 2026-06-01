@@ -3,7 +3,6 @@ id: python-typing.no-type-ignore
 title: Avoid broad type ignore comments
 language: python
 level: warn
-status: warn
 tags: [python, typing]
 ---
 

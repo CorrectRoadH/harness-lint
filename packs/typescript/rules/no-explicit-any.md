@@ -3,7 +3,6 @@ id: typescript.no-explicit-any
 title: Avoid explicit any
 language: typescript
 level: warn
-status: warn
 tags: [typescript, typing]
 ---
 

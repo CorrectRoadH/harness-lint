@@ -3,7 +3,6 @@ id: python-async.no-time-sleep
 title: Avoid time.sleep in async-capable code
 language: python
 level: warn
-status: warn
 tags: [python, async, blocking]
 ---
 

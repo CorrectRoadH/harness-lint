@@ -3,7 +3,6 @@ id: python-typing.no-any-import
 title: Avoid importing Any as a default escape hatch
 language: python
 level: warn
-status: warn
 tags: [python, typing]
 ---
 

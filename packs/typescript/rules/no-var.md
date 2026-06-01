@@ -3,7 +3,6 @@ id: typescript.no-var
 title: Avoid var declarations
 language: typescript
 level: warn
-status: warn
 tags: [typescript, javascript]
 ---
 

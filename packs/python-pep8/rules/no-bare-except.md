@@ -3,7 +3,6 @@ id: python-pep8.no-bare-except
 title: Avoid bare except clauses
 language: python
 level: warn
-status: warn
 tags: [python, pep8, errors]
 ---
 

@@ -3,7 +3,6 @@ id: python.no-broad-object-type
 title: Avoid broad object types
 language: python
 level: warn
-status: warn
 tags: [python, typing]
 ---
 

@@ -3,7 +3,6 @@ id: go.no-process-exit-flow
 title: Avoid process exits in normal service flow
 language: go
 level: warn
-status: warn
 tags: [go, lifecycle, errors]
 ---
 

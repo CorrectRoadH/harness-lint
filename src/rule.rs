@@ -5,7 +5,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 use walkdir::WalkDir;
 
-use crate::model::{RuleBody, RuleDefinition, RuleExample, RuleExampleKind, RuleStatus, Severity};
+use crate::model::{RuleBody, RuleDefinition, RuleExample, RuleExampleKind, Severity};
 
 #[derive(Debug, Deserialize)]
 struct RuleFrontmatter {
@@ -15,8 +15,6 @@ struct RuleFrontmatter {
     language: Option<String>,
     #[serde(default)]
     level: Severity,
-    #[serde(default)]
-    status: RuleStatus,
     #[serde(default)]
     skill: Option<String>,
     #[serde(default)]
@@ -59,6 +57,7 @@ pub fn parse_rule(
         .with_context(|| format!("failed to parse frontmatter in {}", source_path.display()))?;
 
     let description = extract_description(markdown);
+    let grit_block_count = fenced_codes(markdown, Some("grit")).len();
     let body = extract_body(markdown);
     let examples = extract_examples(markdown);
 
@@ -67,7 +66,6 @@ pub fn parse_rule(
         title: frontmatter.title,
         language: frontmatter.language,
         level: frontmatter.level,
-        status: frontmatter.status,
         skill: frontmatter.skill,
         tags: frontmatter.tags,
         description,
@@ -77,7 +75,7 @@ pub fn parse_rule(
         pack_id: pack_id.map(ToOwned::to_owned),
     };
 
-    validate_rule(&rule)?;
+    validate_rule(&rule, grit_block_count)?;
     Ok(rule)
 }
 
@@ -105,7 +103,7 @@ fn extract_description(markdown: &str) -> String {
 }
 
 fn extract_body(markdown: &str) -> RuleBody {
-    if let Some((_, code)) = first_fenced_code(markdown, Some("grit")) {
+    if let Some((_, code)) = fenced_codes(markdown, Some("grit")).into_iter().next() {
         return RuleBody::Grit(code);
     }
 
@@ -145,14 +143,15 @@ fn extract_examples(markdown: &str) -> Vec<RuleExample> {
     examples
 }
 
-fn first_fenced_code(markdown: &str, language: Option<&str>) -> Option<(Option<String>, String)> {
+fn fenced_codes(markdown: &str, language: Option<&str>) -> Vec<(Option<String>, String)> {
+    let mut matches = Vec::new();
     let lines: Vec<_> = markdown.lines().collect();
     let mut index = 0;
     while index < lines.len() {
         let trimmed = lines[index].trim();
         if trimmed.starts_with("```") {
             let fence_language = trimmed.trim_start_matches("```").trim();
-            let matches = language
+            let is_match = language
                 .map(|expected| fence_language.eq_ignore_ascii_case(expected))
                 .unwrap_or(true);
             let mut code = Vec::new();
@@ -161,31 +160,37 @@ fn first_fenced_code(markdown: &str, language: Option<&str>) -> Option<(Option<S
                 code.push(lines[index]);
                 index += 1;
             }
-            if matches {
+            if is_match {
                 let language = (!fence_language.is_empty()).then(|| fence_language.to_string());
-                return Some((language, code.join("\n")));
+                matches.push((language, code.join("\n")));
             }
         }
         index += 1;
     }
-    None
+    matches
 }
 
-fn validate_rule(rule: &RuleDefinition) -> Result<()> {
+fn validate_rule(rule: &RuleDefinition, grit_block_count: usize) -> Result<()> {
     if rule.id.trim().is_empty() {
         bail!("{} has an empty rule id", rule.source_path.display());
     }
     if rule.title.trim().is_empty() {
         bail!("{} has an empty rule title", rule.source_path.display());
     }
-    if rule.status != RuleStatus::Draft && matches!(rule.body, RuleBody::Missing) {
+    if grit_block_count > 1 {
         bail!(
-            "{} is {:?} but has no executable body",
-            rule.source_path.display(),
-            rule.status
+            "{} has {grit_block_count} GritQL blocks; keep exactly one ```grit block per rule file",
+            rule.source_path.display()
         );
     }
-    if rule.status == RuleStatus::Enforced {
+    let has_body = !matches!(rule.body, RuleBody::Missing);
+    if rule.level.is_failing() {
+        if !has_body {
+            bail!(
+                "{} is error-level but has no executable body",
+                rule.source_path.display()
+            );
+        }
         let has_bad = rule
             .examples
             .iter()
@@ -196,7 +201,7 @@ fn validate_rule(rule: &RuleDefinition) -> Result<()> {
             .any(|example| example.kind == RuleExampleKind::Good);
         if !has_bad || !has_good {
             bail!(
-                "{} is enforced but does not include both Bad and Good examples",
+                "{} is error-level but does not include both Bad and Good examples",
                 rule.source_path.display()
             );
         }
@@ -215,7 +220,6 @@ id: python.prefer-pydantic
 title: Prefer Pydantic
 language: python
 level: warn
-status: warn
 skill: tdd
 tags: [python]
 ---
@@ -250,11 +254,10 @@ logger.info("x")
     }
 
     #[test]
-    fn draft_can_have_missing_body() {
+    fn warn_rule_can_have_missing_body() {
         let content = r#"---
 id: ai.some-rule
 title: Some Rule
-status: draft
 ---
 
 # Some Rule
@@ -264,5 +267,50 @@ TODO.
 
         let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();
         assert!(matches!(rule.body, RuleBody::Missing));
+    }
+
+    #[test]
+    fn ignores_unknown_frontmatter_fields() {
+        let content = r#"---
+id: ai.some-rule
+title: Some Rule
+status: draft
+owner: local-team
+---
+
+# Some Rule
+
+TODO.
+"#;
+
+        let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();
+        assert_eq!(rule.id, "ai.some-rule");
+        assert_eq!(rule.title, "Some Rule");
+    }
+
+    #[test]
+    fn rejects_multiple_gritql_blocks() {
+        let content = r#"---
+id: ai.some-rule
+title: Some Rule
+---
+
+# Some Rule
+
+```grit
+language typescript
+`console.log($value)`
+```
+
+```grit
+language typescript
+`debugger`
+```
+"#;
+
+        let error = parse_rule(content, PathBuf::from("rule.md"), None)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("has 2 GritQL blocks"));
     }
 }

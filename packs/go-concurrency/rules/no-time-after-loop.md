@@ -3,7 +3,6 @@ id: go-concurrency.no-time-after-loop
 title: Review time.After allocations
 language: go
 level: warn
-status: warn
 tags: [go, concurrency, timers]
 ---
 

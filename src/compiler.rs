@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::config::GENERATED_GRIT_DIR;
-use crate::model::{CompiledRules, RuleBody, RuleDefinition, RulePack, RuleStatus, Severity};
+use crate::model::{CompiledRules, RuleBody, RuleDefinition, RulePack, Severity};
 
 #[derive(Debug, Serialize)]
 struct GritYaml {
@@ -34,18 +34,16 @@ pub fn compile_rule_set(root: &Path, rules: Vec<RuleDefinition>) -> Result<Compi
         .with_context(|| format!("failed to create {}", patterns_dir.display()))?;
 
     let mut grit_rules = Vec::new();
-    let mut skipped_drafts = Vec::new();
+    let mut skipped_rules = Vec::new();
     let mut expected_files = std::collections::BTreeSet::new();
     for rule in rules {
-        if rule.status == RuleStatus::Draft {
-            skipped_drafts.push(rule);
-            continue;
-        }
         if matches!(rule.body, RuleBody::Grit(_)) {
             let filename = format!("{}.md", safe_pattern_filename(&rule.id));
             write_grit_pattern(&patterns_dir, &filename, &rule)?;
             expected_files.insert(filename);
             grit_rules.push(rule);
+        } else {
+            skipped_rules.push(rule);
         }
     }
 
@@ -55,7 +53,7 @@ pub fn compile_rule_set(root: &Path, rules: Vec<RuleDefinition>) -> Result<Compi
     Ok(CompiledRules {
         grit_dir,
         grit_rules,
-        skipped_drafts,
+        skipped_rules,
     })
 }
 
@@ -180,12 +178,12 @@ pub fn generated_grit_yaml_path(root: &Path) -> PathBuf {
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::model::{RuleBody, RulePack, RuleStatus};
+    use crate::model::{RuleBody, RulePack};
 
     use super::*;
 
     #[test]
-    fn compiler_skips_drafts_and_writes_grit_yaml() {
+    fn compiler_skips_rules_without_grit_and_writes_grit_yaml() {
         let tempdir = tempfile::tempdir().unwrap();
         let pack = RulePack {
             id: "local".to_string(),
@@ -197,7 +195,6 @@ mod tests {
                     title: "Warn".to_string(),
                     language: Some("python".to_string()),
                     level: Severity::Warn,
-                    status: RuleStatus::Warn,
                     skill: None,
                     tags: vec!["local".to_string()],
                     description: "desc".to_string(),
@@ -207,17 +204,16 @@ mod tests {
                     pack_id: Some("local".to_string()),
                 },
                 RuleDefinition {
-                    id: "local.draft".to_string(),
-                    title: "Draft".to_string(),
+                    id: "local.incomplete".to_string(),
+                    title: "Incomplete".to_string(),
                     language: Some("python".to_string()),
                     level: Severity::Warn,
-                    status: RuleStatus::Draft,
                     skill: None,
                     tags: vec![],
                     description: String::new(),
                     body: RuleBody::Missing,
                     examples: vec![],
-                    source_path: PathBuf::from("draft.md"),
+                    source_path: PathBuf::from("incomplete.md"),
                     pack_id: Some("local".to_string()),
                 },
             ],
@@ -225,7 +221,7 @@ mod tests {
         let compiled =
             compile_grit_rules(tempdir.path(), vec![pack], &BTreeMap::new(), &[]).unwrap();
         assert_eq!(compiled.grit_rules.len(), 1);
-        assert_eq!(compiled.skipped_drafts.len(), 1);
+        assert_eq!(compiled.skipped_rules.len(), 1);
         assert!(generated_grit_yaml_path(tempdir.path()).exists());
         let yaml = std::fs::read_to_string(generated_grit_yaml_path(tempdir.path())).unwrap();
         assert!(yaml.contains("patterns: []"));

@@ -3,7 +3,6 @@ id: python-typing.no-untyped-def
 title: Avoid untyped public functions
 language: python
 level: warn
-status: warn
 tags: [python, typing, api]
 ---
 

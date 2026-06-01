@@ -3,7 +3,6 @@ id: typescript.no-debugger
 title: Avoid committed debugger statements
 language: typescript
 level: warn
-status: warn
 tags: [typescript, javascript, debugging]
 ---
 

@@ -3,7 +3,6 @@ id: python-pep8.no-wildcard-import
 title: Avoid wildcard imports
 language: python
 level: warn
-status: warn
 tags: [python, pep8, imports]
 ---
 

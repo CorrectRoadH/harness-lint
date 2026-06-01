@@ -3,7 +3,6 @@ id: go-effective-go.no-nil-nil-return
 title: Avoid nil nil returns
 language: go
 level: warn
-status: warn
 tags: [go, effective-go, errors]
 ---
 

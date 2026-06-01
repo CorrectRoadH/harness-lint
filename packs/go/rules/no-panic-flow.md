@@ -3,7 +3,6 @@ id: go.no-panic-flow
 title: Avoid panic in normal service flow
 language: go
 level: warn
-status: warn
 tags: [go, errors]
 ---
 

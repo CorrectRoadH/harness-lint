@@ -3,7 +3,6 @@ id: python-pep8.no-none-equality
 title: Use is None comparisons
 language: python
 level: warn
-status: warn
 tags: [python, pep8, readability]
 ---
 

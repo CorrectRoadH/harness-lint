@@ -1,9 +1,12 @@
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::model::{RegistryCandidate, RegistryPack, RegistryQuery};
+
+const EMBEDDED_CATALOG: &str = include_str!("../site/catalog.json");
 
 pub fn infer_project_context(root: &Path) -> RegistryQuery {
     RegistryQuery {
@@ -17,19 +20,77 @@ pub fn search_registry(
     query: &RegistryQuery,
     registry_url: Option<&str>,
 ) -> Result<Vec<RegistryCandidate>> {
-    let _registry_url = registry_url;
-
-    Ok(local_catalog_candidates(query))
+    Ok(local_catalog_candidates(query, catalog(registry_url)))
 }
 
-pub fn inspect_pack(id: &str) -> Option<RegistryPack> {
-    catalog().into_iter().find(|pack| pack.id == id)
+pub fn inspect_pack(id: &str, registry_url: Option<&str>) -> Result<Option<RegistryPack>> {
+    Ok(catalog(registry_url).into_iter().find(|pack| pack.id == id))
 }
 
-fn local_catalog_candidates(query: &RegistryQuery) -> Vec<RegistryCandidate> {
+pub fn list_packs(registry_url: Option<&str>) -> Result<Vec<RegistryPack>> {
+    let mut packs = catalog(registry_url);
+    packs.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(packs)
+}
+
+fn catalog(registry_url: Option<&str>) -> Vec<RegistryPack> {
+    registry_url
+        .and_then(|url| remote_catalog(url).ok())
+        .unwrap_or_else(embedded_catalog)
+}
+
+fn remote_catalog(registry_url: &str) -> Result<Vec<RegistryPack>> {
+    if let Some(path) = registry_url.strip_prefix("file://") {
+        return read_catalog_file(Path::new(path));
+    }
+    let path = Path::new(registry_url);
+    if path.exists() {
+        return read_catalog_file(path);
+    }
+
+    let url = catalog_url(registry_url);
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .user_agent("harness-lint")
+        .build()
+        .context("failed to build registry client")?;
+    let response = client
+        .get(url)
+        .send()
+        .context("failed to fetch registry catalog")?
+        .error_for_status()
+        .context("registry catalog returned an error")?;
+    response
+        .json()
+        .context("failed to parse registry catalog response")
+}
+
+fn read_catalog_file(path: &Path) -> Result<Vec<RegistryPack>> {
+    let content =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    serde_json::from_str(&content).with_context(|| format!("failed to parse {}", path.display()))
+}
+
+fn catalog_url(registry_url: &str) -> String {
+    let trimmed = registry_url.trim_end_matches('/');
+    if trimmed.ends_with(".json") {
+        trimmed.to_string()
+    } else {
+        format!("{trimmed}/catalog.json")
+    }
+}
+
+fn embedded_catalog() -> Vec<RegistryPack> {
+    serde_json::from_str(EMBEDDED_CATALOG).expect("embedded registry catalog is valid JSON")
+}
+
+fn local_catalog_candidates(
+    query: &RegistryQuery,
+    catalog: Vec<RegistryPack>,
+) -> Vec<RegistryCandidate> {
     let mut candidates = Vec::new();
     let haystack = searchable_terms(query);
-    for pack in catalog() {
+    for pack in catalog {
         let language_match = pack
             .languages
             .iter()
@@ -79,92 +140,6 @@ fn searchable_terms(query: &RegistryQuery) -> String {
             .map(|library| library.to_ascii_lowercase()),
     );
     terms.join(" ")
-}
-
-fn catalog() -> Vec<RegistryPack> {
-    vec![
-        RegistryPack {
-            id: "python".to_string(),
-            title: "Python application conventions".to_string(),
-            description: "Typed Python runtime rules for explicit boundaries, safer dynamic access, and common debug hazards.".to_string(),
-            pack_spec: "github:CorrectRoadH/harness-lint@main#packs/python".to_string(),
-            languages: vec!["python".to_string()],
-            keywords: vec![
-                "python".to_string(),
-                "pydantic".to_string(),
-                "typed".to_string(),
-                "getattr".to_string(),
-                "object".to_string(),
-            ],
-            rules: vec![
-                candidate("python", "python.no-getattr-flow", "Avoid getattr in normal application flow", "Flag dynamic getattr calls so agents prefer explicit fields, typed adapters, or real boundary objects.", 20),
-                candidate("python", "python.no-broad-object-type", "Avoid broad object types", "Flag broad object type usage so code moves toward concrete models, unions, Protocols, or TypedDict-style structures.", 20),
-                candidate("python", "python.no-print-debug", "Avoid committed print debugging", "Flag print calls in Python application code where logging or structured diagnostics should be used.", 15),
-                candidate("python", "python.no-eval-exec", "Avoid eval and exec", "Flag eval and exec calls because they are rarely appropriate in normal application code.", 20),
-                candidate("python", "python.no-runtime-assert", "Avoid assert for runtime validation", "Flag assert statements in runtime code because optimized Python execution can remove them.", 15),
-            ],
-        },
-        RegistryPack {
-            id: "go".to_string(),
-            title: "Go service conventions".to_string(),
-            description: "Small Go rules for production service hygiene: context flow, panics, and debug output.".to_string(),
-            pack_spec: "github:CorrectRoadH/harness-lint@main#packs/go".to_string(),
-            languages: vec!["go".to_string()],
-            keywords: vec![
-                "go".to_string(),
-                "golang".to_string(),
-                "context".to_string(),
-                "panic".to_string(),
-            ],
-            rules: vec![
-                candidate("go", "go.no-context-todo", "Avoid context.TODO in application flow", "Flag context.TODO calls so code accepts or derives an explicit lifecycle context.", 20),
-                candidate("go", "go.no-panic-flow", "Avoid panic in normal service flow", "Flag panic calls in service code where errors should usually be returned or handled.", 20),
-                candidate("go", "go.no-fmt-print-debug", "Avoid fmt print debugging", "Flag fmt.Print-style calls that should usually become structured logging.", 15),
-                candidate("go", "go.no-process-exit-flow", "Avoid process exits in service flow", "Flag log.Fatal and os.Exit calls so reusable code returns errors to the application boundary.", 15),
-            ],
-        },
-        RegistryPack {
-            id: "typescript".to_string(),
-            title: "TypeScript application conventions".to_string(),
-            description: "TypeScript rules for safer application code: no committed console debugging, no var, and less untyped escape hatches.".to_string(),
-            pack_spec: "github:CorrectRoadH/harness-lint@main#packs/typescript".to_string(),
-            languages: vec![
-                "typescript".to_string(),
-                "javascript".to_string(),
-            ],
-            keywords: vec![
-                "typescript".to_string(),
-                "javascript".to_string(),
-                "react".to_string(),
-                "next".to_string(),
-                "console".to_string(),
-            ],
-            rules: vec![
-                candidate("typescript", "typescript.no-console-log", "Avoid committed console.log", "Flag console.log calls in application code where logging, telemetry, or UI state should be explicit.", 20),
-                candidate("typescript", "typescript.no-var", "Avoid var declarations", "Flag var declarations so code uses block-scoped let or const.", 15),
-                candidate("typescript", "typescript.no-explicit-any", "Avoid explicit any", "Flag explicit any annotations so code moves toward unknown, generics, discriminated unions, or domain types.", 15),
-                candidate("typescript", "typescript.no-debugger", "Avoid committed debugger statements", "Flag debugger statements before they land in application code.", 15),
-            ],
-        },
-    ]
-}
-
-fn candidate(
-    pack_id: &str,
-    rule_id: &str,
-    title: &str,
-    reason: &str,
-    score: u32,
-) -> RegistryCandidate {
-    let pack_spec = format!("github:CorrectRoadH/harness-lint@main#packs/{pack_id}");
-    RegistryCandidate {
-        rule_id: rule_id.to_string(),
-        title: title.to_string(),
-        pack_id: pack_id.to_string(),
-        pack_spec,
-        score,
-        reason: reason.to_string(),
-    }
 }
 
 fn infer_languages(root: &Path) -> Vec<String> {
@@ -235,7 +210,7 @@ mod tests {
 
     #[test]
     fn inspect_returns_pack_details() {
-        let pack = inspect_pack("typescript").unwrap();
+        let pack = inspect_pack("typescript", None).unwrap().unwrap();
         assert_eq!(pack.id, "typescript");
         assert!(!pack.rules.is_empty());
     }

@@ -1,0 +1,11 @@
+[pack]
+id = "go-concurrency"
+name = "Go Concurrency Hygiene"
+version = "0.1.0"
+description = "Rules for goroutine lifecycle, request context flow, and cancellable service code."
+license = "MIT"
+
+[compat]
+harness = ">=0.1.0"
+grit = ">=0.1.0"
+languages = ["go"]

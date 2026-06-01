@@ -114,7 +114,10 @@ pub struct RegistrySection {
 impl Default for RegistrySection {
     fn default() -> Self {
         Self {
-            url: Some("https://registry.harness-lint.dev".to_string()),
+            url: Some(
+                "https://raw.githubusercontent.com/CorrectRoadH/harness-lint/main/site/catalog.json"
+                    .to_string(),
+            ),
         }
     }
 }

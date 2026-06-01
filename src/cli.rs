@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -42,9 +43,25 @@ enum Command {
     Init(InitCommand),
     Doctor,
     Check(CheckCommand),
-    Pack {
-        #[command(subcommand)]
-        command: PackCommand,
+    Search {
+        query: Vec<String>,
+    },
+    Inspect {
+        id: String,
+    },
+    Install {
+        id: String,
+        spec: Option<String>,
+    },
+    Update,
+    Restore,
+    Outdated,
+    Remove {
+        id: String,
+    },
+    List {
+        #[arg(long)]
+        available: bool,
     },
     Rule {
         #[command(subcommand)]
@@ -76,13 +93,16 @@ struct CheckCommand {
     paths: Vec<PathBuf>,
 }
 
-#[derive(Debug, Subcommand)]
-enum PackCommand {
-    Add { id: String, spec: String },
+#[derive(Debug)]
+enum CatalogCommand {
     Search { query: Vec<String> },
     Inspect { id: String },
+    Install { id: String, spec: Option<String> },
     Update,
-    List,
+    Restore,
+    Outdated,
+    Remove { id: String },
+    List { available: bool },
 }
 
 #[derive(Debug, Subcommand)]
@@ -129,7 +149,46 @@ pub fn run() -> Result<ExitCode> {
         Command::Check(command) => {
             run_check(&cwd, cli.config.as_deref(), command, format, cli.verbose)
         }
-        Command::Pack { command } => run_pack(&cwd, cli.config.as_deref(), command, format),
+        Command::Search { query } => run_catalog(
+            &cwd,
+            cli.config.as_deref(),
+            CatalogCommand::Search { query },
+            format,
+        ),
+        Command::Inspect { id } => run_catalog(
+            &cwd,
+            cli.config.as_deref(),
+            CatalogCommand::Inspect { id },
+            format,
+        ),
+        Command::Install { id, spec } => run_catalog(
+            &cwd,
+            cli.config.as_deref(),
+            CatalogCommand::Install { id, spec },
+            format,
+        ),
+        Command::Update => run_catalog(&cwd, cli.config.as_deref(), CatalogCommand::Update, format),
+        Command::Restore => {
+            run_catalog(&cwd, cli.config.as_deref(), CatalogCommand::Restore, format)
+        }
+        Command::Outdated => run_catalog(
+            &cwd,
+            cli.config.as_deref(),
+            CatalogCommand::Outdated,
+            format,
+        ),
+        Command::Remove { id } => run_catalog(
+            &cwd,
+            cli.config.as_deref(),
+            CatalogCommand::Remove { id },
+            format,
+        ),
+        Command::List { available } => run_catalog(
+            &cwd,
+            cli.config.as_deref(),
+            CatalogCommand::List { available },
+            format,
+        ),
         Command::Rule { command } => run_rule(&cwd, cli.config.as_deref(), command, format),
     }
     .map(|_| ExitCode::SUCCESS)
@@ -481,17 +540,25 @@ fn normalize_diagnostics(
         .collect()
 }
 
-fn run_pack(
+fn run_catalog(
     cwd: &PathBuf,
     config_path: Option<&std::path::Path>,
-    command: PackCommand,
+    command: CatalogCommand,
     _format: ReportFormat,
 ) -> Result<()> {
     let root = config::find_project_root(cwd)?;
     match command {
-        PackCommand::Add { id, spec } => {
+        CatalogCommand::Install { id, spec } => {
             let mut config = config::load_config(&root, config_path)?;
             let mut lock = config::load_lock(&root)?;
+            let spec = match spec {
+                Some(spec) => spec,
+                None => {
+                    registry::inspect_pack(&id, config.registry.url.as_deref())?
+                        .ok_or_else(|| anyhow!("pack `{id}` was not found in the catalog"))?
+                        .pack_spec
+                }
+            };
             let parsed = pack::parse_pack_spec(&id, &spec);
             let resolved = match parsed.source {
                 PackSourceKind::Local => pack::resolve_local_pack(&root, parsed)?,
@@ -509,10 +576,16 @@ fn run_pack(
                 loaded.rules.len()
             );
         }
-        PackCommand::Search { query } => {
+        CatalogCommand::Search { query } => {
+            let config = config::load_config(&root, config_path)?;
+            if query.is_empty() {
+                print_available_packs(config.registry.url.as_deref())?;
+                return Ok(());
+            }
             let mut registry_query = registry::infer_project_context(&root);
             registry_query.feedback = query.join(" ");
-            let candidates = registry::search_registry(&registry_query, None)?;
+            let candidates =
+                registry::search_registry(&registry_query, config.registry.url.as_deref())?;
             if candidates.is_empty() {
                 println!("No matching packs found.");
                 return Ok(());
@@ -524,15 +597,13 @@ fn run_pack(
                     candidate.pack_id, candidate.title, candidate.rule_id, candidate.score
                 );
                 println!("  {}", candidate.reason);
-                println!("  inspect: harness-lint pack inspect {}", candidate.pack_id);
-                println!(
-                    "  install: harness-lint pack add {} {}",
-                    candidate.pack_id, candidate.pack_spec
-                );
+                println!("  inspect: harness-lint inspect {}", candidate.pack_id);
+                println!("  install: harness-lint install {}", candidate.pack_id);
             }
         }
-        PackCommand::Inspect { id } => {
-            let pack = registry::inspect_pack(&id)
+        CatalogCommand::Inspect { id } => {
+            let config = config::load_config(&root, config_path)?;
+            let pack = registry::inspect_pack(&id, config.registry.url.as_deref())?
                 .ok_or_else(|| anyhow!("pack `{id}` was not found in the catalog"))?;
             println!("{} ({})", pack.title, pack.id);
             println!("{}", pack.description);
@@ -543,47 +614,160 @@ fn run_pack(
                 println!("  {}", rule.reason);
             }
             println!();
-            println!(
-                "install: harness-lint pack add {} {}",
-                pack.id, pack.pack_spec
-            );
+            println!("source: {}", pack.pack_spec);
+            println!("install: harness-lint install {}", pack.id);
         }
-        PackCommand::Update => {
+        CatalogCommand::Update => update_configured_packs(&root, config_path, "Updated")?,
+        CatalogCommand::Restore => update_configured_packs(&root, config_path, "Restored")?,
+        CatalogCommand::Outdated => {
             let config = config::load_config(&root, config_path)?;
-            let mut lock = config::load_lock(&root)?;
+            let lock = config::load_lock(&root)?;
+            let mut found = 0usize;
             for (id, spec) in &config.packs {
                 let parsed = pack::parse_pack_spec(id, spec);
                 match parsed.source {
+                    PackSourceKind::Git => {
+                        let Some(entry) = lock.packs.get(id) else {
+                            found += 1;
+                            println!("{id}\tnot installed; run harness-lint update");
+                            continue;
+                        };
+                        let status = pack::check_git_pack_update(&root, parsed, Some(entry))?;
+                        if status.update_available {
+                            found += 1;
+                            println!(
+                                "{id}\t{} -> {}",
+                                status.installed_checksum.as_deref().unwrap_or("-"),
+                                status.latest_checksum.as_deref().unwrap_or("-")
+                            );
+                        }
+                    }
                     PackSourceKind::Local => {
                         let resolved = pack::resolve_local_pack(&root, parsed)?;
-                        lock.packs
-                            .insert(id.clone(), pack::lock_entry(&resolved, &root));
-                    }
-                    PackSourceKind::Git => {
-                        let resolved = if let Some(entry) = lock.packs.get(id) {
-                            pack::update_git_pack(&root, entry)?
-                        } else {
-                            pack::install_git_pack(&root, parsed)?
+                        let Some(installed) =
+                            lock.packs.get(id).and_then(|entry| entry.checksum.clone())
+                        else {
+                            found += 1;
+                            println!("{id}\tlock entry missing; run harness-lint update");
+                            continue;
                         };
-                        lock.packs
-                            .insert(id.clone(), pack::lock_entry(&resolved, &root));
+                        if Some(installed) != resolved.checksum {
+                            found += 1;
+                            println!("{id}\tlocal changes detected");
+                        }
                     }
-                    _ => bail!("unsupported pack source for `{id}`"),
+                    _ => {}
                 }
             }
-            config::write_lock(&root, &lock)?;
-            println!("Updated {} pack(s).", config.packs.len());
+            if found == 0 {
+                println!("All packs are up to date.");
+            }
         }
-        PackCommand::List => {
+        CatalogCommand::List { available } => {
             let config = config::load_config(&root, config_path)?;
+            if available {
+                print_available_packs(config.registry.url.as_deref())?;
+                return Ok(());
+            }
+            let lock = config::load_lock(&root)?;
             if config.packs.is_empty() {
                 println!("No external packs configured.");
             }
-            for (id, spec) in config.packs {
-                println!("{id}\t{spec}");
+            for (id, spec) in &config.packs {
+                if let Some(entry) = lock.packs.get(id) {
+                    println!(
+                        "{id}\t{spec}\t{}",
+                        entry.version.as_deref().unwrap_or("unversioned")
+                    );
+                } else {
+                    println!("{id}\t{spec}\tnot installed");
+                }
+            }
+        }
+        CatalogCommand::Remove { id } => {
+            let mut config = config::load_config(&root, config_path)?;
+            let mut lock = config::load_lock(&root)?;
+            let removed_config = config.packs.remove(&id).is_some();
+            let removed_lock = lock.packs.remove(&id).is_some();
+            let cached = root.join(config::PACKS_DIR).join(&id);
+            if cached.exists() {
+                fs::remove_dir_all(&cached)
+                    .with_context(|| format!("failed to remove {}", cached.display()))?;
+            }
+            config::write_config(&root, &config)?;
+            config::write_lock(&root, &lock)?;
+            if removed_config || removed_lock {
+                println!("Removed pack `{id}`.");
+            } else {
+                println!("Pack `{id}` was not installed.");
             }
         }
     }
+    Ok(())
+}
+
+fn print_available_packs(registry_url: Option<&str>) -> Result<()> {
+    let packs = registry::list_packs(registry_url)?;
+    if packs.is_empty() {
+        println!("No packs are available in the catalog.");
+        return Ok(());
+    }
+    println!("Available rule packs:");
+    for pack in packs {
+        println!(
+            "- {}: {} [{}]",
+            pack.id,
+            pack.title,
+            pack.languages.join(", ")
+        );
+        println!("  {}", pack.description);
+        println!("  install: harness-lint install {}", pack.id);
+    }
+    Ok(())
+}
+
+fn update_configured_packs(
+    root: &Path,
+    config_path: Option<&std::path::Path>,
+    verb: &str,
+) -> Result<()> {
+    let config = config::load_config(root, config_path)?;
+    let mut lock = config::load_lock(root)?;
+    let mut updated = 0usize;
+    for (id, spec) in &config.packs {
+        let parsed = pack::parse_pack_spec(id, spec);
+        let previous_checksum = lock.packs.get(id).and_then(|entry| entry.checksum.clone());
+        match parsed.source {
+            PackSourceKind::Local => {
+                let resolved = pack::resolve_local_pack(root, parsed)?;
+                let changed = previous_checksum != resolved.checksum;
+                lock.packs
+                    .insert(id.clone(), pack::lock_entry(&resolved, root));
+                if changed {
+                    updated += 1;
+                    println!("Refreshed local pack `{id}`.");
+                }
+            }
+            PackSourceKind::Git => {
+                let resolved = pack::install_git_pack(root, parsed)?;
+                let changed = previous_checksum != resolved.checksum;
+                lock.packs
+                    .insert(id.clone(), pack::lock_entry(&resolved, root));
+                if changed {
+                    updated += 1;
+                    println!(
+                        "Updated pack `{id}` to {}.",
+                        resolved.version.as_deref().unwrap_or("latest")
+                    );
+                } else {
+                    println!("Pack `{id}` is already up to date.");
+                }
+            }
+            _ => bail!("unsupported pack source for `{id}`"),
+        }
+    }
+    config::write_lock(root, &lock)?;
+    println!("{verb} {updated} of {} pack(s).", config.packs.len());
     Ok(())
 }
 
@@ -645,7 +829,7 @@ fn run_rule(
                     let best = &candidates[0];
                     println!();
                     println!(
-                        "To install the best match, run:\n  harness-lint pack add {} {}",
+                        "To install the best match, run:\n  harness-lint install {} {}",
                         best.pack_id, best.pack_spec
                     );
                     println!(
@@ -747,7 +931,7 @@ fn load_rule_packs(
             PackSourceKind::Git => {
                 let lock = config::load_lock(root)?;
                 let entry = lock.packs.get(id).ok_or_else(|| {
-                    anyhow!("pack `{id}` is not installed; run `harness pack update`")
+                    anyhow!("pack `{id}` is not installed; run `harness-lint update`")
                 })?;
                 let local_path = if entry.local_path.is_absolute() {
                     entry.local_path.clone()
@@ -757,6 +941,7 @@ fn load_rule_packs(
                 let resolved = crate::model::ResolvedPack {
                     spec,
                     local_path,
+                    pack_path: entry.pack_path.clone(),
                     version: entry.version.clone(),
                     checksum: entry.checksum.clone(),
                 };

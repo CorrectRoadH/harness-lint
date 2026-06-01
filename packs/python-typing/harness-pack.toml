@@ -1,0 +1,11 @@
+[pack]
+id = "python-typing"
+name = "Python Typing Boundaries"
+version = "0.1.0"
+description = "Rules for typed Python APIs and fewer static-analysis escape hatches."
+license = "MIT"
+
+[compat]
+harness = ">=0.1.0"
+grit = ">=0.1.0"
+languages = ["python"]

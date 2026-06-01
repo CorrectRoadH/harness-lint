@@ -1,0 +1,340 @@
+[
+  {
+    "id": "python",
+    "title": "Python application conventions",
+    "description": "Typed Python runtime rules for explicit boundaries, safer dynamic access, and common debug hazards.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python",
+    "languages": ["python"],
+    "keywords": ["python", "pydantic", "typed", "getattr", "object", "logging"],
+    "rules": [
+      {
+        "rule_id": "python.no-getattr-flow",
+        "title": "Avoid getattr in normal application flow",
+        "pack_id": "python",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python",
+        "score": 20,
+        "reason": "Flag dynamic getattr calls so agents prefer explicit fields, typed adapters, or real boundary objects."
+      },
+      {
+        "rule_id": "python.no-broad-object-type",
+        "title": "Avoid broad object types",
+        "pack_id": "python",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python",
+        "score": 20,
+        "reason": "Flag broad object type usage so code moves toward concrete models, unions, Protocols, or TypedDict-style structures."
+      },
+      {
+        "rule_id": "python.no-print-debug",
+        "title": "Avoid committed print debugging",
+        "pack_id": "python",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python",
+        "score": 15,
+        "reason": "Flag print calls in Python application code where logging or structured diagnostics should be used."
+      },
+      {
+        "rule_id": "python.no-eval-exec",
+        "title": "Avoid eval and exec",
+        "pack_id": "python",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python",
+        "score": 20,
+        "reason": "Flag eval and exec calls because they are rarely appropriate in normal application code."
+      },
+      {
+        "rule_id": "python.no-runtime-assert",
+        "title": "Avoid assert for runtime validation",
+        "pack_id": "python",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python",
+        "score": 15,
+        "reason": "Flag assert statements in runtime code because optimized Python execution can remove them."
+      }
+    ]
+  },
+  {
+    "id": "python-pep8",
+    "title": "Python PEP 8 Style",
+    "description": "PEP 8-inspired rules for readable Python module style.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
+    "languages": ["python"],
+    "keywords": ["python", "pep8", "pep-8", "style", "imports", "readability"],
+    "rules": [
+      {
+        "rule_id": "python-pep8.no-wildcard-import",
+        "title": "Avoid wildcard imports",
+        "pack_id": "python-pep8",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
+        "score": 15,
+        "reason": "Flag wildcard imports so dependencies stay explicit and easy to trace."
+      },
+      {
+        "rule_id": "python-pep8.no-bare-except",
+        "title": "Avoid bare except clauses",
+        "pack_id": "python-pep8",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
+        "score": 20,
+        "reason": "Flag bare exception handlers so failure handling names the expected error."
+      },
+      {
+        "rule_id": "python-pep8.no-none-equality",
+        "title": "Use is None comparisons",
+        "pack_id": "python-pep8",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
+        "score": 15,
+        "reason": "Flag equality checks against None so code follows Python identity comparison conventions."
+      }
+    ]
+  },
+  {
+    "id": "python-typing",
+    "title": "Python Typing Boundaries",
+    "description": "Rules for typed Python APIs and fewer static-analysis escape hatches.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-typing",
+    "languages": ["python"],
+    "keywords": ["python", "typing", "types", "mypy", "pyright", "api"],
+    "rules": [
+      {
+        "rule_id": "python-typing.no-type-ignore",
+        "title": "Avoid broad type ignore comments",
+        "pack_id": "python-typing",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-typing",
+        "score": 20,
+        "reason": "Flag broad type ignore comments so projects prefer narrow type fixes or documented exceptions."
+      },
+      {
+        "rule_id": "python-typing.no-untyped-def",
+        "title": "Avoid untyped public functions",
+        "pack_id": "python-typing",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-typing",
+        "score": 15,
+        "reason": "Flag function boundaries that do not expose parameter or return types."
+      },
+      {
+        "rule_id": "python-typing.no-any-import",
+        "title": "Avoid importing Any as a default escape hatch",
+        "pack_id": "python-typing",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-typing",
+        "score": 15,
+        "reason": "Flag Any imports so code moves toward concrete models, protocols, or unions."
+      }
+    ]
+  },
+  {
+    "id": "python-async",
+    "title": "Python Async Services",
+    "description": "Rules for async Python services where blocking calls and hidden event loops hurt reliability.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-async",
+    "languages": ["python"],
+    "keywords": ["python", "async", "asyncio", "services", "blocking", "tasks"],
+    "rules": [
+      {
+        "rule_id": "python-async.no-time-sleep",
+        "title": "Avoid time.sleep in async-capable code",
+        "pack_id": "python-async",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-async",
+        "score": 20,
+        "reason": "Flag blocking sleeps so async services use cancellable scheduling primitives."
+      },
+      {
+        "rule_id": "python-async.no-asyncio-run-library",
+        "title": "Avoid asyncio.run inside library flow",
+        "pack_id": "python-async",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-async",
+        "score": 20,
+        "reason": "Flag hidden event-loop creation inside reusable code."
+      },
+      {
+        "rule_id": "python-async.no-untracked-create-task",
+        "title": "Avoid untracked create_task calls",
+        "pack_id": "python-async",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-async",
+        "score": 15,
+        "reason": "Flag task creation where cancellation and error ownership are not visible."
+      }
+    ]
+  },
+  {
+    "id": "go",
+    "title": "Go service conventions",
+    "description": "Small Go rules for production service hygiene: context flow, panics, and debug output.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go",
+    "languages": ["go"],
+    "keywords": ["go", "golang", "context", "panic", "logging"],
+    "rules": [
+      {
+        "rule_id": "go.no-context-todo",
+        "title": "Avoid context.TODO in application flow",
+        "pack_id": "go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go",
+        "score": 20,
+        "reason": "Flag context.TODO calls so code accepts or derives an explicit lifecycle context."
+      },
+      {
+        "rule_id": "go.no-panic-flow",
+        "title": "Avoid panic in normal service flow",
+        "pack_id": "go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go",
+        "score": 20,
+        "reason": "Flag panic calls in service code where errors should usually be returned or handled."
+      },
+      {
+        "rule_id": "go.no-fmt-print-debug",
+        "title": "Avoid fmt print debugging",
+        "pack_id": "go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go",
+        "score": 15,
+        "reason": "Flag fmt.Print-style calls that should usually become structured logging."
+      },
+      {
+        "rule_id": "go.no-process-exit-flow",
+        "title": "Avoid process exits in service flow",
+        "pack_id": "go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go",
+        "score": 15,
+        "reason": "Flag log.Fatal and os.Exit calls so reusable code returns errors to the application boundary."
+      }
+    ]
+  },
+  {
+    "id": "go-effective-go",
+    "title": "Effective Go Inspired",
+    "description": "Rules inspired by Effective Go: explicit errors, simple APIs, and readable package behavior.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+    "languages": ["go"],
+    "keywords": ["go", "golang", "effective go", "effective-go", "api", "errors"],
+    "rules": [
+      {
+        "rule_id": "go-effective-go.no-empty-interface-api",
+        "title": "Avoid empty interface API boundaries",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 20,
+        "reason": "Flag broad interface{} contracts so APIs stay narrow and typed."
+      },
+      {
+        "rule_id": "go-effective-go.no-init-flow",
+        "title": "Review init functions",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag hidden package initialization so setup can become explicit."
+      },
+      {
+        "rule_id": "go-effective-go.no-nil-nil-return",
+        "title": "Avoid nil nil returns",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag value-plus-error returns that provide neither data nor an explanation."
+      }
+    ]
+  },
+  {
+    "id": "go-concurrency",
+    "title": "Go Concurrency Hygiene",
+    "description": "Rules for goroutine lifecycle, request context flow, and cancellable service code.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-concurrency",
+    "languages": ["go"],
+    "keywords": ["go", "golang", "concurrency", "goroutine", "context", "timers"],
+    "rules": [
+      {
+        "rule_id": "go-concurrency.no-background-context-flow",
+        "title": "Avoid context.Background in request flow",
+        "pack_id": "go-concurrency",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-concurrency",
+        "score": 20,
+        "reason": "Flag fresh background contexts so cancellation and tracing keep flowing."
+      },
+      {
+        "rule_id": "go-concurrency.no-untracked-goroutine",
+        "title": "Review untracked goroutines",
+        "pack_id": "go-concurrency",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-concurrency",
+        "score": 15,
+        "reason": "Flag goroutine launches that should be tied to a lifecycle owner."
+      },
+      {
+        "rule_id": "go-concurrency.no-time-after-loop",
+        "title": "Review time.After allocations",
+        "pack_id": "go-concurrency",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-concurrency",
+        "score": 15,
+        "reason": "Flag time.After use where reusable timers may be safer in hot paths."
+      }
+    ]
+  },
+  {
+    "id": "typescript",
+    "title": "TypeScript application conventions",
+    "description": "TypeScript rules for safer application code: no committed console debugging, no var, and fewer untyped escape hatches.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript",
+    "languages": ["typescript", "javascript"],
+    "keywords": ["typescript", "javascript", "react", "next", "console", "any"],
+    "rules": [
+      {
+        "rule_id": "typescript.no-console-log",
+        "title": "Avoid committed console.log",
+        "pack_id": "typescript",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript",
+        "score": 20,
+        "reason": "Flag console.log calls in application code where logging, telemetry, or UI state should be explicit."
+      },
+      {
+        "rule_id": "typescript.no-var",
+        "title": "Avoid var declarations",
+        "pack_id": "typescript",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript",
+        "score": 15,
+        "reason": "Flag var declarations so code uses block-scoped let or const."
+      },
+      {
+        "rule_id": "typescript.no-explicit-any",
+        "title": "Avoid explicit any",
+        "pack_id": "typescript",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript",
+        "score": 15,
+        "reason": "Flag explicit any annotations so code moves toward unknown, generics, discriminated unions, or domain types."
+      },
+      {
+        "rule_id": "typescript.no-debugger",
+        "title": "Avoid committed debugger statements",
+        "pack_id": "typescript",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript",
+        "score": 15,
+        "reason": "Flag debugger statements before they land in application code."
+      }
+    ]
+  },
+  {
+    "id": "typescript-react",
+    "title": "TypeScript React",
+    "description": "Rules for React codebases using TypeScript and predictable component lifecycles.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
+    "languages": ["typescript", "javascript"],
+    "keywords": ["typescript", "javascript", "react", "tsx", "effects", "components"],
+    "rules": [
+      {
+        "rule_id": "typescript-react.no-index-key",
+        "title": "Avoid array index keys",
+        "pack_id": "typescript-react",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
+        "score": 20,
+        "reason": "Flag React index keys so lists use stable domain identifiers."
+      },
+      {
+        "rule_id": "typescript-react.no-async-use-effect",
+        "title": "Avoid async useEffect callbacks",
+        "pack_id": "typescript-react",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
+        "score": 15,
+        "reason": "Flag async effect callbacks so cancellation stays explicit."
+      },
+      {
+        "rule_id": "typescript-react.no-dangerous-html",
+        "title": "Review dangerous HTML rendering",
+        "pack_id": "typescript-react",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
+        "score": 20,
+        "reason": "Flag direct HTML injection so sanitization and ownership boundaries are reviewed."
+      }
+    ]
+  }
+]

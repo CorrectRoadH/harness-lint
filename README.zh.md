@@ -23,6 +23,13 @@ READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main
 harness-lint check --changed
 harness-lint check --all
 harness-lint rule list
+harness-lint search "python typing"
+harness-lint list --available
+harness-lint install python
+harness-lint install python-pep8
+harness-lint outdated
+harness-lint update
+harness-lint remove python
 ```
 
 

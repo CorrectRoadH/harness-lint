@@ -1,0 +1,11 @@
+[pack]
+id = "go-effective-go"
+name = "Effective Go Inspired"
+version = "0.1.0"
+description = "Rules inspired by Effective Go: explicit errors, simple APIs, and readable package behavior."
+license = "MIT"
+
+[compat]
+harness = ">=0.1.0"
+grit = ">=0.1.0"
+languages = ["go"]

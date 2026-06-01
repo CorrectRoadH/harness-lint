@@ -1,0 +1,11 @@
+[pack]
+id = "python-async"
+name = "Python Async Services"
+version = "0.1.0"
+description = "Rules for async Python services where blocking calls and hidden event loops hurt reliability."
+license = "MIT"
+
+[compat]
+harness = ">=0.1.0"
+grit = ">=0.1.0"
+languages = ["python"]

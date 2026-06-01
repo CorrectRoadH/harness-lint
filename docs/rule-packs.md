@@ -40,9 +40,18 @@ External packs are configured in `harness.toml`:
 ```toml
 [packs]
 python = "github:CorrectRoadH/harness-lint@v1.2.0#packs/python"
+go = "CorrectRoadH/harness-lint/packs/go@main"
 local_python = "local:../harness-rules-python"
 ```
 
-Use `harness-lint pack search <query>` and `harness-lint pack inspect <id>` before installing. Git and local specs may point at a pack subdirectory with `#path/to/pack`; if no subdirectory is given, harness-lint also checks `packs/<id>` in the source repository.
+Use `harness-lint search <query>` and `harness-lint inspect <id>` before installing. `harness-lint install <id>` installs from the registry catalog; `harness-lint install <id> <spec>` installs an explicit source.
 
-Installed pack versions are recorded in `harness.lock`.
+Use `harness-lint list --available` or `harness-lint search` with no query to list the catalog. The built-in catalog is split into small tracks so base rules and advanced rules can be downloaded and upgraded separately:
+
+- `python`, `python-pep8`, `python-typing`, `python-async`
+- `go`, `go-effective-go`, `go-concurrency`
+- `typescript`, `typescript-react`
+
+Git and local specs may point at a pack subdirectory with `#path/to/pack`; GitHub shorthand may also include the path before the ref, like `CorrectRoadH/harness-lint/packs/python@main`. GitHub tree URLs such as `https://github.com/CorrectRoadH/harness-lint/tree/main/packs/python` are accepted too. If no subdirectory is given, harness-lint also checks `packs/<id>` in the source repository.
+
+Installed pack versions, requested refs, pack paths, and pack-level checksums are recorded in `harness.lock`. Use `harness-lint outdated` to check for upstream changes, `harness-lint update` or `harness-lint restore` to refresh local copies, and `harness-lint remove <id>` to uninstall a pack.

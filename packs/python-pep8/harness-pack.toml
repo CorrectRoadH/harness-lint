@@ -1,0 +1,11 @@
+[pack]
+id = "python-pep8"
+name = "Python PEP 8 Style"
+version = "0.1.0"
+description = "PEP 8-inspired rules for readable Python module style."
+license = "MIT"
+
+[compat]
+harness = ">=0.1.0"
+grit = ">=0.1.0"
+languages = ["python"]

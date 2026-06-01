@@ -31,4 +31,4 @@ External packs are cached in:
 .harness/packs/
 ```
 
-Only `rules/`, `harness.toml`, and `harness.lock` are intended to be committed.
+Only `rules/`, `harness.toml`, and `harness.lock` are intended to be committed. The `.harness/packs/` cache is recreated by `harness-lint update` from the explicit pack specs and lock metadata.

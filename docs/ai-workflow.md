@@ -33,7 +33,7 @@ Use `harness-lint rule suggest "<constraint>"` for each preference that can beco
 The command should search the harness registry using the detected project languages and libraries.
 For code-related fixes, create or update the lint before changing the code.
 If a rule should trigger a specific Codex skill, add `skill: <skill-name>` to the rule frontmatter.
-If a suitable existing rule exists, ask the user whether to install its rule pack.
+If a suitable existing rule exists, ask the user whether to install its rule pack with `harness-lint install <id>`.
 Only create a local draft when no suitable existing rule exists or the user wants a local project rule.
 Do not rely on `harness-lint init` to infer rules automatically.
 Do not convert vague advice into enforced rules; keep uncertain rules as draft.

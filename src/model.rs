@@ -95,7 +95,6 @@ impl fmt::Display for RuleStatus {
 pub enum PackSourceKind {
     Local,
     Git,
-    Npm,
     Cargo,
     Pip,
     Url,
@@ -114,15 +113,20 @@ pub struct LockEntry {
     pub id: String,
     pub source: PackSourceKind,
     pub spec: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_ref: Option<String>,
     pub version: Option<String>,
     pub checksum: Option<String>,
     pub local_path: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pack_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedPack {
     pub spec: PackSpec,
     pub local_path: PathBuf,
+    pub pack_path: Option<PathBuf>,
     pub version: Option<String>,
     pub checksum: Option<String>,
 }

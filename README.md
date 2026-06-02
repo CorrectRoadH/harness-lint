@@ -2,13 +2,12 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/CorrectRoadH/harness-lint/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/CorrectRoadH/harness-lint/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/CorrectRoadH/harness-lint?label=release&style=flat-square)](https://github.com/CorrectRoadH/harness-lint/releases)
-[![version](https://img.shields.io/badge/version-0.2.3-orange?style=flat-square)](Cargo.toml)
 [![rust](https://img.shields.io/badge/rust-2024-blue?style=flat-square)](Cargo.toml)
 [![homebrew](https://img.shields.io/badge/homebrew-CorrectRoadH%2Ftap-fbb040?style=flat-square)](https://github.com/CorrectRoadH/homebrew-tap)
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-![harness lint hero](assets/harness-lint-readme.png)
+![harness lint hero](https://raw.githubusercontent.com/CorrectRoadH/harness-lint/main/assets/harness-lint-readme.png)
 
 harness-lint is a next-generation lint tool for Harness Engineering. In vibe coding, AI often ignores your instructions, even after repeated corrections or after you write them into `AGENTS.md`. This tool solves that problem with Lint Driven Development. When a user tells an AI agent what not to do, the requirement is first converted into a fixed lint rule. Fast, strict checks then prevent the AI from making the same mistake again.
 

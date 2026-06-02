@@ -7,7 +7,7 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-![harness lint hero](https://raw.githubusercontent.com/CorrectRoadH/harness-lint/main/assets/harness-lint-readme.png)
+![harness lint hero](assets/harness-lint-readme.png)
 
 harness-lint is a next-generation lint tool for Harness Engineering. In vibe coding, AI often ignores your instructions, even after repeated corrections or after you write them into `AGENTS.md`. This tool solves that problem with Lint Driven Development. When a user tells an AI agent what not to do, the requirement is first converted into a fixed lint rule. Fast, strict checks then prevent the AI from making the same mistake again.
 

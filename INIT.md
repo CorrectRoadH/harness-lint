@@ -156,7 +156,9 @@ harness-lint check --changed
 ```
 
 ## 配置 Hook
-询问用户是否需要帮助配置 git hook，比如 commit hook。如果用户要就看看现在用户是否已经有 git hook 配置了，有就直接使用并增加配置，不允许额外安装贪杯。 否则帮用户用最佳实践与最适合该项目的方式帮助用户安装与配置 git hook。
+在最终总结前，必须主动询问用户是否需要继续帮助配置 git hook，比如 commit hook。不要把这一步写成“需要你确认后再接入”“等你确认”或其他被动等待表述；如果还没有配置 hook，就用一个明确问题收尾，例如：“需要我继续帮你把 `harness-lint check --changed` 接到 git hook 里吗？”
+
+如果用户同意，先检查当前仓库是否已有 git hook 配置。已有配置就复用并追加 harness-lint 检查；没有配置时，用最适合该项目的最佳实践安装与配置 git hook，不要为了这一步额外引入新的 hook 管理工具。
 
 ## 最后一步
 向用户总结：
@@ -166,3 +168,4 @@ harness-lint check --changed
 - 写入或更新了哪个 agent 指令文件。
 - 发现了哪些语言/框架。
 - 从用户已有约束中创建了哪些本地规则；哪些无法用 GritQL 描述，所以没有写到 lint 下面
+- 已主动询问是否需要继续帮助配置 git hook；如果用户同意并已配置，也说明采用了哪种 hook 方案。

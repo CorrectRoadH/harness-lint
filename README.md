@@ -61,6 +61,7 @@ If feedback cannot be expressed as a reliable GritQL pattern, do not create a ha
 After creating a rule, run it by itself and confirm it reports the expected file(s) before relying on broader checks. Do not pass paths to `check` to simulate rule scope; if the rule should only apply to certain files, encode that in GritQL with `$filename`.
 
 ```sh
+harness-lint rule verify local.no-print
 harness-lint check --all --rule local.no-print
 ```
 
@@ -101,6 +102,7 @@ logger.info("user=%s", user)
 To limit a rule to specific files, write the file scope directly in GritQL with `$filename`:
 
 ```grit
+language js
 `console.log($value)` where {
   $filename <: r".*src/.*\.ts",
   !$filename <: r".*\.test\.ts"

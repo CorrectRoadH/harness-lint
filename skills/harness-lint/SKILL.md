@@ -51,9 +51,10 @@ harness-lint rule create "<constraint>" --language <language> --grit <gritql>
 
 6. Edit the created file under the configured local rule directory, usually `rules/`.
 7. Run `harness-lint doctor`.
-8. Run the new rule by itself and confirm it reports the expected file(s). Do not pass paths to `check` to simulate rule scope; if the rule should only apply to certain files, encode that directly in GritQL with `$filename`. Adjust the GritQL if the rule is too broad, too narrow, or produces no diagnostic:
+8. Verify the Bad examples, then run the new rule by itself and confirm it reports the expected repository file(s). Do not pass paths to `check` to simulate rule scope; if the rule should only apply to certain files, encode that directly in GritQL with `$filename`. Adjust the GritQL if the rule is too broad, too narrow, or produces no diagnostic:
 
 ```sh
+harness-lint rule verify <rule-id>
 harness-lint check --all --rule <rule-id>
 ```
 
@@ -115,18 +116,22 @@ Authoring rules:
 
 Writing GritQL:
 
-- Start with `language <name>` when the rule targets a specific language, for example `language typescript` or `language python`.
+- Start with `language <name>` when the rule targets a specific language. Use Grit CLI language names such as `js`, `python`, `json`, `java`, `hcl`, `css`, `markdown`, `yaml`, `rust`, `ruby`, `php`, `go`, and `sql`. For TypeScript/JavaScript rules, use `language js` in the GritQL block even when rule frontmatter says `language: typescript`; use `language js(typescript)` when the TypeScript parser variant is needed.
 - Prefer the smallest syntax shape that proves the rule. A narrow pattern with fewer false positives is better than a broad one that guesses intent.
 - Use metavariables such as `$value`, `$name`, or `$body` for parts that may vary.
 - Match the forbidden shape directly first. Add exceptions only after a real false positive appears.
+- Separate `where` conditions with commas, not semicolons.
 - If a rule spans files, project configuration, semantic ownership, or intent that GritQL cannot see, do not create a harness-lint rule until there is a reliable executable pattern.
 
 Example patterns:
 
 ````markdown
 ```grit
-language typescript
-`console.log($value)`
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
 ```
 
 ```grit
@@ -161,6 +166,7 @@ Use the `source:` path from `rule explain` to open the rule Markdown and read th
 For targeted validation:
 
 ```sh
+harness-lint rule verify <rule-id>
 harness-lint check --all --rule <rule-id>
 harness-lint check --changed --rule <rule-id>
 harness-lint --json check --changed --rule <rule-id>
@@ -182,6 +188,7 @@ harness-lint check --changed
 harness-lint check --staged
 harness-lint check --all
 harness-lint check --changed --rule <rule-id>
+harness-lint rule verify <rule-id>
 harness-lint rule list
 harness-lint rule explain <rule-id>
 harness-lint rule create "<constraint>" --language <language> --grit <gritql>

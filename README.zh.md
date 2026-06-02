@@ -61,6 +61,7 @@ harness-lint rule create "禁止 print 调试" --language python --grit '`print(
 创建规则后，先单独运行这条规则并确认它命中了预期文件，再依赖更大范围的检查。不要通过给 `check` 传路径来模拟规则范围；如果规则只应该作用于部分文件，必须在 GritQL 中用 `$filename` 表达。
 
 ```sh
+harness-lint rule verify local.no-print
 harness-lint check --all --rule local.no-print
 ```
 
@@ -101,6 +102,7 @@ logger.info("user=%s", user)
 如果一条规则只应该作用于部分文件，直接在 GritQL 里用 `$filename` 写文件范围：
 
 ```grit
+language js
 `console.log($value)` where {
   $filename <: r".*src/.*\.ts",
   !$filename <: r".*\.test\.ts"

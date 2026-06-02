@@ -19,6 +19,7 @@ pub fn create_rule(
     let language = language.trim();
     validate_language(language)?;
     let grit = normalize_grit(language, grit)?;
+    crate::grit::validate_grit_pattern(&grit, language)?;
     let path = target_rule_dir(root, local_rule_dirs).join(format!("{id_tail}.md"));
     let content = format!(
         r#"---
@@ -86,14 +87,60 @@ fn normalize_grit(language: &str, grit: &str) -> Result<String> {
             "rule GritQL is required; if the feedback cannot be expressed as GritQL, do not create a harness-lint rule"
         );
     }
-    if grit.lines().any(|line| {
-        line.trim_start()
-            .to_ascii_lowercase()
-            .starts_with("language ")
-    }) {
-        Ok(grit.to_string())
+    let expected_grit_language = grit_language_for_project_language(language);
+    let mut replaced_language_line = false;
+    let mut lines = Vec::new();
+    for line in grit.lines() {
+        let trimmed = line.trim_start();
+        if !replaced_language_line
+            && trimmed.to_ascii_lowercase().starts_with("language ")
+            && let Some(actual_language) = trimmed.split_whitespace().nth(1)
+        {
+            let actual_grit_language = grit_language_for_project_language(
+                actual_language
+                    .split_once('(')
+                    .map(|(base, _)| base)
+                    .unwrap_or(actual_language),
+            );
+            if actual_grit_language != expected_grit_language {
+                bail!(
+                    "rule GritQL language `{actual_language}` does not match --language `{language}`"
+                );
+            }
+            if actual_language == expected_grit_language || actual_language.starts_with("js(") {
+                lines.push(line.to_string());
+            } else {
+                lines.push(format!("language {expected_grit_language}"));
+            }
+            replaced_language_line = true;
+            continue;
+        }
+        lines.push(line.to_string());
+    }
+    if replaced_language_line {
+        Ok(lines.join("\n"))
     } else {
-        Ok(format!("language {language}\n{grit}"))
+        Ok(format!("language {expected_grit_language}\n{grit}"))
+    }
+}
+
+fn grit_language_for_project_language(language: &str) -> String {
+    match language.to_ascii_lowercase().as_str() {
+        "typescript" | "ts" | "tsx" | "javascript" | "ecmascript" | "node" | "nodejs" | "js"
+        | "jsx" | "mjs" | "cjs" => "js".to_string(),
+        "python" | "py" => "python".to_string(),
+        "golang" => "go".to_string(),
+        "rust" | "rs" => "rust".to_string(),
+        "ruby" | "rb" => "ruby".to_string(),
+        "elixir" | "ex" | "exs" => "elixir".to_string(),
+        "c#" | "cs" => "csharp".to_string(),
+        "kotlin" | "kt" | "kts" => "kotlin".to_string(),
+        "terraform" | "tf" => "hcl".to_string(),
+        "solidity" | "sol" => "solidity".to_string(),
+        "html" | "htm" => "html".to_string(),
+        "markdown" | "md" => "markdown".to_string(),
+        "yaml" | "yml" => "yaml".to_string(),
+        other => other.to_string(),
     }
 }
 
@@ -136,8 +183,15 @@ fn target_rule_dir(root: &Path, local_rule_dirs: &[PathBuf]) -> PathBuf {
 mod tests {
     use super::*;
 
+    fn grit_available() -> bool {
+        crate::grit::ensure_grit_available().is_ok()
+    }
+
     #[test]
     fn create_rule_creates_rule_file() {
+        if !grit_available() {
+            return;
+        }
         let tempdir = tempfile::tempdir().unwrap();
         let created = create_rule(
             tempdir.path(),
@@ -160,7 +214,79 @@ mod tests {
     }
 
     #[test]
+    fn create_rule_maps_typescript_to_grit_js() {
+        if !grit_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_rule(
+            tempdir.path(),
+            &[PathBuf::from("Rules")],
+            "Avoid console logging",
+            "typescript",
+            "`console.log($value)`",
+        )
+        .unwrap();
+        assert!(created.content.contains("language: typescript"));
+        assert!(
+            created
+                .content
+                .contains("language js\n`console.log($value)`")
+        );
+    }
+
+    #[test]
+    fn create_rule_preserves_supported_grit_language_variants() {
+        if !grit_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_rule(
+            tempdir.path(),
+            &[PathBuf::from("Rules")],
+            "Avoid console logging",
+            "typescript",
+            "language js(typescript)\n`console.log($value)`",
+        )
+        .unwrap();
+        assert!(
+            created
+                .content
+                .contains("language js(typescript)\n`console.log($value)`")
+        );
+    }
+
+    #[test]
+    fn create_rule_maps_common_language_aliases_to_grit_languages() {
+        let cases = [
+            ("tsx", "js"),
+            ("nodejs", "js"),
+            ("py", "python"),
+            ("golang", "go"),
+            ("rs", "rust"),
+            ("rb", "ruby"),
+            ("exs", "elixir"),
+            ("cs", "csharp"),
+            ("kt", "kotlin"),
+            ("tf", "hcl"),
+            ("sol", "solidity"),
+            ("htm", "html"),
+            ("md", "markdown"),
+            ("yml", "yaml"),
+        ];
+        for (project_language, grit_language) in cases {
+            assert_eq!(
+                grit_language_for_project_language(project_language),
+                grit_language
+            );
+        }
+    }
+
+    #[test]
     fn create_rule_preserves_unicode_feedback_in_rule_name() {
+        if !grit_available() {
+            return;
+        }
         let tempdir = tempfile::tempdir().unwrap();
         let created = create_rule(
             tempdir.path(),
@@ -172,6 +298,11 @@ mod tests {
         .unwrap();
         assert_eq!(created.id, "local.你好，不允许使用UI");
         assert_eq!(created.title, "你好，不允许使用UI");
+        assert!(
+            created
+                .content
+                .contains("language js\n`ReactDOM.render($value)`")
+        );
         assert_eq!(
             created.path,
             tempdir.path().join("Rules/你好，不允许使用UI.md")
@@ -206,6 +337,24 @@ mod tests {
         .unwrap_err()
         .to_string();
         assert!(error.contains("rule GritQL is required"));
+    }
+
+    #[test]
+    fn create_rule_rejects_invalid_gritql() {
+        if !grit_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let error = create_rule(
+            tempdir.path(),
+            &[PathBuf::from("Rules")],
+            "Avoid print debugging",
+            "python",
+            "`print($value)` where {\n  $filename <: r\".*src/.*\\.py\";\n}",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("GritQL failed validation"));
     }
 
     #[test]

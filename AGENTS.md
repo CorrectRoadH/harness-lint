@@ -34,6 +34,8 @@ Do not create a harness-lint rule for feedback that cannot be expressed as a rel
 
 `harness-lint check` does not accept positional paths. Use `--changed`, `--staged`, or `--all` to choose the run set, and use `--rule <rule-id>` only to select rules. Do not pass paths to simulate rule scope.
 
+For TypeScript/JavaScript rules, use `language js` inside the GritQL block even when the rule frontmatter says `language: typescript`. If a TypeScript parser variant matters, `language js(typescript)` is valid. Other rule languages should use Grit CLI language names such as `python`, `json`, `java`, `hcl`, `css`, `markdown`, `yaml`, `rust`, `ruby`, `php`, `go`, and `sql`.
+
 If a rule should only apply to certain files, encode the scope inside the GritQL with `$filename`, for example:
 
 ```grit
@@ -46,6 +48,7 @@ If a rule should only apply to certain files, encode the scope inside the GritQL
 After creating or editing a rule, validate it by running the single rule over the configured file set:
 
 ```sh
+harness-lint rule verify <rule-id>
 harness-lint check --all --rule <rule-id>
 ```
 

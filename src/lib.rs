@@ -15,3 +15,4 @@ pub mod paths;
 pub mod registry;
 pub mod report;
 pub mod rule;
+pub mod scratch;

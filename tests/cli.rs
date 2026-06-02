@@ -1,6 +1,14 @@
 use std::fs;
 use std::process::Command;
 
+fn grit_available() -> bool {
+    Command::new("grit")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 #[test]
 fn cli_exposes_version_and_command_descriptions() {
     let binary = env!("CARGO_BIN_EXE_harness-lint");
@@ -43,6 +51,9 @@ fn cli_check_rejects_positional_paths() {
 
 #[test]
 fn cli_init_and_rule_create_work() {
+    if !grit_available() {
+        return;
+    }
     let tempdir = tempfile::tempdir().unwrap();
     let binary = env!("CARGO_BIN_EXE_harness-lint");
     let init = Command::new(binary)
@@ -73,6 +84,71 @@ fn cli_init_and_rule_create_work() {
             .path()
             .join("rules/Prefer pydantic models.md")
             .exists()
+    );
+}
+
+#[test]
+fn cli_rule_verify_checks_bad_examples() {
+    if !grit_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let init = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+
+    fs::write(
+        tempdir.path().join("rules/no-console.md"),
+        r#"---
+id: local.no-console
+title: Avoid console logging
+language: typescript
+level: warn
+tags: [local, typescript]
+---
+
+# Avoid console logging
+
+Use structured logging.
+
+```grit
+language js
+`console.log($value)`
+```
+
+## Bad
+
+```typescript
+console.log(user);
+```
+
+## Good
+
+```typescript
+logger.info("user=%s", user);
+```
+"#,
+    )
+    .unwrap();
+
+    let verify = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["rule", "verify", "local.no-console"])
+        .output()
+        .unwrap();
+    assert!(
+        verify.status.success(),
+        "{}",
+        String::from_utf8_lossy(&verify.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&verify.stdout).contains("Verified 1 rule(s), 1 Bad example(s).")
     );
 }
 

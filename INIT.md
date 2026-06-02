@@ -93,18 +93,22 @@ harness-lint rule create "<constraint>" --language <language> --grit <gritql>
 
 写 GritQL 时：
 
-- 针对具体语言时先写 `language <name>`，例如 `language typescript`、`language python`、`language go`。
+- 针对具体语言时先写 `language <name>`。Grit 支持的语言名以 Grit CLI 为准，例如 `js`、`python`、`json`、`java`、`hcl`、`css`、`markdown`、`yaml`、`rust`、`ruby`、`php`、`go`、`sql` 等。TypeScript/JavaScript 规则的 Grit 语言写 `language js`；需要 TypeScript parser 变体时可以写 `language js(typescript)`。
 - 先匹配最小、最确定的坏代码形状，宁可窄一点，也不要为了覆盖更多场景造成误报。
 - 用 `$value`、`$name`、`$body` 这类 metavariable 表示会变化的部分。
 - 先直接匹配禁止形状；只有出现真实误报后，再补例外条件。
+- `where` 条件之间用逗号分隔，不要用分号。
 - 如果规则依赖跨文件语义、项目配置、所有权或意图，GritQL 看不准，就不要创建 harness-lint rule，也不要硬造一个不可靠的 pattern。
 
 GritQL 示例：
 
 ````markdown
 ```grit
-language typescript
-`console.log($value)`
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
 ```
 
 ```grit
@@ -128,9 +132,10 @@ language go
 
 完成后用用户的语言告诉用户“我帮你写了哪些规则”，并给一个 one-shot 摘要，不要只说“已创建规则”。
 
-创建或修改每条规则后，必须先单独运行这条规则，确认它能抓到预期目标。不要通过给 `check` 传路径来模拟规则范围；如果规则只应该作用于部分文件，必须在 GritQL 中用 `$filename` 表达：
+创建或修改每条规则后，必须先验证 Bad 示例能被规则抓到，再单独运行这条规则确认实际仓库命中范围。不要通过给 `check` 传路径来模拟规则范围；如果规则只应该作用于部分文件，必须在 GritQL 中用 `$filename` 表达：
 
 ```sh
+harness-lint rule verify <rule-id>
 harness-lint check --all --rule <rule-id>
 ```
 
@@ -151,6 +156,7 @@ One-shot 示例：
 
 ```sh
 harness-lint doctor
+harness-lint rule verify <rule-id>
 harness-lint check --all --rule <rule-id>
 harness-lint check --changed
 ```

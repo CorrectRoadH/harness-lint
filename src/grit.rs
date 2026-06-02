@@ -5,6 +5,7 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 use crate::model::{CompiledRules, Diagnostic, Severity};
+use crate::scratch::ScratchDir;
 
 pub fn ensure_grit_available() -> Result<String> {
     let output = Command::new("grit")
@@ -65,6 +66,91 @@ pub fn run_grit(
     }
 
     Ok(diagnostics)
+}
+
+pub fn validate_grit_pattern(body: &str, sample_language: &str) -> Result<()> {
+    let version = ensure_grit_available()?;
+    check_grit_compatibility(&version, None)?;
+
+    let scratch = ScratchDir::new("harness-lint-grit-validate")?;
+    let grit_dir = scratch.path().join(".grit");
+    let patterns_dir = grit_dir.join("patterns");
+    std::fs::create_dir_all(&patterns_dir)
+        .with_context(|| format!("failed to create {}", patterns_dir.display()))?;
+    std::fs::write(grit_dir.join("grit.yaml"), "version: 0.0.2\npatterns: []\n")
+        .context("failed to write scratch grit.yaml")?;
+    std::fs::write(
+        patterns_dir.join("local_validate.md"),
+        format!(
+            "---\ntitle: \"Validate\"\nlevel: warn\ntags: []\n---\n\n# Validate\n\n```grit\n{body}\n```\n"
+        ),
+    )
+    .context("failed to write scratch GritQL pattern")?;
+
+    let sample_path = scratch
+        .path()
+        .join("src")
+        .join(format!("bad-example.{}", sample_extension(sample_language)));
+    if let Some(parent) = sample_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    std::fs::write(&sample_path, "").with_context(|| {
+        format!(
+            "failed to write scratch source sample {}",
+            sample_path.display()
+        )
+    })?;
+
+    let grit_cache_dir = scratch.path().join("cache");
+    std::fs::create_dir_all(&grit_cache_dir)
+        .with_context(|| format!("failed to create {}", grit_cache_dir.display()))?;
+    let output = Command::new("grit")
+        .current_dir(scratch.path())
+        .env("GRIT_TELEMETRY_DISABLED", "true")
+        .env("GRIT_CACHE_DIR", &grit_cache_dir)
+        .arg("--json")
+        .arg("check")
+        .arg(&sample_path)
+        .output()
+        .context("failed to run `grit check` for rule validation")?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let diagnostics = parse_grit_output(&stdout, &stderr);
+    if !output.status.success() && diagnostics.is_empty() {
+        bail!("GritQL failed validation: {}", stderr.trim());
+    }
+    Ok(())
+}
+
+pub fn sample_extension(language: &str) -> &'static str {
+    match language.to_ascii_lowercase().as_str() {
+        "typescript" | "ts" => "ts",
+        "tsx" => "tsx",
+        "javascript" | "ecmascript" | "node" | "nodejs" | "js" | "mjs" | "cjs" => "js",
+        "jsx" => "jsx",
+        "python" | "py" => "py",
+        "go" | "golang" => "go",
+        "rust" | "rs" => "rs",
+        "ruby" | "rb" => "rb",
+        "elixir" | "ex" | "exs" => "ex",
+        "csharp" | "c#" | "cs" => "cs",
+        "java" => "java",
+        "kotlin" | "kt" | "kts" => "kt",
+        "solidity" | "sol" => "sol",
+        "hcl" => "hcl",
+        "terraform" | "tf" => "tf",
+        "html" | "htm" => "html",
+        "css" => "css",
+        "markdown" | "md" => "md",
+        "yaml" | "yml" => "yaml",
+        "json" => "json",
+        "toml" => "toml",
+        "sql" => "sql",
+        "vue" => "vue",
+        "php" => "php",
+        _ => "txt",
+    }
 }
 
 fn parse_grit_output(stdout: &str, stderr: &str) -> Vec<Diagnostic> {
@@ -240,5 +326,38 @@ mod tests {
     fn accepts_non_empty_grit_version() {
         check_grit_compatibility("grit 0.1.0", Some(">=0.1.0")).unwrap();
         assert!(check_grit_compatibility("", None).is_err());
+    }
+
+    #[test]
+    fn sample_extension_covers_grit_cli_languages_and_aliases() {
+        let cases = [
+            ("typescript", "ts"),
+            ("tsx", "tsx"),
+            ("javascript", "js"),
+            ("jsx", "jsx"),
+            ("python", "py"),
+            ("go", "go"),
+            ("rust", "rs"),
+            ("ruby", "rb"),
+            ("elixir", "ex"),
+            ("csharp", "cs"),
+            ("java", "java"),
+            ("kotlin", "kt"),
+            ("solidity", "sol"),
+            ("hcl", "hcl"),
+            ("terraform", "tf"),
+            ("html", "html"),
+            ("css", "css"),
+            ("markdown", "md"),
+            ("yaml", "yaml"),
+            ("json", "json"),
+            ("toml", "toml"),
+            ("sql", "sql"),
+            ("vue", "vue"),
+            ("php", "php"),
+        ];
+        for (language, extension) in cases {
+            assert_eq!(sample_extension(language), extension);
+        }
     }
 }

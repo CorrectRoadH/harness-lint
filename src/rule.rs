@@ -322,7 +322,7 @@ owner: local-team
 TODO.
 
 ```grit
-language typescript
+language js
 `console.log($value)`
 ```
 "#;
@@ -342,12 +342,12 @@ title: Some Rule
 # Some Rule
 
 ```grit
-language typescript
+language js
 `console.log($value)`
 ```
 
 ```grit
-language typescript
+language js
 `debugger`
 ```
 "#;

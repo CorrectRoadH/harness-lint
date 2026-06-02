@@ -149,7 +149,7 @@ pub fn find_project_root(start: &Path) -> Result<PathBuf> {
         }
         if !current.pop() {
             bail!(
-                "could not find project root from {}; run `harness init` first",
+                "could not find project root from {}; run `harness-lint init` first",
                 start.display()
             );
         }
@@ -162,7 +162,7 @@ pub fn load_config(root: &Path, explicit: Option<&Path>) -> Result<ProjectConfig
         .unwrap_or_else(|| root.join(CONFIG_FILE));
     if !path.exists() {
         bail!(
-            "missing {}; run `harness init` in {}",
+            "missing {}; run `harness-lint init` in {}",
             path.display(),
             root.display()
         );
@@ -260,5 +260,12 @@ require_capitalized_dirs = true
             Some(PathBuf::from("Attachments"))
         );
         assert!(config.obsidian.require_capitalized_dirs);
+    }
+
+    #[test]
+    fn missing_config_points_to_harness_lint_init() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let error = load_config(tempdir.path(), None).unwrap_err().to_string();
+        assert!(error.contains("harness-lint init"));
     }
 }

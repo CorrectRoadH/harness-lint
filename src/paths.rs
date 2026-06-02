@@ -65,16 +65,33 @@ pub fn rule_matches_path(rule: &RuleDefinition, path: &Path) -> bool {
         return true;
     };
     let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
-    match language.as_str() {
-        "python" => ext == "py",
-        "javascript" | "js" => matches!(ext, "js" | "jsx" | "mjs" | "cjs"),
+    match language.to_ascii_lowercase().as_str() {
+        "python" | "py" => ext == "py",
+        "javascript" | "ecmascript" | "node" | "nodejs" | "js" => {
+            matches!(ext, "js" | "jsx" | "mjs" | "cjs")
+        }
+        "jsx" => ext == "jsx",
         "typescript" | "ts" => matches!(ext, "ts" | "tsx"),
+        "tsx" => ext == "tsx",
         "rust" => ext == "rs",
-        "go" => ext == "go",
+        "go" | "golang" => ext == "go",
+        "ruby" | "rb" => ext == "rb",
+        "elixir" | "ex" | "exs" => matches!(ext, "ex" | "exs"),
+        "csharp" | "c#" | "cs" => ext == "cs",
+        "java" => ext == "java",
+        "kotlin" | "kt" | "kts" => matches!(ext, "kt" | "kts"),
+        "solidity" | "sol" => ext == "sol",
+        "hcl" => ext == "hcl",
+        "terraform" | "tf" => ext == "tf",
+        "html" | "htm" => matches!(ext, "html" | "htm"),
+        "css" => ext == "css",
         "markdown" | "md" => ext == "md",
-        "yaml" => matches!(ext, "yaml" | "yml"),
+        "yaml" | "yml" => matches!(ext, "yaml" | "yml"),
         "json" => ext == "json",
         "toml" => ext == "toml",
+        "sql" => ext == "sql",
+        "vue" => ext == "vue",
+        "php" => ext == "php",
         "svg" => ext == "svg",
         "text" => true,
         _ => true,
@@ -139,5 +156,54 @@ mod tests {
         )
         .unwrap();
         assert_eq!(paths, vec![PathBuf::from("src/main.py")]);
+    }
+
+    #[test]
+    fn matches_common_grit_languages_and_aliases() {
+        let mut rule = RuleDefinition {
+            id: "local.x".to_string(),
+            title: "x".to_string(),
+            language: None,
+            level: Severity::Warn,
+            skill: None,
+            tags: vec![],
+            description: String::new(),
+            body: RuleBody::Grit(String::new()),
+            examples: vec![],
+            source_path: PathBuf::from("rule.md"),
+            pack_id: None,
+        };
+        let cases = [
+            ("typescript", "src/main.ts"),
+            ("tsx", "src/main.tsx"),
+            ("javascript", "src/main.jsx"),
+            ("python", "src/main.py"),
+            ("go", "src/main.go"),
+            ("rust", "src/main.rs"),
+            ("ruby", "src/main.rb"),
+            ("elixir", "src/main.exs"),
+            ("csharp", "src/main.cs"),
+            ("java", "src/Main.java"),
+            ("kotlin", "src/Main.kts"),
+            ("solidity", "src/Main.sol"),
+            ("hcl", "infra/main.hcl"),
+            ("terraform", "infra/main.tf"),
+            ("html", "src/index.htm"),
+            ("css", "src/main.css"),
+            ("markdown", "README.md"),
+            ("yaml", "config.yml"),
+            ("json", "package.json"),
+            ("toml", "Cargo.toml"),
+            ("sql", "query.sql"),
+            ("vue", "App.vue"),
+            ("php", "index.php"),
+        ];
+        for (language, path) in cases {
+            rule.language = Some(language.to_string());
+            assert!(
+                rule_matches_path(&rule, Path::new(path)),
+                "{language} should match {path}"
+            );
+        }
     }
 }

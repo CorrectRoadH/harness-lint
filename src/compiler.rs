@@ -131,8 +131,14 @@ fn remove_stale_patterns(
         }
         let filename = entry.file_name().to_string_lossy().to_string();
         if filename.ends_with(".md") && !expected_files.contains(&filename) {
-            fs::remove_file(entry.path())
-                .with_context(|| format!("failed to remove {}", entry.path().display()))?;
+            match fs::remove_file(entry.path()) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("failed to remove {}", entry.path().display()));
+                }
+            }
         }
     }
     Ok(())

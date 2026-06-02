@@ -59,6 +59,7 @@ harness-lint rule create "Avoid print debugging" --language python --grit '`prin
 규칙을 만든 뒤에는 더 넓은 체크에 의존하기 전에, 그 규칙만 실행해서 예상한 파일이 보고되는지 확인하세요. `check`에 path를 넘겨 rule scope를 흉내 내지 마세요. 특정 파일에만 적용해야 한다면 GritQL의 `$filename`으로 표현하세요.
 
 ```sh
+harness-lint rule verify local.no-print
 harness-lint check --all --rule local.no-print
 ```
 

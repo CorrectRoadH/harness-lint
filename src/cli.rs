@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -13,7 +14,7 @@ use crate::config::{self, ProjectConfig};
 use crate::git;
 use crate::grit;
 use crate::init;
-use crate::model::{PackSourceKind, RuleBody, RuleDefinition};
+use crate::model::{PackSourceKind, RuleBody, RuleDefinition, RuleExampleKind};
 use crate::obsidian;
 use crate::pack;
 use crate::paths;
@@ -121,6 +122,8 @@ enum RuleCommand {
         #[arg(long)]
         grit: String,
     },
+    #[command(about = "Verify that rule Bad examples trigger their GritQL")]
+    Verify { rule_id: Option<String> },
     #[command(about = "Find existing rule candidates from feedback")]
     Suggest { feedback: String },
 }
@@ -222,6 +225,7 @@ fn run_check(
     let mut diagnostics = if active_rules.is_empty() || selected_paths.grit.is_empty() {
         Vec::new()
     } else {
+        let _lock = acquire_grit_run_lock(&root)?;
         let compiled = compiler::compile_rule_set(&root, active_rules.clone())?;
         if config.lint.cache {
             let rule_fingerprint = cache::fingerprint(&format!("{:?}", compiled.grit_rules));
@@ -265,6 +269,50 @@ fn run_check(
         bail!("harness-lint found error-level diagnostics");
     }
     Ok(())
+}
+
+#[derive(Debug)]
+struct GritRunLock {
+    path: PathBuf,
+}
+
+impl Drop for GritRunLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn acquire_grit_run_lock(root: &Path) -> Result<GritRunLock> {
+    let lock_dir = root.join(".harness");
+    fs::create_dir_all(&lock_dir)
+        .with_context(|| format!("failed to create {}", lock_dir.display()))?;
+    let path = lock_dir.join("grit-run.lock");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                writeln!(file, "pid={}", std::process::id())
+                    .with_context(|| format!("failed to write {}", path.display()))?;
+                return Ok(GritRunLock { path });
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if std::time::Instant::now() >= deadline {
+                    bail!(
+                        "timed out waiting for another harness-lint check to release {}; remove the lock if no harness-lint process is running",
+                        path.display()
+                    );
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(error) => {
+                return Err(error).with_context(|| format!("failed to acquire {}", path.display()));
+            }
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1089,6 +1137,39 @@ fn run_rule(
                 created.path.display()
             );
         }
+        RuleCommand::Verify { rule_id } => {
+            let config = config::load_config(&root, config_path)?;
+            let rules = load_rules(&root, &config)?;
+            let selected_rules: Vec<_> = rules
+                .into_iter()
+                .filter(|rule| rule_id.as_ref().is_none_or(|id| &rule.id == id))
+                .collect();
+            if selected_rules.is_empty() {
+                if let Some(rule_id) = rule_id {
+                    bail!("rule `{rule_id}` was not found");
+                }
+                bail!("no rules found");
+            }
+            let verified_examples = verify_rule_bad_examples(&selected_rules)?;
+            match format {
+                ReportFormat::Json => {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "rules": selected_rules.len(),
+                            "bad_examples": verified_examples
+                        })
+                    );
+                }
+                ReportFormat::Human => {
+                    println!(
+                        "Verified {} rule(s), {} Bad example(s).",
+                        selected_rules.len(),
+                        verified_examples
+                    );
+                }
+            }
+        }
         RuleCommand::Suggest { feedback } => {
             let config = config::load_config(&root, config_path)?;
             let mut query = registry::infer_project_context(&root);
@@ -1127,6 +1208,69 @@ fn run_rule(
         }
     }
     Ok(())
+}
+
+fn verify_rule_bad_examples(rules: &[RuleDefinition]) -> Result<usize> {
+    let mut verified_examples = 0;
+    for rule in rules {
+        let bad_examples: Vec<_> = rule
+            .examples
+            .iter()
+            .filter(|example| example.kind == RuleExampleKind::Bad)
+            .collect();
+        if bad_examples.is_empty() {
+            bail!(
+                "rule `{}` has no Bad examples; add one before verification",
+                rule.id
+            );
+        }
+        for (index, example) in bad_examples.iter().enumerate() {
+            if !has_concrete_example(&example.code) {
+                bail!(
+                    "Bad example {} for rule `{}` is empty or TODO-only",
+                    index + 1,
+                    rule.id
+                );
+            }
+            let scratch = crate::scratch::ScratchDir::new("harness-lint-rule-verify")?;
+            let language = example
+                .language
+                .as_deref()
+                .or(rule.language.as_deref())
+                .unwrap_or("text");
+            let relative_path = PathBuf::from("src")
+                .join(format!("bad-example.{}", grit::sample_extension(language)));
+            let source_path = scratch.path().join(&relative_path);
+            if let Some(parent) = source_path.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
+            }
+            fs::write(&source_path, &example.code)
+                .with_context(|| format!("failed to write {}", source_path.display()))?;
+            let compiled = compiler::compile_rule_set(scratch.path(), vec![rule.clone()])?;
+            let diagnostics = normalize_diagnostics(
+                scratch.path(),
+                &compiled,
+                grit::run_grit(scratch.path(), &compiled, &[relative_path])?,
+            );
+            if diagnostics.is_empty() {
+                bail!(
+                    "Bad example {} for rule `{}` did not trigger; adjust the GritQL, Bad example, or `$filename` scope",
+                    index + 1,
+                    rule.id
+                );
+            }
+            verified_examples += 1;
+        }
+    }
+    Ok(verified_examples)
+}
+
+fn has_concrete_example(code: &str) -> bool {
+    code.lines().any(|line| {
+        let trimmed = line.trim();
+        !trimmed.is_empty() && !trimmed.to_ascii_uppercase().contains("TODO")
+    })
 }
 
 fn select_paths(

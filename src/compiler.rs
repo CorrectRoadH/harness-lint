@@ -34,17 +34,12 @@ pub fn compile_rule_set(root: &Path, rules: Vec<RuleDefinition>) -> Result<Compi
         .with_context(|| format!("failed to create {}", patterns_dir.display()))?;
 
     let mut grit_rules = Vec::new();
-    let mut skipped_rules = Vec::new();
     let mut expected_files = std::collections::BTreeSet::new();
     for rule in rules {
-        if matches!(rule.body, RuleBody::Grit(_)) {
-            let filename = format!("{}.md", safe_pattern_filename(&rule.id));
-            write_grit_pattern(&patterns_dir, &filename, &rule)?;
-            expected_files.insert(filename);
-            grit_rules.push(rule);
-        } else {
-            skipped_rules.push(rule);
-        }
+        let filename = format!("{}.md", safe_pattern_filename(&rule.id));
+        write_grit_pattern(&patterns_dir, &filename, &rule)?;
+        expected_files.insert(filename);
+        grit_rules.push(rule);
     }
 
     remove_stale_patterns(&patterns_dir, &expected_files)?;
@@ -53,7 +48,6 @@ pub fn compile_rule_set(root: &Path, rules: Vec<RuleDefinition>) -> Result<Compi
     Ok(CompiledRules {
         grit_dir,
         grit_rules,
-        skipped_rules,
     })
 }
 
@@ -87,10 +81,7 @@ fn grit_yaml() -> Result<String> {
 
 fn write_grit_pattern(patterns_dir: &Path, filename: &str, rule: &RuleDefinition) -> Result<()> {
     let path = patterns_dir.join(filename);
-    let body = match &rule.body {
-        RuleBody::Grit(body) => body,
-        _ => return Ok(()),
-    };
+    let RuleBody::Grit(body) = &rule.body;
     let tags = if rule.tags.is_empty() {
         "[]".to_string()
     } else {
@@ -183,45 +174,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compiler_skips_rules_without_grit_and_writes_grit_yaml() {
+    fn compiler_writes_grit_rules_and_grit_yaml() {
         let tempdir = tempfile::tempdir().unwrap();
         let pack = RulePack {
             id: "local".to_string(),
             name: "Local".to_string(),
             version: "0.0.0".to_string(),
-            rules: vec![
-                RuleDefinition {
-                    id: "local.warn".to_string(),
-                    title: "Warn".to_string(),
-                    language: Some("python".to_string()),
-                    level: Severity::Warn,
-                    skill: None,
-                    tags: vec!["local".to_string()],
-                    description: "desc".to_string(),
-                    body: RuleBody::Grit("language python\n`print($x)`".to_string()),
-                    examples: vec![],
-                    source_path: PathBuf::from("warn.md"),
-                    pack_id: Some("local".to_string()),
-                },
-                RuleDefinition {
-                    id: "local.incomplete".to_string(),
-                    title: "Incomplete".to_string(),
-                    language: Some("python".to_string()),
-                    level: Severity::Warn,
-                    skill: None,
-                    tags: vec![],
-                    description: String::new(),
-                    body: RuleBody::Missing,
-                    examples: vec![],
-                    source_path: PathBuf::from("incomplete.md"),
-                    pack_id: Some("local".to_string()),
-                },
-            ],
+            rules: vec![RuleDefinition {
+                id: "local.warn".to_string(),
+                title: "Warn".to_string(),
+                language: Some("python".to_string()),
+                level: Severity::Warn,
+                skill: None,
+                tags: vec!["local".to_string()],
+                description: "desc".to_string(),
+                body: RuleBody::Grit("language python\n`print($x)`".to_string()),
+                examples: vec![],
+                source_path: PathBuf::from("warn.md"),
+                pack_id: Some("local".to_string()),
+            }],
         };
         let compiled =
             compile_grit_rules(tempdir.path(), vec![pack], &BTreeMap::new(), &[]).unwrap();
         assert_eq!(compiled.grit_rules.len(), 1);
-        assert_eq!(compiled.skipped_rules.len(), 1);
         assert!(generated_grit_yaml_path(tempdir.path()).exists());
         let yaml = std::fs::read_to_string(generated_grit_yaml_path(tempdir.path())).unwrap();
         assert!(yaml.contains("patterns: []"));

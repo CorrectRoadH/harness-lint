@@ -58,7 +58,7 @@ pub fn parse_rule(
 
     let description = extract_description(markdown);
     let grit_block_count = fenced_codes(markdown, Some("grit")).len();
-    let body = extract_body(markdown);
+    let body = extract_body(markdown, &source_path)?;
     let examples = extract_examples(markdown);
 
     let rule = RuleDefinition {
@@ -102,28 +102,33 @@ fn extract_description(markdown: &str) -> String {
     description.join(" ")
 }
 
-fn extract_body(markdown: &str) -> RuleBody {
+fn extract_body(markdown: &str, source_path: &Path) -> Result<RuleBody> {
     if let Some((_, code)) = fenced_codes(markdown, Some("grit")).into_iter().next() {
         if has_executable_grit(&code) {
-            return RuleBody::Grit(code);
+            return Ok(RuleBody::Grit(code));
         }
+        bail!(
+            "{} has a ```grit block but no executable GritQL",
+            source_path.display()
+        );
     }
 
-    RuleBody::Missing
+    bail!(
+        "{} is missing an executable ```grit block; every rule must be enforceable with GritQL",
+        source_path.display()
+    )
 }
 
-pub fn has_non_executable_grit_block(markdown: &str) -> bool {
-    let grit_blocks = fenced_codes(markdown, Some("grit"));
-    !grit_blocks.is_empty()
-        && grit_blocks
-            .iter()
-            .all(|(_, code)| !has_executable_grit(code))
-}
-
-fn has_executable_grit(code: &str) -> bool {
+pub(crate) fn has_executable_grit(code: &str) -> bool {
     code.lines().any(|line| {
         let trimmed = line.trim();
-        !trimmed.is_empty() && !trimmed.starts_with("//")
+        !trimmed.is_empty()
+            && !trimmed.starts_with("//")
+            && !trimmed.starts_with('#')
+            && !trimmed.starts_with("/*")
+            && !trimmed.starts_with('*')
+            && !trimmed.starts_with("*/")
+            && !trimmed.to_ascii_uppercase().contains("TODO")
     })
 }
 
@@ -200,14 +205,7 @@ fn validate_rule(rule: &RuleDefinition, grit_block_count: usize) -> Result<()> {
             rule.source_path.display()
         );
     }
-    let has_body = !matches!(rule.body, RuleBody::Missing);
     if rule.level.is_failing() {
-        if !has_body {
-            bail!(
-                "{} is error-level but has no executable body",
-                rule.source_path.display()
-            );
-        }
         let has_bad = rule
             .examples
             .iter()
@@ -271,7 +269,7 @@ logger.info("x")
     }
 
     #[test]
-    fn warn_rule_can_have_missing_body() {
+    fn rejects_rule_without_gritql() {
         let content = r#"---
 id: ai.some-rule
 title: Some Rule
@@ -282,12 +280,14 @@ title: Some Rule
 TODO.
 "#;
 
-        let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();
-        assert!(matches!(rule.body, RuleBody::Missing));
+        let error = parse_rule(content, PathBuf::from("rule.md"), None)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("missing an executable ```grit block"));
     }
 
     #[test]
-    fn warn_rule_with_comment_only_grit_block_is_missing_body() {
+    fn rejects_comment_only_grit_block() {
         let content = r#"---
 id: ai.some-rule
 title: Some Rule
@@ -302,8 +302,10 @@ TODO.
 ```
 "#;
 
-        let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();
-        assert!(matches!(rule.body, RuleBody::Missing));
+        let error = parse_rule(content, PathBuf::from("rule.md"), None)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("has a ```grit block but no executable GritQL"));
     }
 
     #[test]
@@ -318,6 +320,11 @@ owner: local-team
 # Some Rule
 
 TODO.
+
+```grit
+language typescript
+`console.log($value)`
+```
 "#;
 
         let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();

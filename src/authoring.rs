@@ -10,15 +10,21 @@ pub fn create_rule(
     root: &Path,
     local_rule_dirs: &[PathBuf],
     feedback: &str,
+    language: &str,
+    grit: &str,
 ) -> Result<CreatedRule> {
     let id_tail = rule_name_from_feedback(feedback)?;
     let id = format!("local.{id_tail}");
     let title = feedback.trim().to_string();
+    let language = language.trim();
+    validate_language(language)?;
+    let grit = normalize_grit(language, grit)?;
     let path = target_rule_dir(root, local_rule_dirs).join(format!("{id_tail}.md"));
     let content = format!(
         r#"---
 id: {id}
 title: {title:?}
+language: {language}
 level: warn
 skill:
 tags: [local, ai-feedback]
@@ -28,17 +34,19 @@ tags: [local, ai-feedback]
 
 {feedback}
 
-TODO: Add GritQL once the matching shape is clear.
+```grit
+{grit}
+```
 
 ## Bad
 
-```text
+```{language}
 TODO: Add an example that should be flagged.
 ```
 
 ## Good
 
-```text
+```{language}
 TODO: Add an example that should be allowed.
 ```
 "#
@@ -56,6 +64,37 @@ TODO: Add an example that should be allowed.
         path,
         content,
     })
+}
+
+fn validate_language(language: &str) -> Result<()> {
+    if language.is_empty() {
+        bail!("rule language is required; pass --language <language>");
+    }
+    if language
+        .chars()
+        .any(|ch| ch.is_control() || ch.is_whitespace())
+    {
+        bail!("rule language must be a single Grit language name without whitespace");
+    }
+    Ok(())
+}
+
+fn normalize_grit(language: &str, grit: &str) -> Result<String> {
+    let grit = grit.trim();
+    if !crate::rule::has_executable_grit(grit) {
+        bail!(
+            "rule GritQL is required; if the feedback cannot be expressed as GritQL, do not create a harness-lint rule"
+        );
+    }
+    if grit.lines().any(|line| {
+        line.trim_start()
+            .to_ascii_lowercase()
+            .starts_with("language ")
+    }) {
+        Ok(grit.to_string())
+    } else {
+        Ok(format!("language {language}\n{grit}"))
+    }
 }
 
 fn rule_name_from_feedback(feedback: &str) -> Result<String> {
@@ -104,6 +143,8 @@ mod tests {
             tempdir.path(),
             &[PathBuf::from("custom-rules")],
             "Prefer pydantic models",
+            "python",
+            "`print($value)`",
         )
         .unwrap();
         assert_eq!(created.id, "local.Prefer pydantic models");
@@ -114,6 +155,8 @@ mod tests {
                 .join("custom-rules/Prefer pydantic models.md")
         );
         assert!(!created.content.contains("status:"));
+        assert!(created.content.contains("language: python"));
+        assert!(created.content.contains("language python\n`print($value)`"));
     }
 
     #[test]
@@ -123,6 +166,8 @@ mod tests {
             tempdir.path(),
             &[PathBuf::from("Rules")],
             "你好，不允许使用UI",
+            "typescript",
+            "language typescript\n`ReactDOM.render($value)`",
         )
         .unwrap();
         assert_eq!(created.id, "local.你好，不允许使用UI");
@@ -136,9 +181,45 @@ mod tests {
     #[test]
     fn create_rule_rejects_path_separators() {
         let tempdir = tempfile::tempdir().unwrap();
-        let error = create_rule(tempdir.path(), &[PathBuf::from("Rules")], "不要用 UI/DOM")
-            .unwrap_err()
-            .to_string();
+        let error = create_rule(
+            tempdir.path(),
+            &[PathBuf::from("Rules")],
+            "不要用 UI/DOM",
+            "typescript",
+            "`console.log($value)`",
+        )
+        .unwrap_err()
+        .to_string();
         assert!(error.contains("unsupported character `/`"));
+    }
+
+    #[test]
+    fn create_rule_rejects_missing_gritql() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let error = create_rule(
+            tempdir.path(),
+            &[PathBuf::from("Rules")],
+            "Prefer pydantic models",
+            "python",
+            "// TODO",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("rule GritQL is required"));
+    }
+
+    #[test]
+    fn create_rule_rejects_invalid_language() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let error = create_rule(
+            tempdir.path(),
+            &[PathBuf::from("Rules")],
+            "Prefer pydantic models",
+            "python\nlevel: error",
+            "`print($value)`",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("single Grit language name"));
     }
 }

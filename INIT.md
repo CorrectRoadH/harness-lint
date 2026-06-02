@@ -75,20 +75,19 @@ rules/
 
 从用户已有的 `AGENTS.md`、`CLAUDE.md`、`.cursor/rules`、README 和 review 文档中提取稳定、可重复检查的约定，并直接创建或更新本地规则。规则名、标题、描述、Bad / Good 示例和最终给用户的总结，都应该使用用户习惯的语言；如果用户的仓库文档主要是中文，就用中文写规则内容。创建前先运行 `harness-lint rule list` 查看已有 lint，避免重复规则。
 
-不要把一次性任务、模糊偏好或无法检查的愿望强行变成 `level: error` 规则；不确定的先保持 `level: warn`。对每条需要新增的可规则化约定，统一用 CLI 创建本地规则骨架和规则文件名：
+不要把一次性任务、模糊偏好、流程愿望、跨文件意图判断或无法用 GritQL 稳定检查的约束写成 harness-lint rule。创建规则前必须先确认它能被一个可靠的 GritQL pattern 捕捉；如果不能，就不要创建规则，把它保留在 agent 指令、review checklist 或项目文档中。对每条需要新增的可规则化约定，统一用 CLI 创建本地规则文件：
 
 ```sh
-harness-lint rule create "<constraint>"
+harness-lint rule create "<constraint>" --language <language> --grit <gritql>
 ```
 
 然后手动编辑生成的 `rules/*.md`：
 
-- 补充 `language`。
 - 用用户习惯的语言改好 `id`、`title`、正文说明、Bad / Good 示例。
 - 规则 `id` 和文件名要可读、稳定。允许中文和其他语言，但不要使用路径符号或装饰性符号；空格用 `-` 替代；英文最好用全小写 kebab-case，例如 `local.no-print-debug`；中文可以用短句，例如 `local.禁止使用UI` 或 `local.禁止-使用-UI`。
 - 尽量让 `id` 和文件名对齐，例如 `id: local.no-print-debug` 对应 `no-print-debug.md`。
-- 能写 GritQL 时写 GritQL。
-- 每个规则文件最多只能有一个 `grit` fenced code block；`harness-lint doctor` 会拒绝多个 GritQL block。
+- 每个规则文件必须有且只有一个可执行的 `grit` fenced code block；`harness-lint doctor` 会拒绝缺失、空的、TODO/comment-only 或多个 GritQL block。
+- 如果规则只应该作用于部分文件，直接在 GritQL 中用 `$filename` 条件表达，例如 `$filename <: r".*src/.*\.ts"` 和 `!$filename <: r".*\.test\.ts"`；不要额外发明 frontmatter scope。
 - 还拿不准时保持 `level: warn`；只有团队明确希望失败退出时才改成 `level: error`。
 - 如果规则适合触发特定 Codex skill，添加精确的 `skill: <skill-name>`；不确定时留空。常见示例：`tdd` 用于测试先行修复，`triage-issue` 用于根因定位和 issue 计划，`codex-security:fix-finding` 用于明确安全漏洞修复，`build-web-apps:frontend-testing-debugging` 用于前端渲染/交互/回归问题，`build-web-apps:react-best-practices` 用于 React / Next.js 性能或最佳实践问题。
 
@@ -98,7 +97,7 @@ harness-lint rule create "<constraint>"
 - 先匹配最小、最确定的坏代码形状，宁可窄一点，也不要为了覆盖更多场景造成误报。
 - 用 `$value`、`$name`、`$body` 这类 metavariable 表示会变化的部分。
 - 先直接匹配禁止形状；只有出现真实误报后，再补例外条件。
-- 如果规则依赖跨文件语义、项目配置、所有权或意图，GritQL 看不准，就先保持 prose-only 和 `level: warn`，不要硬造一个不可靠的 pattern。
+- 如果规则依赖跨文件语义、项目配置、所有权或意图，GritQL 看不准，就不要创建 harness-lint rule，也不要硬造一个不可靠的 pattern。
 
 GritQL 示例：
 
@@ -129,6 +128,14 @@ language go
 
 完成后用用户的语言告诉用户“我帮你写了哪些规则”，并给一个 one-shot 摘要，不要只说“已创建规则”。
 
+创建或修改每条规则后，必须先单独运行这条规则，确认它能抓到预期目标。不要通过给 `check` 传路径来模拟规则范围；如果规则只应该作用于部分文件，必须在 GritQL 中用 `$filename` 表达：
+
+```sh
+harness-lint check --all --rule <rule-id>
+```
+
+检查输出里应该出现预期命中的文件，且不应该出现不相关文件。若规则没有诊断、范围太大或范围太小，先调整 GritQL，再继续全局检查。
+
 One-shot 示例：
 
 ```text
@@ -144,6 +151,7 @@ One-shot 示例：
 
 ```sh
 harness-lint doctor
+harness-lint check --all --rule <rule-id>
 harness-lint check --changed
 ```
 
@@ -157,4 +165,4 @@ harness-lint check --changed
 - 初始化了哪些文件。
 - 写入或更新了哪个 agent 指令文件。
 - 发现了哪些语言/框架。
-- 从用户已有约束中创建了哪些本地规则，哪些无法用 gritql 来描述，所以没有写到 lint 下面
+- 从用户已有约束中创建了哪些本地规则；哪些无法用 GritQL 描述，所以没有写到 lint 下面

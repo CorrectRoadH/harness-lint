@@ -48,7 +48,19 @@ harness-lint remove python
 local = ["custom-rules"]
 ```
 
-`harness-lint rule create`는 설정된 첫 번째 로컬 규칙 디렉터리에 새 규칙을 작성합니다.
+`harness-lint rule create`는 설정된 첫 번째 로컬 규칙 디렉터리에 새 규칙을 작성합니다. 로컬 규칙은 생성 시점에 실행 가능한 GritQL을 포함해야 합니다.
+
+```sh
+harness-lint rule create "Avoid print debugging" --language python --grit '`print($value)`'
+```
+
+피드백을 신뢰할 수 있는 GritQL pattern으로 표현할 수 없다면 harness-lint rule을 만들지 마세요. 그런 제약은 agent 지침, review checklist, 또는 프로젝트 문서에 남겨두세요.
+
+규칙을 만든 뒤에는 더 넓은 체크에 의존하기 전에, 그 규칙만 실행해서 예상한 파일이 보고되는지 확인하세요. `check`에 path를 넘겨 rule scope를 흉내 내지 마세요. 특정 파일에만 적용해야 한다면 GritQL의 `$filename`으로 표현하세요.
+
+```sh
+harness-lint check --all --rule local.no-print
+```
 
 규칙 파일 예시:
 
@@ -83,3 +95,12 @@ print(user)
 logger.info("user=%s", user)
 ```
 ````
+
+규칙을 특정 파일 범위로 제한하려면 GritQL에서 `$filename` 조건을 직접 작성하세요.
+
+```grit
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```

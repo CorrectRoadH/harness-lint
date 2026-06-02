@@ -119,7 +119,6 @@ pub struct RuleDefinition {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleBody {
     Grit(String),
-    Missing,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,7 +166,6 @@ pub struct CreatedRule {
 pub struct CompiledRules {
     pub grit_dir: PathBuf,
     pub grit_rules: Vec<RuleDefinition>,
-    pub skipped_rules: Vec<RuleDefinition>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

@@ -50,7 +50,19 @@ Custom project rules live in `rules/*.md` by default. To put them somewhere else
 local = ["custom-rules"]
 ```
 
-`rule create` writes new rules to the first configured local rule directory.
+`rule create` writes new rules to the first configured local rule directory. A local rule must include executable GritQL at creation time:
+
+```sh
+harness-lint rule create "Avoid print debugging" --language python --grit '`print($value)`'
+```
+
+If feedback cannot be expressed as a reliable GritQL pattern, do not create a harness-lint rule for it. Keep that guidance in agent instructions, review checklists, or project docs instead.
+
+After creating a rule, run it by itself and confirm it reports the expected file(s) before relying on broader checks. Do not pass paths to `check` to simulate rule scope; if the rule should only apply to certain files, encode that in GritQL with `$filename`.
+
+```sh
+harness-lint check --all --rule local.no-print
+```
 
 Rule file example:
 
@@ -85,3 +97,12 @@ print(user)
 logger.info("user=%s", user)
 ```
 ````
+
+To limit a rule to specific files, write the file scope directly in GritQL with `$filename`:
+
+```grit
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```

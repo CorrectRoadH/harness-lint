@@ -21,7 +21,13 @@ pub trait GritRunner {
 }
 
 pub trait RuleAuthoring {
-    fn create_rule(&self, feedback: String, context: ProjectContext) -> Result<CreatedRule>;
+    fn create_rule(
+        &self,
+        feedback: String,
+        language: String,
+        grit: String,
+        context: ProjectContext,
+    ) -> Result<CreatedRule>;
 }
 
 pub trait Reporter {

@@ -45,7 +45,7 @@ enum Command {
     Init(InitCommand),
     #[command(about = "Diagnose config, rules, grit, and git integration")]
     Doctor,
-    #[command(about = "Run active rules against selected files")]
+    #[command(about = "Run active rules against the configured project file set")]
     Check(CheckCommand),
     #[command(about = "Search the rule-pack catalog")]
     Search { query: Vec<String> },
@@ -93,8 +93,6 @@ struct CheckCommand {
     rule: Vec<String>,
     #[arg(long)]
     tag: Vec<String>,
-    #[arg(value_name = "PATH")]
-    paths: Vec<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -115,8 +113,14 @@ enum RuleCommand {
     List,
     #[command(about = "Explain a loaded rule")]
     Explain { rule_id: String },
-    #[command(about = "Create a local rule from feedback")]
-    Create { feedback: String },
+    #[command(about = "Create a local rule from feedback and executable GritQL")]
+    Create {
+        feedback: String,
+        #[arg(long)]
+        language: String,
+        #[arg(long)]
+        grit: String,
+    },
     #[command(about = "Find existing rule candidates from feedback")]
     Suggest { feedback: String },
 }
@@ -343,22 +347,13 @@ fn run_doctor(
     }
     match validate_local_rules(&root, &config) {
         Ok(validation) => {
-            let non_executable_count = validation
-                .rule_count
-                .saturating_sub(validation.executable_count);
             findings.push(doctor_ok(
                 "local-rules",
                 format!(
-                    "validated {} local rule(s), {} executable GritQL, {} without executable GritQL",
-                    validation.rule_count, validation.executable_count, non_executable_count
+                    "validated {} local rule(s), all with executable GritQL",
+                    validation.rule_count
                 ),
             ));
-            for rule in validation.non_executable_grit_rules {
-                findings.push(doctor_warn(
-                    "local-rules",
-                    non_executable_grit_rule_message(&rule),
-                ));
-            }
         }
         Err(error) => findings.push(doctor_error("local-rules", format!("{error:#}"))),
     }
@@ -475,8 +470,6 @@ fn report_doctor(findings: &[DoctorFinding], format: ReportFormat) -> Result<()>
 #[derive(Debug)]
 struct LocalRuleValidation {
     rule_count: usize,
-    executable_count: usize,
-    non_executable_grit_rules: Vec<RuleDefinition>,
 }
 
 fn validate_local_rules(root: &Path, config: &ProjectConfig) -> Result<LocalRuleValidation> {
@@ -494,37 +487,19 @@ fn validate_local_rules(root: &Path, config: &ProjectConfig) -> Result<LocalRule
             .with_context(|| format!("invalid local rules in {}", path.display()))?;
         rules.extend(discovered);
     }
-    let non_executable_grit_rules = rules
-        .iter()
-        .filter(|rule| matches!(rule.body, RuleBody::Missing))
-        .filter_map(|rule| {
-            let content = fs::read_to_string(&rule.source_path).ok()?;
-            crate::rule::has_non_executable_grit_block(&content).then(|| rule.clone())
-        })
-        .collect();
     let rule_count = rules.len();
     let executable_count = rules
         .iter()
         .filter(|rule| matches!(rule.body, RuleBody::Grit(_)))
         .count();
-    if executable_count > 0 {
-        validate_local_gritql(root, rules)
-            .context("local rule GritQL failed validation during doctor")?;
+    if rule_count != executable_count {
+        bail!(
+            "validated {rule_count} local rule(s), but only {executable_count} include executable GritQL"
+        );
     }
-    Ok(LocalRuleValidation {
-        rule_count,
-        executable_count,
-        non_executable_grit_rules,
-    })
-}
-
-fn non_executable_grit_rule_message(rule: &RuleDefinition) -> String {
-    format!(
-        "rule `{}` ({}) at {} contains a ```grit block but no executable GritQL; remove the fence for a documentation-only rule or replace the TODO/comment with a real GritQL pattern",
-        rule.id,
-        rule.title,
-        rule.source_path.display()
-    )
+    validate_local_gritql(root, rules)
+        .context("local rule GritQL failed validation during doctor")?;
+    Ok(LocalRuleValidation { rule_count })
 }
 
 fn validate_local_gritql(root: &Path, rules: Vec<RuleDefinition>) -> Result<()> {
@@ -718,7 +693,6 @@ mod tests {
                 source_path: root.join("Rules/rule.md"),
                 pack_id: Some("local".to_string()),
             }],
-            skipped_rules: vec![],
         };
         let diagnostics = normalize_diagnostics(
             root,
@@ -765,7 +739,6 @@ mod tests {
                 source_path: source_path.clone(),
                 pack_id: Some("local".to_string()),
             }],
-            skipped_rules: vec![],
         };
         let error = anyhow!(
             "`grit check` failed: Error: Unable to compile pattern local_playwright_page_ready_gate:\npattern definition not found: local_playwright_page_ready_gate. Try running grit init."
@@ -779,7 +752,7 @@ mod tests {
     }
 
     #[test]
-    fn local_rule_validation_reports_non_executable_grit_block() {
+    fn local_rule_validation_rejects_non_executable_grit_block() {
         let root = tempfile::tempdir().unwrap();
         let rules_dir = root.path().join("Rules");
         fs::create_dir_all(&rules_dir).unwrap();
@@ -802,15 +775,16 @@ title: Draft Rule
         let mut config = ProjectConfig::default();
         config.rules.local = vec![PathBuf::from("Rules")];
 
-        let validation = validate_local_rules(root.path(), &config).unwrap();
-
-        assert_eq!(validation.rule_count, 1);
-        assert_eq!(validation.executable_count, 0);
-        assert_eq!(validation.non_executable_grit_rules.len(), 1);
-        let message = non_executable_grit_rule_message(&validation.non_executable_grit_rules[0]);
-        assert!(message.contains("rule `local.draft-rule`"));
-        assert!(message.contains(&rule_path.display().to_string()));
-        assert!(message.contains("contains a ```grit block but no executable GritQL"));
+        let error = validate_local_rules(root.path(), &config)
+            .unwrap_err()
+            .to_string();
+        let expanded_error = format!(
+            "{:#}",
+            validate_local_rules(root.path(), &config).unwrap_err()
+        );
+        assert!(error.contains("invalid local rules"));
+        assert!(expanded_error.contains(&rule_path.display().to_string()));
+        assert!(expanded_error.contains("has a ```grit block but no executable GritQL"));
     }
 }
 
@@ -1101,9 +1075,14 @@ fn run_rule(
                 .ok_or_else(|| anyhow!("rule `{rule_id}` was not found"))?;
             report::print_rule_explain(rule);
         }
-        RuleCommand::Create { feedback } => {
+        RuleCommand::Create {
+            feedback,
+            language,
+            grit,
+        } => {
             let config = config::load_config(&root, config_path)?;
-            let created = authoring::create_rule(&root, &config.rules.local, &feedback)?;
+            let created =
+                authoring::create_rule(&root, &config.rules.local, &feedback, &language, &grit)?;
             println!(
                 "Created rule `{}` at {}",
                 created.id,
@@ -1135,13 +1114,13 @@ fn run_rule(
                     best.pack_id, best.pack_spec
                 );
                 println!(
-                    "To create a local rule instead, run:\n  harness-lint rule create {:?}",
+                    "To create a local rule instead, first confirm the feedback can be expressed as GritQL, then run:\n  harness-lint rule create {:?} --language <language> --grit <gritql>",
                     feedback
                 );
             } else {
                 println!("No existing rule candidates found.");
                 println!(
-                    "To create a local rule, run:\n  harness-lint rule create {:?}",
+                    "To create a local rule, first confirm the feedback can be expressed as GritQL, then run:\n  harness-lint rule create {:?} --language <language> --grit <gritql>",
                     feedback
                 );
             }
@@ -1156,11 +1135,8 @@ fn select_paths(
     command: &CheckCommand,
     rules: &[RuleDefinition],
 ) -> Result<SelectedPaths> {
-    let is_implicit_full_scan =
-        command.paths.is_empty() && !command.changed && !command.staged && !command.all;
-    let raw_paths = if !command.paths.is_empty() {
-        command.paths.clone()
-    } else if command.staged {
+    let is_implicit_full_scan = !command.changed && !command.staged && !command.all;
+    let raw_paths = if command.staged {
         git::staged_files(root)?
     } else if command.changed {
         let base = command.base.as_deref().unwrap_or(&config.lint.changed_base);
@@ -1200,7 +1176,7 @@ fn select_paths(
     }
     if is_implicit_full_scan && grit_paths.len() > 1000 {
         bail!(
-            "refusing implicit full scan of {} files; use `harness-lint check --changed`, pass paths, or run `harness-lint check --all` to force it",
+            "refusing implicit full scan of {} files; use `harness-lint check --changed` or run `harness-lint check --all` to force it",
             grit_paths.len()
         );
     }
@@ -1273,9 +1249,6 @@ fn collect_effective_rules(
     let mut rules = Vec::new();
     for pack in packs {
         for mut rule in pack.rules.clone() {
-            if !matches!(rule.body, crate::model::RuleBody::Grit(_)) {
-                continue;
-            }
             if config.disabled.rules.iter().any(|id| id == &rule.id) {
                 continue;
             }

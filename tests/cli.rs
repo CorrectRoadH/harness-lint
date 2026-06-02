@@ -19,8 +19,26 @@ fn cli_exposes_version_and_command_descriptions() {
         String::from_utf8_lossy(&help.stderr)
     );
     let stdout = String::from_utf8_lossy(&help.stdout);
-    assert!(stdout.contains("Run active rules against selected files"));
+    assert!(stdout.contains("Run active rules against the configured project file set"));
     assert!(stdout.contains("Rebuild the local pack cache from harness.lock"));
+}
+
+#[test]
+fn cli_check_rejects_positional_paths() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let output = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["check", "path/to/example.py"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("unexpected argument"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]
@@ -38,7 +56,15 @@ fn cli_init_and_rule_create_work() {
     let suggest = Command::new(binary)
         .arg("--cwd")
         .arg(tempdir.path())
-        .args(["rule", "create", "Prefer pydantic models"])
+        .args([
+            "rule",
+            "create",
+            "Prefer pydantic models",
+            "--language",
+            "python",
+            "--grit",
+            "`print($value)`",
+        ])
         .output()
         .unwrap();
     assert!(suggest.status.success());

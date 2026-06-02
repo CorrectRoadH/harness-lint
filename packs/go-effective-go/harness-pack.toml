@@ -2,7 +2,7 @@
 id = "go-effective-go"
 name = "Effective Go Inspired"
 version = "0.1.0"
-description = "Rules inspired by Effective Go: explicit errors, simple APIs, and readable package behavior."
+description = "Rules inspired by Effective Go: allocation, control flow, explicit errors, simple APIs, and readable package behavior."
 license = "MIT"
 
 [compat]

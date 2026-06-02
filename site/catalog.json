@@ -196,11 +196,27 @@
   {
     "id": "go-effective-go",
     "title": "Effective Go Inspired",
-    "description": "Rules inspired by Effective Go: explicit errors, simple APIs, and readable package behavior.",
+    "description": "Rules inspired by Effective Go: allocation, control flow, explicit errors, simple APIs, and readable package behavior.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
     "languages": ["go"],
-    "keywords": ["go", "golang", "effective go", "effective-go", "api", "errors"],
+    "keywords": ["go", "golang", "effective go", "effective-go", "api", "errors", "allocation", "interfaces", "blank identifier"],
     "rules": [
+      {
+        "rule_id": "go-effective-go.no-blank-placeholder-assignment",
+        "title": "Remove blank identifier placeholders",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag `_ = value` placeholders that silence unused-variable errors and usually mark unfinished code."
+      },
+      {
+        "rule_id": "go-effective-go.no-else-after-return",
+        "title": "Omit else after return",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag unnecessary else blocks after returning guard clauses so the successful path reads down the page."
+      },
       {
         "rule_id": "go-effective-go.no-empty-interface-api",
         "title": "Avoid empty interface API boundaries",
@@ -208,6 +224,14 @@
         "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
         "score": 20,
         "reason": "Flag broad interface{} contracts so APIs stay narrow and typed."
+      },
+      {
+        "rule_id": "go-effective-go.no-ignored-error-blank",
+        "title": "Do not discard call errors with blank identifiers",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 20,
+        "reason": "Flag call results that discard the second return with `_`, a common ignored-error shape."
       },
       {
         "rule_id": "go-effective-go.no-init-flow",
@@ -218,12 +242,76 @@
         "reason": "Flag hidden package initialization so setup can become explicit."
       },
       {
+        "rule_id": "go-effective-go.no-new-channel-allocation",
+        "title": "Use make for channels",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag new(chan T) because make initializes channel values for communication."
+      },
+      {
+        "rule_id": "go-effective-go.no-new-map-allocation",
+        "title": "Use make for maps",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag new(map[K]V) because make initializes map values before writes."
+      },
+      {
+        "rule_id": "go-effective-go.no-new-slice-allocation",
+        "title": "Use make for slices",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag new([]T) because make prepares initialized slice storage."
+      },
+      {
         "rule_id": "go-effective-go.no-nil-nil-return",
         "title": "Avoid nil nil returns",
         "pack_id": "go-effective-go",
         "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
         "score": 15,
         "reason": "Flag value-plus-error returns that provide neither data nor an explanation."
+      },
+      {
+        "rule_id": "go-effective-go.no-panic-flow",
+        "title": "Avoid panic in library flow",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 20,
+        "reason": "Flag panic calls so library-style code returns explicit errors for recoverable failures."
+      },
+      {
+        "rule_id": "go-effective-go.no-pointer-array-parameter",
+        "title": "Prefer slices over pointer array parameters",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag pointer-to-array parameters where slices usually express sequence APIs more idiomatically."
+      },
+      {
+        "rule_id": "go-effective-go.no-recursive-stringer-format",
+        "title": "Avoid recursive String formatting",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 20,
+        "reason": "Flag String methods that format the receiver directly and can recursively call String again."
+      },
+      {
+        "rule_id": "go-effective-go.no-redundant-delete-guard",
+        "title": "Delete map entries directly",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag presence guards around delete calls because delete is safe when a key is absent."
+      },
+      {
+        "rule_id": "go-effective-go.no-single-result-type-assertion",
+        "title": "Use comma ok type assertions",
+        "pack_id": "go-effective-go",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
+        "score": 15,
+        "reason": "Flag directly returned single-result type assertions so failures can be handled with comma-ok."
       }
     ]
   },

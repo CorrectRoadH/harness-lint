@@ -20,6 +20,12 @@ brew install getgrit/tap/grit
 brew install CorrectRoadH/tap/harness-lint
 ```
 
+To install the companion Codex skill:
+
+```sh
+npx skills add CorrectRoadH/harness-lint
+```
+
 ## Init Harness Lint For Your Repo, For Agents
 
 ```text

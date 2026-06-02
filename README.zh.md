@@ -18,6 +18,12 @@ brew install getgrit/tap/grit
 brew install CorrectRoadH/tap/harness-lint
 ```
 
+安装配套的 Codex skill：
+
+```sh
+npx skills add CorrectRoadH/harness-lint
+```
+
 ## 为 Agent 初始化当前仓库
 
 ```text

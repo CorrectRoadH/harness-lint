@@ -18,6 +18,12 @@ brew install getgrit/tap/grit
 brew install CorrectRoadH/tap/harness-lint
 ```
 
+함께 쓰는 Codex skill을 설치하려면:
+
+```sh
+npx skills add CorrectRoadH/harness-lint
+```
+
 ## Agent용 리포지토리 초기화
 
 ```text

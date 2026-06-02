@@ -395,6 +395,7 @@ fn built_in_pack_directories_load_as_local_packs() {
         "go",
         "go-effective-go",
         "go-concurrency",
+        "rust",
         "typescript",
         "typescript-react",
     ] {
@@ -427,5 +428,6 @@ fn built_in_pack_directories_load_as_local_packs() {
     let stdout = String::from_utf8_lossy(&rules.stdout);
     assert!(stdout.contains("python-pep8.no-wildcard-import"));
     assert!(stdout.contains("go-effective-go.no-empty-interface-api"));
+    assert!(stdout.contains("rust.no-dbg-macro"));
     assert!(stdout.contains("typescript-react.no-index-key"));
 }

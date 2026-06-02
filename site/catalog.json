@@ -262,6 +262,48 @@
     ]
   },
   {
+    "id": "rust",
+    "title": "Rust Application Conventions",
+    "description": "Rules for Rust application code hygiene: explicit errors, no committed scaffolding, and fewer panic paths.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/rust",
+    "languages": ["rust"],
+    "keywords": ["rust", "errors", "unwrap", "panic", "dbg", "todo"],
+    "rules": [
+      {
+        "rule_id": "rust.no-dbg-macro",
+        "title": "Avoid committed dbg macros",
+        "pack_id": "rust",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/rust",
+        "score": 20,
+        "reason": "Flag dbg! calls so debug probes do not land in application code."
+      },
+      {
+        "rule_id": "rust.no-unwrap-expect",
+        "title": "Review unwrap and expect calls",
+        "pack_id": "rust",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/rust",
+        "score": 20,
+        "reason": "Flag Option and Result panic paths so code moves toward explicit error handling."
+      },
+      {
+        "rule_id": "rust.no-panic-flow",
+        "title": "Avoid panic in normal application flow",
+        "pack_id": "rust",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/rust",
+        "score": 15,
+        "reason": "Flag panic! calls where returning errors or handling invalid states is usually clearer."
+      },
+      {
+        "rule_id": "rust.no-todo-unimplemented",
+        "title": "Avoid committed todo and unimplemented macros",
+        "pack_id": "rust",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/rust",
+        "score": 15,
+        "reason": "Flag scaffolding macros before unfinished branches are committed."
+      }
+    ]
+  },
+  {
     "id": "typescript",
     "title": "TypeScript application conventions",
     "description": "TypeScript rules for safer application code: no committed console debugging, no var, and fewer untyped escape hatches.",

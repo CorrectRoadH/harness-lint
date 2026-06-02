@@ -64,7 +64,66 @@ rules/
 
 初始化规则的目标是把用户仓库里已有的 agent 约束沉淀成本地规则。
 
-### 3.1 从用户已有约束初始化本地规则
+### 3.1 先搜索并推荐可安装的规则包
+
+在写本地规则前，先根据仓库语言、框架和已有约束搜索 rule-pack catalog，告诉用户“有哪些规则和你的 repo 有关”以及“哪些可以安装”。
+
+先检测仓库语言和框架。优先看这些信号：
+
+- Python: `pyproject.toml`、`requirements.txt`、`*.py`
+- TypeScript/JavaScript: `package.json`、`tsconfig.json`、`*.ts`、`*.tsx`、`*.js`
+- Go: `go.mod`、`*.go`
+- Rust: `Cargo.toml`、`*.rs`
+
+然后查看和搜索可用 packs：
+
+```sh
+harness-lint list --available
+harness-lint search <language-or-framework>
+harness-lint search <project-constraint-keyword>
+```
+
+对看起来相关的 pack，用 `inspect` 查看具体规则：
+
+```sh
+harness-lint inspect <pack-id>
+```
+
+把结果用用户习惯的语言总结给用户，先说明这个仓库看起来是什么语言/框架，然后用 Markdown table 展示相关 packs。表格至少包含：
+
+| 序号 | 名字 | 规则包内容介绍 |
+| --- | --- | --- |
+| 1 | `<pack-id>` | 说明这个 pack 覆盖哪些规则、为什么和当前 repo 有关、是否建议安装。 |
+
+表格里的“规则包内容介绍”要包含是否建议安装及原因；对看起来相关但不建议安装的 pack，也要写清楚原因，例如范围太宽、和项目约定冲突、暂时没有对应技术栈。
+
+One-shot 示例：
+
+```text
+我看了一下这个仓库，主要是 TypeScript + React 项目。当前 rule-pack catalog 里和这个 repo 有关的 packs 是：
+
+| 序号 | 名字 | 规则包内容介绍 |
+| --- | --- | --- |
+| 1 | `typescript` | 建议安装。覆盖 TypeScript 常见代码质量规则，例如调试输出、危险类型写法和容易遗漏的语言习惯，和当前 repo 的 `tsconfig.json`、`*.ts`、`*.tsx` 匹配。 |
+| 2 | `react` | 建议安装。覆盖 React 组件和 JSX 相关规则，例如列表 key、组件副作用和常见渲染问题，和当前 repo 的 `*.tsx` 组件代码匹配。 |
+| 3 | `python` | 不建议安装。这个 repo 没有 Python 项目信号，安装后暂时不会提供有效覆盖。 |
+
+我建议先安装 `typescript` 和 `react`。要我现在帮你安装吗？
+```
+
+总结后必须像 one-shot 末尾那样明确询问用户是否要安装推荐的 packs。
+
+只有用户同意后，才安装推荐的 packs：
+
+```sh
+harness-lint install <pack-id>
+harness-lint doctor
+harness-lint check --all
+```
+
+如果没有找到适合当前仓库的 pack，明确告诉用户“暂时没有合适的可安装 packs”，然后继续从用户已有约束初始化本地规则。安装 packs 后，后续本地规则只补充 packs 没覆盖、但能被可靠 GritQL 表达的项目专属约定。
+
+### 3.2 从用户已有约束初始化本地规则
 
 先检测仓库语言和框架。优先看这些信号：
 
@@ -173,5 +232,6 @@ harness-lint check --changed
 - 初始化了哪些文件。
 - 写入或更新了哪个 agent 指令文件。
 - 发现了哪些语言/框架。
+- 搜索到了哪些和 repo 有关的 packs；用户同意后安装了哪些 packs；哪些推荐但没有安装。
 - 从用户已有约束中创建了哪些本地规则；哪些无法用 GritQL 描述，所以没有写到 lint 下面
 - 已主动询问是否需要继续帮助配置 git hook；如果用户同意并已配置，也说明采用了哪种 hook 方案。

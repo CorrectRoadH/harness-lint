@@ -1,0 +1,11 @@
+[pack]
+id = "rust"
+name = "Rust Application Conventions"
+version = "0.1.0"
+description = "Rules for Rust application code hygiene: explicit errors, no committed scaffolding, and fewer panic paths."
+license = "MIT"
+
+[compat]
+harness = ">=0.1.0"
+grit = ">=0.1.0"
+languages = ["rust"]

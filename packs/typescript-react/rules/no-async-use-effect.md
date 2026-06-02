@@ -12,7 +12,10 @@ Keep the effect callback synchronous and handle cancellation inside it.
 
 ```grit
 language js
-`useEffect(async () => { $body })`
+or {
+  `useEffect(async () => { $body })`,
+  `useEffect(async () => { $body }, $deps)`
+}
 ```
 
 ## Bad

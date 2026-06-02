@@ -18,13 +18,24 @@ language go
 ## Bad
 
 ```go
-case <-time.After(timeout):
-    return ErrTimeout
+func Wait(timeout time.Duration) error {
+    select {
+    case <-time.After(timeout):
+        return ErrTimeout
+    }
+}
 ```
 
 ## Good
 
 ```go
-timer := time.NewTimer(timeout)
-defer timer.Stop()
+func Wait(timeout time.Duration) error {
+    timer := time.NewTimer(timeout)
+    defer timer.Stop()
+
+    select {
+    case <-timer.C:
+        return ErrTimeout
+    }
+}
 ```

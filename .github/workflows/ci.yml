@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: npm install --location=global @getgrit/cli
+      - run: grit --version
       - run: cargo fmt --check
       - run: cargo test --all
       - run: cargo build --release

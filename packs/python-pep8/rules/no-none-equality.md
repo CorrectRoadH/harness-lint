@@ -1,30 +1,33 @@
 ---
 id: python-pep8.no-none-equality
-title: Use is None comparisons
+title: Use identity comparisons for None
 language: python
 level: warn
 tags: [python, pep8, readability]
 ---
 
-# Use is None comparisons
+# Use identity comparisons for None
 
 Prefer identity checks for `None` so code follows Python conventions and avoids overloaded equality surprises.
 
 ```grit
 language python
-`$value == None`
+or {
+  `$value == None`,
+  `$value != None`
+}
 ```
 
 ## Bad
 
 ```python
-if user == None:
+if user != None:
     return
 ```
 
 ## Good
 
 ```python
-if user is None:
+if user is not None:
     return
 ```

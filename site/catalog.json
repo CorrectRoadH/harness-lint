@@ -66,20 +66,44 @@
         "reason": "Flag wildcard imports so dependencies stay explicit and easy to trace."
       },
       {
-        "rule_id": "python-pep8.no-bare-except",
-        "title": "Avoid bare except clauses",
-        "pack_id": "python-pep8",
-        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
-        "score": 20,
-        "reason": "Flag bare exception handlers so failure handling names the expected error."
-      },
-      {
         "rule_id": "python-pep8.no-none-equality",
-        "title": "Use is None comparisons",
+        "title": "Use identity comparisons for None",
         "pack_id": "python-pep8",
         "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
         "score": 15,
         "reason": "Flag equality checks against None so code follows Python identity comparison conventions."
+      },
+      {
+        "rule_id": "python-pep8.no-boolean-equality",
+        "title": "Avoid boolean equality comparisons",
+        "pack_id": "python-pep8",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
+        "score": 15,
+        "reason": "Flag comparisons against True or False so code uses truthiness or explicit predicates."
+      },
+      {
+        "rule_id": "python-pep8.no-lambda-assignment",
+        "title": "Avoid assigning lambdas",
+        "pack_id": "python-pep8",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
+        "score": 15,
+        "reason": "Flag named lambda assignments so code uses def and keeps tracebacks readable."
+      },
+      {
+        "rule_id": "python-pep8.no-negated-membership-identity",
+        "title": "Use not in and is not operators",
+        "pack_id": "python-pep8",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
+        "score": 15,
+        "reason": "Flag negated in/is expressions so code uses Python's direct not in and is not operators."
+      },
+      {
+        "rule_id": "python-pep8.no-type-equality",
+        "title": "Use isinstance for type checks",
+        "pack_id": "python-pep8",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
+        "score": 15,
+        "reason": "Flag type(...) equality checks so subclass-aware isinstance checks are used."
       }
     ]
   },
@@ -464,6 +488,46 @@
         "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
         "score": 20,
         "reason": "Flag direct HTML injection so sanitization and ownership boundaries are reviewed."
+      },
+      {
+        "rule_id": "typescript-react.no-children-prop",
+        "title": "Avoid passing children as a prop",
+        "pack_id": "typescript-react",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
+        "score": 15,
+        "reason": "Flag children props so JSX nesting makes ownership and render structure visible."
+      },
+      {
+        "rule_id": "typescript-react.no-clone-element",
+        "title": "Review cloneElement usage",
+        "pack_id": "typescript-react",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
+        "score": 15,
+        "reason": "Flag cloneElement calls so component composition stays explicit."
+      },
+      {
+        "rule_id": "typescript-react.no-default-props",
+        "title": "Avoid defaultProps on function components",
+        "pack_id": "typescript-react",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
+        "score": 15,
+        "reason": "Flag defaultProps assignments so TypeScript components use default parameters."
+      },
+      {
+        "rule_id": "typescript-react.no-find-dom-node",
+        "title": "Avoid findDOMNode",
+        "pack_id": "typescript-react",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
+        "score": 20,
+        "reason": "Flag findDOMNode calls so code uses explicit refs instead."
+      },
+      {
+        "rule_id": "typescript-react.no-string-ref",
+        "title": "Avoid string refs",
+        "pack_id": "typescript-react",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
+        "score": 20,
+        "reason": "Flag legacy string refs so code uses callback refs or useRef."
       }
     ]
   }

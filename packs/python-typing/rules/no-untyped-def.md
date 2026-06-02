@@ -12,7 +12,14 @@ Public functions should expose parameter and return types so callers and agents 
 
 ```grit
 language python
-`def $name($args):`
+or {
+  function_definition(name=$name, parameters=$params, body=$body) where {
+    !$params <: contains `:`
+  },
+  function_definition(name=$name, parameters=$params, return_type=$return_type, body=$body) where {
+    !$return_type <: r".+"
+  }
+}
 ```
 
 ## Bad

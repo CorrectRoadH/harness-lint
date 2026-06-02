@@ -12,7 +12,7 @@ Keep task handles visible so cancellation, errors, and shutdown behavior are exp
 
 ```grit
 language python
-`asyncio.create_task($call)`
+`asyncio.create_task($call);`
 ```
 
 ## Bad

@@ -12,6 +12,7 @@ pub const LOCK_FILE: &str = "harness.lock";
 pub const USER_RULE_DIR: &str = "rules";
 pub const WORK_DIR: &str = ".harness";
 pub const PACKS_DIR: &str = ".harness/packs";
+pub const REPOS_DIR: &str = ".harness/repos";
 pub const GENERATED_GRIT_DIR: &str = ".harness/generated/.grit";
 pub const CACHE_DIR: &str = ".harness/cache";
 
@@ -177,7 +178,7 @@ pub fn load_config(root: &Path, explicit: Option<&Path>) -> Result<ProjectConfig
 pub fn write_config(root: &Path, config: &ProjectConfig) -> Result<()> {
     let path = root.join(CONFIG_FILE);
     let content = toml::to_string_pretty(config).context("failed to serialize harness.toml")?;
-    fs::write(&path, content).with_context(|| format!("failed to write {}", path.display()))?;
+    write_atomic(&path, content).with_context(|| format!("failed to write {}", path.display()))?;
     Ok(())
 }
 
@@ -196,7 +197,28 @@ pub fn load_lock(root: &Path) -> Result<HarnessLock> {
 pub fn write_lock(root: &Path, lock: &HarnessLock) -> Result<()> {
     let path = root.join(LOCK_FILE);
     let content = toml::to_string_pretty(lock).context("failed to serialize harness.lock")?;
-    fs::write(&path, content).with_context(|| format!("failed to write {}", path.display()))?;
+    write_atomic(&path, content).with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
+}
+
+fn write_atomic(path: &Path, content: String) -> Result<()> {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("harness-lint");
+    let temp_path = path.with_file_name(format!(".{file_name}.{}.tmp", std::process::id()));
+    fs::write(&temp_path, content)
+        .with_context(|| format!("failed to write {}", temp_path.display()))?;
+    if let Err(error) = fs::rename(&temp_path, path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error).with_context(|| {
+            format!(
+                "failed to replace {} with {}",
+                path.display(),
+                temp_path.display()
+            )
+        });
+    }
     Ok(())
 }
 

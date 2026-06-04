@@ -2,17 +2,20 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
-use crate::config::PACKS_DIR;
+use crate::config::{PACKS_DIR, REPOS_DIR};
 use crate::model::{LockEntry, PackSourceKind, PackSpec, ResolvedPack, RulePack};
 use crate::rule::{discover_rules, parse_rule_file};
 
 pub const PACK_MANIFEST: &str = "harness-pack.toml";
+const GIT_CLONE_ATTEMPTS: usize = 3;
 
 #[derive(Debug, Deserialize)]
 struct PackManifest {
@@ -222,33 +225,13 @@ pub fn resolve_local_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
 }
 
 pub fn install_git_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
-    let target = root.join(PACKS_DIR).join(&spec.id);
-    let temp_target = root.join(PACKS_DIR).join(format!("{}.tmp", spec.id));
-    if temp_target.exists() {
-        fs::remove_dir_all(&temp_target)
-            .with_context(|| format!("failed to clear {}", temp_target.display()))?;
-    }
-    fs::create_dir_all(target.parent().expect("pack target has parent"))
-        .with_context(|| format!("failed to create {}", root.join(PACKS_DIR).display()))?;
-
-    clone_git_source(&spec, &temp_target)?;
-    if target.exists() {
-        fs::remove_dir_all(&target)
-            .with_context(|| format!("failed to clear {}", target.display()))?;
-    }
-    fs::rename(&temp_target, &target).with_context(|| {
-        format!(
-            "failed to move installed pack from {} to {}",
-            temp_target.display(),
-            target.display()
-        )
-    })?;
-
     let (_, fragment) = split_spec_path(&spec.spec);
-    let local_path = resolve_pack_root(&target, &spec.id, fragment)?;
-    let commit = git_commit(&target).ok();
-    let pack_path = pack_path_from_repo(&target, &local_path)?;
-    let checksum = git_tree_hash(&target, pack_path.as_deref()).ok();
+    let repo = ensure_install_repo_cache(root, &spec)?;
+    let repo_pack_root = resolve_pack_root(&repo, &spec.id, fragment)?;
+    let pack_path = pack_path_from_repo(&repo, &repo_pack_root)?;
+    let checksum = git_tree_hash(&repo, pack_path.as_deref()).ok();
+    let commit = git_commit(&repo).ok();
+    let local_path = install_pack_snapshot(root, &spec.id, &repo_pack_root)?;
     Ok(ResolvedPack {
         spec,
         local_path,
@@ -259,32 +242,12 @@ pub fn install_git_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
 }
 
 pub fn restore_git_pack(root: &Path, entry: &LockEntry) -> Result<ResolvedPack> {
-    let target = root.join(PACKS_DIR).join(&entry.id);
-    let temp_target = root.join(PACKS_DIR).join(format!("{}.tmp", entry.id));
-    if temp_target.exists() {
-        fs::remove_dir_all(&temp_target)
-            .with_context(|| format!("failed to clear {}", temp_target.display()))?;
-    }
-    fs::create_dir_all(target.parent().expect("pack target has parent"))
-        .with_context(|| format!("failed to create {}", root.join(PACKS_DIR).display()))?;
-
-    clone_git_source_from_lock(entry, &temp_target)?;
-    if target.exists() {
-        fs::remove_dir_all(&target)
-            .with_context(|| format!("failed to clear {}", target.display()))?;
-    }
-    fs::rename(&temp_target, &target).with_context(|| {
-        format!(
-            "failed to move restored pack from {} to {}",
-            temp_target.display(),
-            target.display()
-        )
-    })?;
-
     let (_, fragment) = split_spec_path(&entry.spec);
-    let local_path = resolve_pack_root(&target, &entry.id, fragment)?;
-    let pack_path = pack_path_from_repo(&target, &local_path)?;
-    let checksum = git_tree_hash(&target, pack_path.as_deref()).ok();
+    let repo = ensure_restore_repo_cache(root, entry)?;
+    let repo_pack_root = resolve_pack_root(&repo, &entry.id, fragment)?;
+    let pack_path = pack_path_from_repo(&repo, &repo_pack_root)?;
+    let checksum = git_tree_hash(&repo, pack_path.as_deref()).ok();
+    let local_path = install_pack_snapshot(root, &entry.id, &repo_pack_root)?;
     Ok(ResolvedPack {
         spec: PackSpec {
             id: entry.id.clone(),
@@ -294,7 +257,7 @@ pub fn restore_git_pack(root: &Path, entry: &LockEntry) -> Result<ResolvedPack> 
         },
         local_path,
         pack_path,
-        version: git_commit(&target).ok(),
+        version: git_commit(&repo).ok(),
         checksum,
     })
 }
@@ -314,19 +277,15 @@ pub fn check_git_pack_update(
     lock: Option<&LockEntry>,
 ) -> Result<PackRemoteStatus> {
     let temp_target = root.join(PACKS_DIR).join(format!("{}.check.tmp", spec.id));
-    if temp_target.exists() {
-        fs::remove_dir_all(&temp_target)
-            .with_context(|| format!("failed to clear {}", temp_target.display()))?;
-    }
     fs::create_dir_all(temp_target.parent().expect("pack target has parent"))
         .with_context(|| format!("failed to create {}", root.join(PACKS_DIR).display()))?;
-    clone_git_source(&spec, &temp_target)?;
+    let temp_target = TempPackDir::prepare(temp_target)?;
+    clone_git_source(&spec, temp_target.path())?;
     let (_, fragment) = split_spec_path(&spec.spec);
-    let local_path = resolve_pack_root(&temp_target, &spec.id, fragment)?;
-    let pack_path = pack_path_from_repo(&temp_target, &local_path)?;
-    let latest_checksum = git_tree_hash(&temp_target, pack_path.as_deref()).ok();
-    let latest_version = git_commit(&temp_target).ok();
-    let _ = fs::remove_dir_all(&temp_target);
+    let local_path = resolve_pack_root(temp_target.path(), &spec.id, fragment)?;
+    let pack_path = pack_path_from_repo(temp_target.path(), &local_path)?;
+    let latest_checksum = git_tree_hash(temp_target.path(), pack_path.as_deref()).ok();
+    let latest_version = git_commit(temp_target.path()).ok();
 
     let installed_checksum = lock.and_then(|entry| entry.checksum.clone());
     let update_available = installed_checksum.is_some()
@@ -425,7 +384,12 @@ pub fn load_local_rules_pack(root: &Path, dirs: &[PathBuf]) -> Result<RulePack> 
 }
 
 fn git_url(spec: &str) -> String {
-    if spec.starts_with("http://") || spec.starts_with("https://") || spec.starts_with("git@") {
+    if spec.starts_with("http://")
+        || spec.starts_with("https://")
+        || spec.starts_with("git@")
+        || spec.starts_with("file://")
+        || Path::new(spec).is_absolute()
+    {
         spec.to_string()
     } else {
         format!("https://github.com/{spec}.git")
@@ -440,46 +404,226 @@ fn split_spec_path(spec: &str) -> (&str, Option<&str>) {
     }
 }
 
-fn clone_git_source(spec: &PackSpec, target: &Path) -> Result<()> {
+fn ensure_install_repo_cache(root: &Path, spec: &PackSpec) -> Result<PathBuf> {
     let (git_spec, _) = split_spec_path(&spec.spec);
     let url = git_url(git_spec);
-    let mut command = Command::new("git");
-    command
-        .arg("-c")
-        .arg("filter.lfs.required=false")
-        .arg("-c")
-        .arg("filter.lfs.smudge=")
-        .arg("-c")
-        .arg("filter.lfs.clean=")
-        .arg("-c")
-        .arg("filter.lfs.process=")
-        .arg("clone")
-        .arg("--depth")
-        .arg("1");
-    if let Some(version) = &spec.version_req {
-        command.arg("--branch").arg(version);
+    let cache_ref = spec.version_req.as_deref().unwrap_or("HEAD");
+    let target = repo_cache_path(root, &url, Some(cache_ref));
+    if target.exists() && git_commit(&target).is_ok() {
+        eprintln!("harness-lint: using cached git repo {}", target.display());
+        return Ok(target);
     }
-    command
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_LFS_SKIP_SMUDGE", "1")
-        .arg(&url)
-        .arg(target);
-    let output = command
-        .output()
-        .with_context(|| format!("failed to clone {url}"))?;
-    if !output.status.success() {
-        let _ = fs::remove_dir_all(target);
-        bail!(
-            "failed to clone {url}: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+    install_repo_cache(
+        root,
+        &target,
+        &url,
+        CloneMode::Shallow {
+            branch: spec.version_req.as_deref(),
+        },
+    )
+}
+
+fn ensure_restore_repo_cache(root: &Path, entry: &LockEntry) -> Result<PathBuf> {
+    let (git_spec, _) = split_spec_path(&entry.spec);
+    let url = git_url(git_spec);
+    let cache_ref = entry
+        .version
+        .as_deref()
+        .or(entry.requested_ref.as_deref())
+        .unwrap_or("HEAD");
+    let target = repo_cache_path(root, &url, Some(cache_ref));
+    if target.exists() && git_commit(&target).is_ok() {
+        eprintln!("harness-lint: using cached git repo {}", target.display());
+        return Ok(target);
+    }
+    install_repo_cache(root, &target, &url, CloneMode::NoCheckout)?;
+
+    if let Some(version) = &entry.version {
+        git_checkout(&target, version)?;
+    } else if let Some(requested_ref) = &entry.requested_ref {
+        git_checkout(&target, requested_ref)?;
+    } else {
+        git_checkout(&target, "HEAD")?;
+    }
+    Ok(target)
+}
+
+fn install_repo_cache(
+    root: &Path,
+    target: &Path,
+    url: &str,
+    mode: CloneMode<'_>,
+) -> Result<PathBuf> {
+    fs::create_dir_all(root.join(REPOS_DIR))
+        .with_context(|| format!("failed to create {}", root.join(REPOS_DIR).display()))?;
+    let temp_target = target.with_extension("tmp");
+    let temp_target = TempPackDir::prepare(temp_target)?;
+    clone_git_repo(url, temp_target.path(), mode)?;
+    if target.exists() {
+        fs::remove_dir_all(target)
+            .with_context(|| format!("failed to clear {}", target.display()))?;
+    }
+    fs::rename(temp_target.path(), target).with_context(|| {
+        format!(
+            "failed to move cached repo from {} to {}",
+            temp_target.path().display(),
+            target.display()
+        )
+    })?;
+    temp_target.persist();
+    Ok(target.to_path_buf())
+}
+
+fn repo_cache_path(root: &Path, url: &str, ref_name: Option<&str>) -> PathBuf {
+    root.join(REPOS_DIR)
+        .join(repo_cache_key(url, ref_name.unwrap_or("HEAD")))
+}
+
+fn repo_cache_key(url: &str, ref_name: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(url.as_bytes());
+    hasher.update([0]);
+    hasher.update(ref_name.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+fn install_pack_snapshot(root: &Path, id: &str, source: &Path) -> Result<PathBuf> {
+    let target = root.join(PACKS_DIR).join(id);
+    let temp_target = root.join(PACKS_DIR).join(format!("{id}.tmp"));
+    fs::create_dir_all(target.parent().expect("pack target has parent"))
+        .with_context(|| format!("failed to create {}", root.join(PACKS_DIR).display()))?;
+    let temp_target = TempPackDir::prepare(temp_target)?;
+    copy_dir_contents(source, temp_target.path())?;
+    if target.exists() {
+        fs::remove_dir_all(&target)
+            .with_context(|| format!("failed to clear {}", target.display()))?;
+    }
+    fs::rename(temp_target.path(), &target).with_context(|| {
+        format!(
+            "failed to move installed pack from {} to {}",
+            temp_target.path().display(),
+            target.display()
+        )
+    })?;
+    temp_target.persist();
+    Ok(target)
+}
+
+fn copy_dir_contents(source: &Path, target: &Path) -> Result<()> {
+    fs::create_dir_all(target).with_context(|| format!("failed to create {}", target.display()))?;
+    for entry in WalkDir::new(source) {
+        let entry = entry.with_context(|| format!("failed to walk {}", source.display()))?;
+        let path = entry.path();
+        if path
+            .components()
+            .any(|component| component.as_os_str() == ".git")
+        {
+            continue;
+        }
+        let relative = path.strip_prefix(source).with_context(|| {
+            format!(
+                "failed to copy {} relative to {}",
+                path.display(),
+                source.display()
+            )
+        })?;
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+        let destination = target.join(relative);
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&destination)
+                .with_context(|| format!("failed to create {}", destination.display()))?;
+        } else if entry.file_type().is_file() {
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
+            }
+            fs::copy(path, &destination).with_context(|| {
+                format!(
+                    "failed to copy {} to {}",
+                    path.display(),
+                    destination.display()
+                )
+            })?;
+        }
     }
     Ok(())
 }
 
-fn clone_git_source_from_lock(entry: &LockEntry, target: &Path) -> Result<()> {
-    let (git_spec, _) = split_spec_path(&entry.spec);
+fn clone_git_source(spec: &PackSpec, target: &Path) -> Result<()> {
+    let (git_spec, _) = split_spec_path(&spec.spec);
     let url = git_url(git_spec);
+    clone_git_repo(
+        &url,
+        target,
+        CloneMode::Shallow {
+            branch: spec.version_req.as_deref(),
+        },
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CloneMode<'a> {
+    Shallow { branch: Option<&'a str> },
+    NoCheckout,
+}
+
+fn clone_git_repo(url: &str, target: &Path, mode: CloneMode<'_>) -> Result<()> {
+    let mut last_error = None;
+    for attempt in 1..=GIT_CLONE_ATTEMPTS {
+        if target.exists() {
+            fs::remove_dir_all(target)
+                .with_context(|| format!("failed to clear {}", target.display()))?;
+        }
+        eprintln!("harness-lint: cloning {url} (attempt {attempt}/{GIT_CLONE_ATTEMPTS})");
+
+        let output = git_clone_output(url, target, mode);
+        match output {
+            Ok(output) if output.status.success() => return Ok(()),
+            Ok(output) => {
+                let message = command_failure_message(&output.stderr, &output.stdout);
+                last_error = Some(message.clone());
+                let _ = fs::remove_dir_all(target);
+                if attempt < GIT_CLONE_ATTEMPTS {
+                    eprintln!(
+                        "harness-lint: clone attempt {attempt}/{GIT_CLONE_ATTEMPTS} failed: {}; retrying",
+                        one_line(&message)
+                    );
+                    thread::sleep(retry_delay(attempt));
+                }
+            }
+            Err(error) => {
+                let message = error.to_string();
+                last_error = Some(message.clone());
+                let _ = fs::remove_dir_all(target);
+                if attempt < GIT_CLONE_ATTEMPTS {
+                    eprintln!(
+                        "harness-lint: clone attempt {attempt}/{GIT_CLONE_ATTEMPTS} failed: {}; retrying",
+                        one_line(&message)
+                    );
+                    thread::sleep(retry_delay(attempt));
+                }
+            }
+        }
+    }
+
+    bail!(
+        "failed to clone {url} after {GIT_CLONE_ATTEMPTS} attempts: {}\n\
+         temporary checkout {} was cleaned up; rerun the command if this was a transient network, GitHub, or rate-limit failure",
+        last_error
+            .as_deref()
+            .filter(|message| !message.is_empty())
+            .unwrap_or("git exited without an error message"),
+        target.display()
+    )
+}
+
+fn git_clone_output(
+    url: &str,
+    target: &Path,
+    mode: CloneMode<'_>,
+) -> std::io::Result<std::process::Output> {
     let mut command = Command::new("git");
     command
         .arg("-c")
@@ -490,31 +634,82 @@ fn clone_git_source_from_lock(entry: &LockEntry, target: &Path) -> Result<()> {
         .arg("filter.lfs.clean=")
         .arg("-c")
         .arg("filter.lfs.process=")
-        .arg("clone")
-        .arg("--no-checkout")
+        .arg("clone");
+    match mode {
+        CloneMode::Shallow { branch } => {
+            command.arg("--depth").arg("1");
+            if let Some(branch) = branch {
+                command.arg("--branch").arg(branch);
+            }
+        }
+        CloneMode::NoCheckout => {
+            command.arg("--no-checkout");
+        }
+    }
+    command
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_LFS_SKIP_SMUDGE", "1")
+        .env("GIT_HTTP_LOW_SPEED_LIMIT", "1000")
+        .env("GIT_HTTP_LOW_SPEED_TIME", "30")
         .arg(&url)
-        .arg(target);
-    let output = command
+        .arg(target)
         .output()
-        .with_context(|| format!("failed to clone {url}"))?;
-    if !output.status.success() {
-        let _ = fs::remove_dir_all(target);
-        bail!(
-            "failed to clone {url}: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+}
+
+fn command_failure_message(stderr: &[u8], stdout: &[u8]) -> String {
+    let stderr = String::from_utf8_lossy(stderr).trim().to_string();
+    if !stderr.is_empty() {
+        return stderr;
+    }
+    let stdout = String::from_utf8_lossy(stdout).trim().to_string();
+    if !stdout.is_empty() {
+        stdout
+    } else {
+        "git exited without an error message".to_string()
+    }
+}
+
+fn one_line(message: &str) -> String {
+    message.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn retry_delay(attempt: usize) -> Duration {
+    Duration::from_millis(250 * attempt as u64)
+}
+
+#[derive(Debug)]
+struct TempPackDir {
+    path: PathBuf,
+    cleanup: bool,
+}
+
+impl TempPackDir {
+    fn prepare(path: PathBuf) -> Result<Self> {
+        if path.exists() {
+            fs::remove_dir_all(&path)
+                .with_context(|| format!("failed to clear {}", path.display()))?;
+        }
+        Ok(Self {
+            path,
+            cleanup: true,
+        })
     }
 
-    if let Some(version) = &entry.version {
-        git_checkout(target, version)?;
-    } else if let Some(requested_ref) = &entry.requested_ref {
-        git_checkout(target, requested_ref)?;
-    } else {
-        git_checkout(target, "HEAD")?;
+    fn path(&self) -> &Path {
+        &self.path
     }
-    Ok(())
+
+    fn persist(mut self) {
+        self.cleanup = false;
+    }
+}
+
+impl Drop for TempPackDir {
+    fn drop(&mut self) {
+        if self.cleanup {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 }
 
 fn git_checkout(path: &Path, ref_name: &str) -> Result<()> {
@@ -668,5 +863,21 @@ mod tests {
         assert_eq!(spec.source, PackSourceKind::Git);
         assert_eq!(spec.spec, "CorrectRoadH/harness-lint#packs/python");
         assert_eq!(spec.version_req.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn git_url_preserves_local_and_file_urls() {
+        assert_eq!(
+            git_url("file:///tmp/harness-lint-pack.git"),
+            "file:///tmp/harness-lint-pack.git"
+        );
+        assert_eq!(
+            git_url("/tmp/harness-lint-pack.git"),
+            "/tmp/harness-lint-pack.git"
+        );
+        assert_eq!(
+            git_url("CorrectRoadH/harness-lint"),
+            "https://github.com/CorrectRoadH/harness-lint.git"
+        );
     }
 }

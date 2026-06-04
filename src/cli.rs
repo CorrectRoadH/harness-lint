@@ -843,6 +843,11 @@ fn run_catalog(
     _format: ReportFormat,
 ) -> Result<()> {
     let root = config::find_project_root(cwd)?;
+    let _pack_operation_lock = if requires_pack_operation_lock(&command) {
+        Some(acquire_pack_operation_lock(&root)?)
+    } else {
+        None
+    };
     match command {
         CatalogCommand::Install { id, spec } => {
             let mut config = config::load_config(&root, config_path)?;
@@ -1000,6 +1005,69 @@ fn run_catalog(
         }
     }
     Ok(())
+}
+
+fn requires_pack_operation_lock(command: &CatalogCommand) -> bool {
+    matches!(
+        command,
+        CatalogCommand::Install { .. }
+            | CatalogCommand::Update
+            | CatalogCommand::Restore
+            | CatalogCommand::Outdated
+            | CatalogCommand::Remove { .. }
+    )
+}
+
+#[derive(Debug)]
+struct PackOperationLock {
+    path: PathBuf,
+}
+
+impl Drop for PackOperationLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn acquire_pack_operation_lock(root: &Path) -> Result<PackOperationLock> {
+    let lock_dir = root.join(config::WORK_DIR);
+    fs::create_dir_all(&lock_dir)
+        .with_context(|| format!("failed to create {}", lock_dir.display()))?;
+    let path = lock_dir.join("pack-operation.lock");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut reported_wait = false;
+    loop {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                writeln!(file, "pid={}", std::process::id())
+                    .with_context(|| format!("failed to write {}", path.display()))?;
+                return Ok(PackOperationLock { path });
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if !reported_wait {
+                    eprintln!(
+                        "harness-lint: waiting for another pack operation to release {}",
+                        path.display()
+                    );
+                    reported_wait = true;
+                }
+                if std::time::Instant::now() >= deadline {
+                    bail!(
+                        "timed out waiting for another harness-lint pack operation to release {}; remove the lock if no harness-lint process is running",
+                        path.display()
+                    );
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(error) => {
+                return Err(error).with_context(|| format!("failed to acquire {}", path.display()));
+            }
+        }
+    }
 }
 
 fn print_available_packs(registry_url: Option<&str>) -> Result<()> {

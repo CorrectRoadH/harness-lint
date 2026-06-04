@@ -374,6 +374,190 @@ language python
     assert!(!lock.contains("[packs.demo]"));
 }
 
+#[cfg(unix)]
+#[test]
+fn cli_git_pack_install_retries_reports_and_cleans_failed_tmp() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let init = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+
+    let bin_dir = tempdir.path().join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    let fake_git = bin_dir.join("git");
+    fs::write(
+        &fake_git,
+        r#"#!/bin/sh
+target=""
+for arg in "$@"; do
+  target="$arg"
+done
+mkdir -p "$target"
+echo "fake git clone failed" >&2
+exit 1
+"#,
+    )
+    .unwrap();
+    let mut permissions = fs::metadata(&fake_git).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&fake_git, permissions).unwrap();
+
+    let path = format!(
+        "{}:{}",
+        bin_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let install = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args([
+            "install",
+            "broken",
+            "github:CorrectRoadH/harness-lint@main#packs/broken",
+        ])
+        .env("PATH", path)
+        .output()
+        .unwrap();
+
+    assert!(!install.status.success());
+    let stderr = String::from_utf8_lossy(&install.stderr);
+    assert!(stderr.contains("attempt 1/3"), "{stderr}");
+    assert!(stderr.contains("attempt 3/3"), "{stderr}");
+    assert!(stderr.contains("after 3 attempts"), "{stderr}");
+    assert!(stderr.contains("temporary checkout"), "{stderr}");
+    assert!(!tempdir.path().join(".harness/packs/broken.tmp").exists());
+
+    let config = fs::read_to_string(tempdir.path().join("harness.toml")).unwrap();
+    assert!(!config.contains("broken ="));
+    let lock = fs::read_to_string(tempdir.path().join("harness.lock")).unwrap_or_default();
+    assert!(!lock.contains("[packs.broken]"));
+    let repos_dir = tempdir.path().join(".harness/repos");
+    if repos_dir.exists() {
+        let leftovers: Vec<_> = fs::read_dir(&repos_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().and_then(|extension| extension.to_str()) == Some("tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+    }
+}
+
+#[test]
+fn cli_git_pack_install_reuses_repo_cache_for_same_repo_ref() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let repo_dir = tempdir.path().join("pack-repo");
+    for id in ["one", "two"] {
+        let rules_dir = repo_dir.join("packs").join(id).join("rules");
+        fs::create_dir_all(&rules_dir).unwrap();
+        fs::write(
+            repo_dir.join("packs").join(id).join("harness-pack.toml"),
+            format!(
+                r#"[pack]
+id = "{id}"
+name = "{id}"
+version = "0.1.0"
+
+[compat]
+languages = ["go"]
+"#
+            ),
+        )
+        .unwrap();
+        fs::write(
+            rules_dir.join("no-fmt-print.md"),
+            format!(
+                r#"---
+id: {id}.no-fmt-print
+title: Avoid fmt print
+language: go
+level: warn
+tags: [go]
+---
+
+# Avoid fmt print
+
+Use structured logging.
+
+```grit
+language go
+`fmt.Println($value)`
+```
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    for args in [
+        vec!["init", "-b", "main"],
+        vec!["config", "user.email", "test@example.com"],
+        vec!["config", "user.name", "Harness Test"],
+        vec!["add", "."],
+        vec!["commit", "-m", "add packs"],
+    ] {
+        let output = Command::new("git")
+            .current_dir(&repo_dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let init = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+
+    for id in ["one", "two"] {
+        let spec = format!("git:{}@main#packs/{id}", repo_dir.display());
+        let install = Command::new(binary)
+            .arg("--cwd")
+            .arg(tempdir.path())
+            .args(["install", id, &spec])
+            .output()
+            .unwrap();
+        assert!(
+            install.status.success(),
+            "{}",
+            String::from_utf8_lossy(&install.stderr)
+        );
+    }
+
+    let repo_cache_entries: Vec<_> = fs::read_dir(tempdir.path().join(".harness/repos"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.is_dir())
+        .collect();
+    assert_eq!(repo_cache_entries.len(), 1, "{repo_cache_entries:?}");
+    assert!(
+        tempdir
+            .path()
+            .join(".harness/packs/one/harness-pack.toml")
+            .exists()
+    );
+    assert!(
+        tempdir
+            .path()
+            .join(".harness/packs/two/harness-pack.toml")
+            .exists()
+    );
+}
+
 #[test]
 fn built_in_pack_directories_load_as_local_packs() {
     let tempdir = tempfile::tempdir().unwrap();

@@ -410,7 +410,11 @@ fn ensure_install_repo_cache(root: &Path, spec: &PackSpec) -> Result<PathBuf> {
     let cache_ref = spec.version_req.as_deref().unwrap_or("HEAD");
     let target = repo_cache_path(root, &url, Some(cache_ref));
     if target.exists() && git_commit(&target).is_ok() {
-        eprintln!("harness-lint: using cached git repo {}", target.display());
+        eprintln!(
+            "harness-lint: refreshing cached git repo {}",
+            target.display()
+        );
+        refresh_install_repo_cache(&target, cache_ref)?;
         return Ok(target);
     }
     install_repo_cache(
@@ -421,6 +425,30 @@ fn ensure_install_repo_cache(root: &Path, spec: &PackSpec) -> Result<PathBuf> {
             branch: spec.version_req.as_deref(),
         },
     )
+}
+
+fn refresh_install_repo_cache(target: &Path, ref_name: &str) -> Result<()> {
+    let mut fetch = Command::new("git");
+    fetch
+        .current_dir(target)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_LFS_SKIP_SMUDGE", "1")
+        .args(["fetch", "--depth", "1", "origin"]);
+    if ref_name != "HEAD" {
+        fetch.arg(ref_name);
+    }
+    let output = fetch
+        .output()
+        .with_context(|| format!("failed to fetch updates in {}", target.display()))?;
+    if !output.status.success() {
+        bail!(
+            "failed to fetch updates in {}: {}",
+            target.display(),
+            command_failure_message(&output.stderr, &output.stdout)
+        );
+    }
+
+    git_checkout(target, "FETCH_HEAD")
 }
 
 fn ensure_restore_repo_cache(root: &Path, entry: &LockEntry) -> Result<PathBuf> {

@@ -9,6 +9,20 @@ fn grit_available() -> bool {
         .unwrap_or(false)
 }
 
+fn run_git(repo: &std::path::Path, args: &[&str]) {
+    let output = Command::new("git")
+        .current_dir(repo)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {:?} failed: {}",
+        args,
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn cli_exposes_version_and_command_descriptions() {
     let binary = env!("CARGO_BIN_EXE_harness-lint");
@@ -762,6 +776,142 @@ language go
             .join(".harness/packs/two/harness-pack.toml")
             .exists()
     );
+}
+
+#[test]
+fn cli_git_pack_update_refreshes_existing_repo_cache() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let repo_dir = tempdir.path().join("pack-repo");
+    let pack_dir = repo_dir.join("packs/demo");
+    let rules_dir = pack_dir.join("rules");
+    fs::create_dir_all(&rules_dir).unwrap();
+    fs::write(
+        pack_dir.join("harness-pack.toml"),
+        r#"[pack]
+id = "demo"
+name = "Demo"
+version = "0.1.0"
+
+[compat]
+languages = ["python"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        rules_dir.join("no-print.md"),
+        r#"---
+id: demo.no-print
+title: Avoid print
+language: python
+level: warn
+tags: [python]
+---
+
+# Avoid print
+
+Use logging.
+
+```grit
+language python
+`print($value)`
+```
+"#,
+    )
+    .unwrap();
+
+    run_git(&repo_dir, &["init", "-b", "main"]);
+    run_git(&repo_dir, &["config", "user.email", "test@example.com"]);
+    run_git(&repo_dir, &["config", "user.name", "Harness Test"]);
+    run_git(&repo_dir, &["add", "."]);
+    run_git(&repo_dir, &["commit", "-m", "initial pack"]);
+    let old_commit = Command::new("git")
+        .current_dir(&repo_dir)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(old_commit.status.success());
+    let old_commit = String::from_utf8_lossy(&old_commit.stdout)
+        .trim()
+        .to_string();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let init = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+
+    let spec = format!("git:{}@main#packs/demo", repo_dir.display());
+    let install = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["install", "demo", &spec])
+        .output()
+        .unwrap();
+    assert!(
+        install.status.success(),
+        "{}",
+        String::from_utf8_lossy(&install.stderr)
+    );
+    let installed =
+        fs::read_to_string(tempdir.path().join(".harness/packs/demo/rules/no-print.md")).unwrap();
+    assert!(installed.contains("Use logging."));
+
+    fs::write(
+        rules_dir.join("no-print.md"),
+        r#"---
+id: demo.no-print
+title: Avoid print
+language: python
+level: warn
+tags: [python]
+---
+
+# Avoid print
+
+Use structured logging instead.
+
+```grit
+language python
+`print($value)`
+```
+"#,
+    )
+    .unwrap();
+    run_git(&repo_dir, &["add", "."]);
+    run_git(&repo_dir, &["commit", "-m", "update pack"]);
+    let new_commit = Command::new("git")
+        .current_dir(&repo_dir)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(new_commit.status.success());
+    let new_commit = String::from_utf8_lossy(&new_commit.stdout)
+        .trim()
+        .to_string();
+    assert_ne!(old_commit, new_commit);
+
+    let update = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .arg("update")
+        .output()
+        .unwrap();
+    assert!(
+        update.status.success(),
+        "{}",
+        String::from_utf8_lossy(&update.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&update.stdout);
+    assert!(stdout.contains(&format!("Updated pack `demo` to {new_commit}.")));
+
+    let installed =
+        fs::read_to_string(tempdir.path().join(".harness/packs/demo/rules/no-print.md")).unwrap();
+    assert!(installed.contains("Use structured logging instead."));
+    let lock = fs::read_to_string(tempdir.path().join("harness.lock")).unwrap();
+    assert!(lock.contains(&format!("version = \"{new_commit}\"")));
 }
 
 #[test]

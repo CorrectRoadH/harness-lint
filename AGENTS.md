@@ -36,7 +36,7 @@ Do not create a harness-lint rule for feedback that cannot be expressed as a rel
 
 For TypeScript/JavaScript rules, use `language js` inside the GritQL block even when the rule frontmatter says `language: typescript`. If a TypeScript parser variant matters, `language js(typescript)` is valid. Other rule languages should use Grit CLI language names such as `python`, `json`, `java`, `hcl`, `css`, `markdown`, `yaml`, `rust`, `ruby`, `php`, `go`, and `sql`.
 
-If a rule should only apply to certain files, encode the scope inside the GritQL with `$filename`, for example:
+If a rule should only apply to certain files and you own the rule, encode the scope inside the GritQL with `$filename`, for example:
 
 ```grit
 `console.log($value)` where {
@@ -44,6 +44,17 @@ If a rule should only apply to certain files, encode the scope inside the GritQL
   !$filename <: r".*\.test\.ts"
 }
 ```
+
+If an external or already-shared rule is valid in general but has a confirmed path-specific exception, use `[[suppressions]]` in `harness.toml` instead of adding a broad `ignore.paths` entry:
+
+```toml
+[[suppressions]]
+rule = "go-effective-go.no-blank-placeholder-assignment"
+paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
+reason = "Generated router adapters intentionally discard unused generated parameters."
+```
+
+Use `ignore.paths` only when no rules should scan those files at all, such as generated output.
 
 After creating or editing a rule, validate it by running the single rule over the configured file set:
 

@@ -177,8 +177,19 @@ Fixing flow:
 1. If the rule correctly describes the project convention, fix the code.
 2. If the rule is ambiguous, improve its title, prose, Bad/Good examples, or GritQL while keeping it at `level: warn`. If no reliable GritQL can express it, remove it from harness-lint rules and keep the guidance in project documentation instead.
 3. If the rule is a false positive, adjust the GritQL pattern and rerun the targeted check.
-4. If the rule should not apply to a path or case, prefer a narrow rule/pattern fix. Use `harness.toml` overrides, disabled rules, or ignore paths only when the project intentionally wants that policy.
+4. If the rule should not apply to a path or case, prefer a narrow rule/pattern fix. For rules you own, encode file scope directly in GritQL with `$filename`. For external or already-shared rules with a confirmed path exception, add a `[[suppressions]]` entry in `harness.toml` instead of ignoring the whole directory.
 5. Rerun `harness-lint check --changed` before finishing.
+
+Scoped suppression example:
+
+```toml
+[[suppressions]]
+rule = "go-effective-go.no-blank-placeholder-assignment"
+paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
+reason = "Generated router adapters intentionally discard unused generated parameters."
+```
+
+Use `ignore.paths` only when no rules should scan those files at all, such as generated output. Suppressions hide only diagnostics whose rule and path both match; other rules still report in the same files.
 
 ## Useful Commands
 

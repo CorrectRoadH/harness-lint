@@ -114,3 +114,16 @@ language js
   !$filename <: r".*\.test\.ts"
 }
 ```
+
+## 作用域化 Suppression
+
+只有当某些文件完全不应该被任何规则检查时，才使用 `ignore.paths`，例如生成产物。如果只是某一条规则在某些路径上噪音太高，但这些文件仍应被其他规则扫描，用 `[[suppressions]]`：
+
+```toml
+[[suppressions]]
+rule = "go-effective-go.no-blank-placeholder-assignment"
+paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
+reason = "Generated router adapters intentionally discard unused generated parameters."
+```
+
+Scoped suppression 会在检查完成后应用。只有 `rule` 和 `path` 同时匹配的诊断会被隐藏；同一批文件仍会继续接受其他规则检查。`reason` 可选，但建议填写，方便后续 reviewer 和 AI agent 理解为什么这里不是目录 ignore。

@@ -15,6 +15,15 @@ language js
 or {
   `React.cloneElement($element, $props)`,
   `cloneElement($element, $props)`
+} where {
+  or {
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.ts",
+    $filename <: r".*\.js",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
 }
 ```
 

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -20,6 +20,7 @@ use crate::pack;
 use crate::paths;
 use crate::registry;
 use crate::report::{self, DiagnosticReportOptions, ReportFormat};
+use crate::suppression;
 
 const GRIT_BATCH_SIZE: usize = 256;
 
@@ -207,6 +208,7 @@ fn run_check(
 ) -> Result<()> {
     let root = config::find_project_root(cwd)?;
     let config = config::load_config(&root, config_path)?;
+    suppression::validate_suppressions(&config.suppressions)?;
     let packs = load_rule_packs(&root, &config)?;
     let active_rules = collect_effective_rules(&packs, &config, &command);
     let selected_paths = select_paths(&root, &config, &command, &active_rules)?;
@@ -226,30 +228,29 @@ fn run_check(
         Vec::new()
     } else {
         let _lock = acquire_grit_run_lock(&root)?;
-        let compiled = compiler::compile_rule_set(&root, active_rules.clone())?;
-        if config.lint.cache {
-            let rule_fingerprint = cache::fingerprint(&format!("{:?}", compiled.grit_rules));
-            let config_fingerprint = cache::fingerprint(&format!(
-                "{:?}{:?}{:?}{:?}{:?}",
-                command.rule, command.tag, config.overrides, config.disabled, config.ignore
-            ));
-            run_cached_check(
-                &root,
-                &compiled,
-                &selected_paths.grit,
-                &rule_fingerprint,
-                &config_fingerprint,
-                verbose,
-            )?
-        } else {
-            run_uncached_check(&root, &compiled, &selected_paths.grit)?
-        }
+        run_grit_checks(
+            &root,
+            &active_rules,
+            &selected_paths.grit,
+            &config,
+            &command,
+            verbose,
+        )?
     };
     diagnostics.extend(obsidian::run_checks(
         &root,
         &config.obsidian,
         &selected_paths.obsidian,
     )?);
+    let suppression_outcome =
+        suppression::apply_diagnostic_suppressions(diagnostics, &config.suppressions)?;
+    if verbose && suppression_outcome.suppressed_count > 0 {
+        eprintln!(
+            "harness-lint: suppressed {} diagnostic(s) by rule+path configuration",
+            suppression_outcome.suppressed_count
+        );
+    }
+    let mut diagnostics = suppression_outcome.diagnostics;
     diagnostics.sort_by(|left, right| {
         left.path
             .cmp(&right.path)
@@ -269,6 +270,72 @@ fn run_check(
         bail!("harness-lint found error-level diagnostics");
     }
     Ok(())
+}
+
+fn run_grit_checks(
+    root: &Path,
+    active_rules: &[RuleDefinition],
+    selected_paths: &[PathBuf],
+    config: &ProjectConfig,
+    command: &CheckCommand,
+    verbose: bool,
+) -> Result<Vec<crate::model::Diagnostic>> {
+    let mut diagnostics = Vec::new();
+    for rules in group_rules_by_language(active_rules) {
+        let paths: Vec<_> = selected_paths
+            .iter()
+            .filter(|path| {
+                rules
+                    .iter()
+                    .any(|rule| paths::rule_matches_path(rule, path.as_path()))
+            })
+            .cloned()
+            .collect();
+        if paths.is_empty() {
+            continue;
+        }
+        let compiled = compiler::compile_rule_set(root, rules)?;
+        if config.lint.cache {
+            let rule_fingerprint = cache::fingerprint(&format!("{:?}", compiled.grit_rules));
+            let config_fingerprint = cache::fingerprint(&format!(
+                "{:?}{:?}{:?}{:?}{:?}",
+                command.rule, command.tag, config.overrides, config.disabled, config.ignore
+            ));
+            diagnostics.extend(run_cached_check(
+                root,
+                &compiled,
+                &paths,
+                &rule_fingerprint,
+                &config_fingerprint,
+                verbose,
+            )?);
+        } else {
+            diagnostics.extend(run_uncached_check(root, &compiled, &paths)?);
+        }
+    }
+    diagnostics.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.start_line.cmp(&right.start_line))
+            .then(left.start_column.cmp(&right.start_column))
+            .then(left.rule_id.cmp(&right.rule_id))
+    });
+    Ok(diagnostics)
+}
+
+fn group_rules_by_language(active_rules: &[RuleDefinition]) -> Vec<Vec<RuleDefinition>> {
+    let mut groups: BTreeMap<Option<String>, Vec<RuleDefinition>> = BTreeMap::new();
+    for rule in active_rules {
+        groups
+            .entry(
+                rule.language
+                    .as_ref()
+                    .map(|language| language.trim().to_ascii_lowercase()),
+            )
+            .or_default()
+            .push(rule.clone());
+    }
+    groups.into_values().collect()
 }
 
 #[derive(Debug)]
@@ -369,6 +436,18 @@ fn run_doctor(
         }
     };
 
+    match suppression::validate_suppressions(&config.suppressions) {
+        Ok(()) if !config.suppressions.is_empty() => findings.push(doctor_ok(
+            "suppressions",
+            format!(
+                "validated {} scoped suppression(s)",
+                config.suppressions.len()
+            ),
+        )),
+        Ok(()) => {}
+        Err(error) => findings.push(doctor_error("suppressions", error.to_string())),
+    }
+
     if config.rules.local.is_empty() {
         findings.push(doctor_warn(
             "local-rules",
@@ -413,6 +492,18 @@ fn run_doctor(
                 "rules",
                 format!("loaded {} pack(s) with {} rule(s)", packs.len(), rule_count),
             ));
+            let rule_ids: BTreeSet<&str> = packs
+                .iter()
+                .flat_map(|pack| pack.rules.iter().map(|rule| rule.id.as_str()))
+                .collect();
+            for suppression in &config.suppressions {
+                if !rule_ids.contains(suppression.rule.as_str()) {
+                    findings.push(doctor_warn(
+                        "suppressions",
+                        format!("suppression references unknown rule `{}`", suppression.rule),
+                    ));
+                }
+            }
         }
         Err(error) => findings.push(doctor_error("rules", error.to_string())),
     }

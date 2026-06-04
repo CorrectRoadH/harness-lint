@@ -50,6 +50,212 @@ fn cli_check_rejects_positional_paths() {
 }
 
 #[test]
+fn cli_check_applies_rule_path_suppressions() {
+    if !grit_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(tempdir.path().join("rules")).unwrap();
+    fs::create_dir_all(tempdir.path().join("src/generated")).unwrap();
+    fs::write(
+        tempdir.path().join("harness.toml"),
+        r#"
+[project]
+name = "demo"
+
+[rules]
+local = ["rules"]
+
+[ignore]
+paths = []
+
+[[suppressions]]
+rule = "local.no-print"
+paths = ["src/generated/**"]
+reason = "Generated fixtures intentionally use print."
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("rules/no-print.md"),
+        r#"---
+id: local.no-print
+title: Avoid print debugging
+language: python
+level: warn
+tags: [local, python]
+---
+
+# Avoid print debugging
+
+Use logging instead.
+
+```grit
+language python
+`print($value)`
+```
+
+## Bad
+
+```python
+print(user)
+```
+
+## Good
+
+```python
+logger.info("user=%s", user)
+```
+"#,
+    )
+    .unwrap();
+    fs::write(tempdir.path().join("src/app.py"), "print('visible')\n").unwrap();
+    fs::write(
+        tempdir.path().join("src/generated/adapter.py"),
+        "print('suppressed')\n",
+    )
+    .unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let output = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["check", "--all"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("src/app.py"), "{stdout}");
+    assert!(!stdout.contains("src/generated/adapter.py"), "{stdout}");
+}
+
+#[test]
+fn cli_check_all_keeps_mixed_language_rules_on_matching_files() {
+    if !grit_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(tempdir.path().join("rules")).unwrap();
+    fs::create_dir_all(tempdir.path().join("src")).unwrap();
+    fs::write(
+        tempdir.path().join("harness.toml"),
+        r#"
+[project]
+name = "demo"
+
+[lint]
+default_level = "warn"
+changed_base = "origin/main"
+cache = false
+
+[rules]
+local = ["rules"]
+
+[ignore]
+paths = []
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("rules/no-var.md"),
+        r#"---
+id: local.no-var
+title: Avoid var declarations
+language: typescript
+level: warn
+tags: [typescript]
+---
+
+# Avoid var declarations
+
+Use let or const.
+
+```grit
+language js
+`var $name = $value`
+```
+
+## Bad
+
+```ts
+var total = 0
+```
+
+## Good
+
+```ts
+let total = 0
+```
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("rules/no-panic.md"),
+        r#"---
+id: local.no-panic
+title: Avoid panic
+language: go
+level: warn
+tags: [go]
+---
+
+# Avoid panic
+
+Return errors.
+
+```grit
+language go
+`panic($value)`
+```
+
+## Bad
+
+```go
+panic(err)
+```
+
+## Good
+
+```go
+return err
+```
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("src/main.go"),
+        "package main\n\nfunc main() {\n\tvar total = 1\n\tpanic(total)\n}\n",
+    )
+    .unwrap();
+    fs::write(tempdir.path().join("src/app.ts"), "var total = 0\n").unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let output = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["check", "--all"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("src/app.ts"), "{stdout}");
+    assert!(stdout.contains("src/main.go"), "{stdout}");
+    assert!(stdout.contains("local.no-var"), "{stdout}");
+    assert!(stdout.contains("local.no-panic"), "{stdout}");
+    assert!(!stdout.contains("src/main.go: local.no-var"), "{stdout}");
+}
+
+#[test]
 fn cli_init_and_rule_create_work() {
     if !grit_available() {
         return;

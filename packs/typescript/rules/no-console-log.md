@@ -12,7 +12,16 @@ Use repository logging, telemetry, or explicit UI state instead of committed `co
 
 ```grit
 language js
-`console.log($value)`
+`console.log($value)` where {
+  or {
+    $filename <: r".*\.ts",
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.js",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
 ```
 
 ## Bad

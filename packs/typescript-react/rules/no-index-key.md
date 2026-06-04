@@ -12,7 +12,16 @@ Use stable domain ids for React keys so reordering does not confuse component st
 
 ```grit
 language js
-`key={index}`
+`key={index}` where {
+  or {
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.ts",
+    $filename <: r".*\.js",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
 ```
 
 ## Bad

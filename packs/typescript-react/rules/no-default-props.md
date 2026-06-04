@@ -12,7 +12,16 @@ Use default parameter values so TypeScript sees the defaulting behavior at the c
 
 ```grit
 language js
-`$component.defaultProps = $value`
+`$component.defaultProps = $value` where {
+  or {
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.ts",
+    $filename <: r".*\.js",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
 ```
 
 ## Bad

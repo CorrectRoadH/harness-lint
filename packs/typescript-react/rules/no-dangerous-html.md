@@ -12,7 +12,16 @@ Avoid direct HTML injection unless the content has a trusted sanitizer and owner
 
 ```grit
 language js
-`dangerouslySetInnerHTML={$value}`
+`dangerouslySetInnerHTML={$value}` where {
+  or {
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.ts",
+    $filename <: r".*\.js",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
 ```
 
 ## Bad

@@ -12,7 +12,16 @@ Remove `debugger` statements before committing application code.
 
 ```grit
 language js
-`debugger`
+`debugger` where {
+  or {
+    $filename <: r".*\.ts",
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.js",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
 ```
 
 ## Bad

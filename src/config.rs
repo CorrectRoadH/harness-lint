@@ -32,6 +32,8 @@ pub struct ProjectConfig {
     pub disabled: DisabledSection,
     #[serde(default)]
     pub ignore: IgnoreSection,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suppressions: Vec<SuppressionSection>,
     #[serde(default)]
     pub registry: RegistrySection,
     #[serde(default)]
@@ -48,6 +50,7 @@ impl Default for ProjectConfig {
             overrides: BTreeMap::new(),
             disabled: DisabledSection::default(),
             ignore: IgnoreSection::default(),
+            suppressions: Vec::new(),
             registry: RegistrySection::default(),
             obsidian: ObsidianSection::default(),
         }
@@ -105,6 +108,15 @@ pub struct DisabledSection {
 pub struct IgnoreSection {
     #[serde(default)]
     pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SuppressionSection {
+    pub rule: String,
+    #[serde(default)]
+    pub paths: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -259,6 +271,11 @@ rules = ["python.y"]
 [ignore]
 paths = ["dist/**"]
 
+[[suppressions]]
+rule = "python.z"
+paths = ["generated/**"]
+reason = "Generated adapters intentionally use this pattern."
+
 [obsidian]
 markdown_links = true
 orphan_files = true
@@ -275,6 +292,13 @@ require_capitalized_dirs = true
         assert_eq!(config.rules.local, vec![PathBuf::from("rules")]);
         assert_eq!(config.packs["python"], "local:../rules");
         assert_eq!(config.disabled.rules, vec!["python.y"]);
+        assert_eq!(config.suppressions.len(), 1);
+        assert_eq!(config.suppressions[0].rule, "python.z");
+        assert_eq!(config.suppressions[0].paths, vec!["generated/**"]);
+        assert_eq!(
+            config.suppressions[0].reason.as_deref(),
+            Some("Generated adapters intentionally use this pattern.")
+        );
         assert!(config.obsidian.markdown_links);
         assert!(config.obsidian.orphan_files);
         assert_eq!(

@@ -15,6 +15,15 @@ language js
 or {
   `ReactDOM.findDOMNode($value)`,
   `findDOMNode($value)`
+} where {
+  or {
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.ts",
+    $filename <: r".*\.js",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
 }
 ```
 

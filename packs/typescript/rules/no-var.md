@@ -12,7 +12,16 @@ Use `const` by default and `let` when reassignment is required.
 
 ```grit
 language js
-`var $name = $value`
+`var $name = $value` where {
+  or {
+    $filename <: r".*\.ts",
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.js",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
 ```
 
 ## Bad

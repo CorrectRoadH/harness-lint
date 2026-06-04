@@ -12,7 +12,16 @@ Prefer `unknown`, generics, discriminated unions, or domain types over `any`.
 
 ```grit
 language js
-`any`
+`any` where {
+  or {
+    $filename <: r".*\.ts",
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.js",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
 ```
 
 ## Bad

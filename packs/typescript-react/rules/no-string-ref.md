@@ -12,7 +12,16 @@ Use callback refs or `useRef` so ref ownership is explicit and compatible with m
 
 ```grit
 language js
-`<$component ref="$name" />`
+`<$component ref="$name" />` where {
+  or {
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.ts",
+    $filename <: r".*\.js",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
 ```
 
 ## Bad

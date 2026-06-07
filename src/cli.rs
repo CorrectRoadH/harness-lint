@@ -11,16 +11,15 @@ use crate::authoring;
 use crate::cache;
 use crate::compiler;
 use crate::config::{self, ProjectConfig};
+use crate::exceptions;
 use crate::git;
 use crate::grit;
 use crate::init;
 use crate::model::{PackSourceKind, RuleBody, RuleDefinition, RuleExampleKind};
-use crate::obsidian;
 use crate::pack;
 use crate::paths;
 use crate::registry;
 use crate::report::{self, DiagnosticReportOptions, ReportFormat};
-use crate::suppression;
 
 const GRIT_BATCH_SIZE: usize = 256;
 
@@ -208,23 +207,22 @@ fn run_check(
 ) -> Result<()> {
     let root = config::find_project_root(cwd)?;
     let config = config::load_config(&root, config_path)?;
-    suppression::validate_suppressions(&config.suppressions)?;
+    exceptions::validate_exceptions(&config.exceptions)?;
     let packs = load_rule_packs(&root, &config)?;
     let active_rules = collect_effective_rules(&packs, &config, &command);
     let selected_paths = select_paths(&root, &config, &command, &active_rules)?;
     if verbose {
         eprintln!(
-            "harness-lint: {} active rule(s), {} GritQL path(s), {} Obsidian path(s)",
+            "harness-lint: {} active rule(s), {} GritQL path(s)",
             active_rules.len(),
-            selected_paths.grit.len(),
-            selected_paths.obsidian.len()
+            selected_paths.grit.len()
         );
     }
-    if selected_paths.grit.is_empty() && selected_paths.obsidian.is_empty() {
+    if selected_paths.grit.is_empty() {
         report::report_diagnostics(&[], format, DiagnosticReportOptions { root: &root })?;
         return Ok(());
     }
-    let mut diagnostics = if active_rules.is_empty() || selected_paths.grit.is_empty() {
+    let diagnostics = if active_rules.is_empty() || selected_paths.grit.is_empty() {
         Vec::new()
     } else {
         let _lock = acquire_grit_run_lock(&root)?;
@@ -237,20 +235,15 @@ fn run_check(
             verbose,
         )?
     };
-    diagnostics.extend(obsidian::run_checks(
-        &root,
-        &config.obsidian,
-        &selected_paths.obsidian,
-    )?);
-    let suppression_outcome =
-        suppression::apply_diagnostic_suppressions(diagnostics, &config.suppressions)?;
-    if verbose && suppression_outcome.suppressed_count > 0 {
+    let exception_outcome =
+        exceptions::apply_diagnostic_exceptions(diagnostics, &config.exceptions)?;
+    if verbose && exception_outcome.hidden_count > 0 {
         eprintln!(
-            "harness-lint: suppressed {} diagnostic(s) by rule+path configuration",
-            suppression_outcome.suppressed_count
+            "harness-lint: hid {} result(s) by rule exception configuration",
+            exception_outcome.hidden_count
         );
     }
-    let mut diagnostics = suppression_outcome.diagnostics;
+    let mut diagnostics = exception_outcome.diagnostics;
     diagnostics.sort_by(|left, right| {
         left.path
             .cmp(&right.path)
@@ -436,16 +429,13 @@ fn run_doctor(
         }
     };
 
-    match suppression::validate_suppressions(&config.suppressions) {
-        Ok(()) if !config.suppressions.is_empty() => findings.push(doctor_ok(
-            "suppressions",
-            format!(
-                "validated {} scoped suppression(s)",
-                config.suppressions.len()
-            ),
+    match exceptions::validate_exceptions(&config.exceptions) {
+        Ok(()) if !config.exceptions.is_empty() => findings.push(doctor_ok(
+            "exceptions",
+            format!("validated {} rule exception(s)", config.exceptions.len()),
         )),
         Ok(()) => {}
-        Err(error) => findings.push(doctor_error("suppressions", error.to_string())),
+        Err(error) => findings.push(doctor_error("exceptions", error.to_string())),
     }
 
     if config.rules.local.is_empty() {
@@ -496,11 +486,14 @@ fn run_doctor(
                 .iter()
                 .flat_map(|pack| pack.rules.iter().map(|rule| rule.id.as_str()))
                 .collect();
-            for suppression in &config.suppressions {
-                if !rule_ids.contains(suppression.rule.as_str()) {
+            for exception in &config.exceptions {
+                if !rule_ids.contains(exception.rule.as_str()) {
                     findings.push(doctor_warn(
-                        "suppressions",
-                        format!("suppression references unknown rule `{}`", suppression.rule),
+                        "exceptions",
+                        format!(
+                            "rule exception references unknown rule `{}`",
+                            exception.rule
+                        ),
                     ));
                 }
             }
@@ -1453,46 +1446,18 @@ fn select_paths(
         rules,
         &config.rules.local,
     )?;
-    let mut obsidian_paths = paths::filter_paths(
-        raw_paths.clone(),
-        &config.ignore.paths,
-        &[],
-        &config.rules.local,
-    )?;
-    let mut obsidian_extra_roots = config.obsidian.content_roots.clone();
-    obsidian_extra_roots.extend(config.obsidian.note_roots.clone());
-    if let Some(root) = &config.obsidian.flat_attachment_dir {
-        obsidian_extra_roots.push(root.clone());
-    }
-    if !obsidian_extra_roots.is_empty() {
-        let mut extra_paths: Vec<_> = raw_paths
-            .into_iter()
-            .filter(|path| {
-                obsidian_extra_roots
-                    .iter()
-                    .any(|root| path.starts_with(root))
-            })
-            .collect();
-        obsidian_paths.append(&mut extra_paths);
-        obsidian_paths.sort();
-        obsidian_paths.dedup();
-    }
     if is_implicit_full_scan && grit_paths.len() > 1000 {
         bail!(
             "refusing implicit full scan of {} files; use `harness-lint check --changed` or run `harness-lint check --all` to force it",
             grit_paths.len()
         );
     }
-    Ok(SelectedPaths {
-        grit: grit_paths,
-        obsidian: obsidian_paths,
-    })
+    Ok(SelectedPaths { grit: grit_paths })
 }
 
 #[derive(Debug)]
 struct SelectedPaths {
     grit: Vec<PathBuf>,
-    obsidian: Vec<PathBuf>,
 }
 
 fn load_rule_packs(

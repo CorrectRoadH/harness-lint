@@ -47,6 +47,51 @@ harness-lint update
 harness-lint remove python
 ```
 
+## Configuration Demo
+
+`harness.toml` controls which files are checked, where local rules live, which rule packs are installed, and which rule results should be treated differently.
+
+```toml
+# Optional project name shown in generated config.
+[project]
+name = "my-service"
+
+# Default lint behavior.
+[lint]
+# warn reports a problem; error makes the check fail.
+default_level = "warn"
+# Used by `harness-lint check --changed`.
+changed_base = "origin/main"
+# Reuse file-level results between runs.
+cache = true
+
+# Local project-owned rule files.
+[rules]
+local = ["rules"]
+
+# Shared rule packs to install and restore.
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+
+# Change the level of one rule without editing the rule file.
+[overrides]
+"typescript.no-console-log" = "error"
+
+# Turn off specific rules.
+[disabled]
+rules = ["typescript.no-explicit-any"]
+
+# Skip these paths for every rule.
+[ignore]
+paths = ["dist/**", "coverage/**"]
+
+# Hide one rule only for matching paths; other rules still check those files.
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+```
+
 ## Local Rules
 
 Custom project rules live in `rules/*.md` by default. To put them somewhere else, configure `harness.toml`:
@@ -114,16 +159,3 @@ language js
   !$filename <: r".*\.test\.ts"
 }
 ```
-
-## Scoped Suppressions
-
-Use `ignore.paths` only for files that should not be checked by any rule, such as generated output. When one rule is noisy for a known path but other rules should still run there, add a scoped suppression:
-
-```toml
-[[suppressions]]
-rule = "go-effective-go.no-blank-placeholder-assignment"
-paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
-reason = "Generated router adapters intentionally discard unused generated parameters."
-```
-
-Scoped suppressions are applied after checks run. They hide only diagnostics whose `rule` and `path` both match, so the same files remain visible to every other rule. `reason` is optional but recommended for future reviewers and AI agents.

@@ -32,12 +32,12 @@ pub struct ProjectConfig {
     pub disabled: DisabledSection,
     #[serde(default)]
     pub ignore: IgnoreSection,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub suppressions: Vec<SuppressionSection>,
+    #[serde(default, alias = "suppressions", skip_serializing_if = "Vec::is_empty")]
+    pub exceptions: Vec<RuleExceptionSection>,
     #[serde(default)]
     pub registry: RegistrySection,
-    #[serde(default)]
-    pub obsidian: ObsidianSection,
+    #[serde(skip)]
+    pub used_legacy_exceptions_key: bool,
 }
 
 impl Default for ProjectConfig {
@@ -50,9 +50,9 @@ impl Default for ProjectConfig {
             overrides: BTreeMap::new(),
             disabled: DisabledSection::default(),
             ignore: IgnoreSection::default(),
-            suppressions: Vec::new(),
+            exceptions: Vec::new(),
             registry: RegistrySection::default(),
-            obsidian: ObsidianSection::default(),
+            used_legacy_exceptions_key: false,
         }
     }
 }
@@ -111,7 +111,7 @@ pub struct IgnoreSection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SuppressionSection {
+pub struct RuleExceptionSection {
     pub rule: String,
     #[serde(default)]
     pub paths: Vec<String>,
@@ -133,23 +133,6 @@ impl Default for RegistrySection {
             ),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct ObsidianSection {
-    #[serde(default)]
-    pub markdown_links: bool,
-    #[serde(default)]
-    pub orphan_files: bool,
-    pub flat_attachment_dir: Option<PathBuf>,
-    #[serde(default)]
-    pub note_roots: Vec<PathBuf>,
-    #[serde(default)]
-    pub content_roots: Vec<PathBuf>,
-    #[serde(default)]
-    pub content_extensions: Vec<String>,
-    #[serde(default)]
-    pub require_capitalized_dirs: bool,
 }
 
 pub fn find_project_root(start: &Path) -> Result<PathBuf> {
@@ -182,9 +165,23 @@ pub fn load_config(root: &Path, explicit: Option<&Path>) -> Result<ProjectConfig
     }
     let content =
         fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
-    let config =
+    let mut config: ProjectConfig =
         toml::from_str(&content).with_context(|| format!("failed to parse {}", path.display()))?;
+    if uses_legacy_suppressions_key(&content) {
+        config.used_legacy_exceptions_key = true;
+        eprintln!(
+            "warning: `[[suppressions]]` is deprecated; rename it to `[[exceptions]]` in {}",
+            path.display()
+        );
+    }
     Ok(config)
+}
+
+fn uses_legacy_suppressions_key(content: &str) -> bool {
+    content.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed == "[suppressions]" || trimmed == "[[suppressions]]"
+    })
 }
 
 pub fn write_config(root: &Path, config: &ProjectConfig) -> Result<()> {
@@ -271,19 +268,10 @@ rules = ["python.y"]
 [ignore]
 paths = ["dist/**"]
 
-[[suppressions]]
+[[exceptions]]
 rule = "python.z"
 paths = ["generated/**"]
 reason = "Generated adapters intentionally use this pattern."
-
-[obsidian]
-markdown_links = true
-orphan_files = true
-flat_attachment_dir = "Attachments"
-note_roots = ["Notes"]
-content_roots = ["Notes"]
-content_extensions = ["md", "base", "canvas"]
-require_capitalized_dirs = true
 "#,
         )
         .unwrap();
@@ -292,20 +280,48 @@ require_capitalized_dirs = true
         assert_eq!(config.rules.local, vec![PathBuf::from("rules")]);
         assert_eq!(config.packs["python"], "local:../rules");
         assert_eq!(config.disabled.rules, vec!["python.y"]);
-        assert_eq!(config.suppressions.len(), 1);
-        assert_eq!(config.suppressions[0].rule, "python.z");
-        assert_eq!(config.suppressions[0].paths, vec!["generated/**"]);
+        assert_eq!(config.exceptions.len(), 1);
+        assert_eq!(config.exceptions[0].rule, "python.z");
+        assert_eq!(config.exceptions[0].paths, vec!["generated/**"]);
         assert_eq!(
-            config.suppressions[0].reason.as_deref(),
+            config.exceptions[0].reason.as_deref(),
             Some("Generated adapters intentionally use this pattern.")
         );
-        assert!(config.obsidian.markdown_links);
-        assert!(config.obsidian.orphan_files);
-        assert_eq!(
-            config.obsidian.flat_attachment_dir,
-            Some(PathBuf::from("Attachments"))
-        );
-        assert!(config.obsidian.require_capitalized_dirs);
+    }
+
+    #[test]
+    fn parses_legacy_suppressions_key() {
+        let config: ProjectConfig = toml::from_str(
+            r#"
+[[suppressions]]
+rule = "python.z"
+paths = ["generated/**"]
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.exceptions.len(), 1);
+        assert_eq!(config.exceptions[0].rule, "python.z");
+        assert_eq!(config.exceptions[0].paths, vec!["generated/**"]);
+    }
+
+    #[test]
+    fn load_config_marks_legacy_suppressions_key() {
+        let tempdir = tempfile::tempdir().unwrap();
+        fs::write(
+            tempdir.path().join(CONFIG_FILE),
+            r#"
+[[suppressions]]
+rule = "python.z"
+paths = ["generated/**"]
+"#,
+        )
+        .unwrap();
+
+        let config = load_config(tempdir.path(), None).unwrap();
+
+        assert!(config.used_legacy_exceptions_key);
+        assert_eq!(config.exceptions.len(), 1);
     }
 
     #[test]

@@ -46,6 +46,51 @@ harness-lint update
 harness-lint remove python
 ```
 
+## 配置示例
+
+`harness.toml` 用来控制检查哪些文件、本地规则放在哪里、安装哪些规则包，以及哪些规则结果需要特殊处理。
+
+```toml
+# 可选的项目名，会出现在生成的配置里。
+[project]
+name = "my-service"
+
+# 默认检查行为。
+[lint]
+# warn 只报告问题；error 会让检查失败。
+default_level = "warn"
+# `harness-lint check --changed` 用它作为 Git 对比基准。
+changed_base = "origin/main"
+# 在多次运行之间复用文件级检查结果。
+cache = true
+
+# 本项目自己维护的规则文件目录。
+[rules]
+local = ["rules"]
+
+# 已安装的共享规则包。
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+
+# 不改规则文件，单独调整某条规则的级别。
+[overrides]
+"typescript.no-console-log" = "error"
+
+# 关闭指定规则。
+[disabled]
+rules = ["typescript.no-explicit-any"]
+
+# 这些路径会被所有规则跳过。
+[ignore]
+paths = ["dist/**", "coverage/**"]
+
+# 只隐藏某条规则在指定路径上的结果；其他规则仍会检查这些文件。
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+```
+
 
 ## 本地规则
 
@@ -114,16 +159,3 @@ language js
   !$filename <: r".*\.test\.ts"
 }
 ```
-
-## 作用域化 Suppression
-
-只有当某些文件完全不应该被任何规则检查时，才使用 `ignore.paths`，例如生成产物。如果只是某一条规则在某些路径上噪音太高，但这些文件仍应被其他规则扫描，用 `[[suppressions]]`：
-
-```toml
-[[suppressions]]
-rule = "go-effective-go.no-blank-placeholder-assignment"
-paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
-reason = "Generated router adapters intentionally discard unused generated parameters."
-```
-
-Scoped suppression 会在检查完成后应用。只有 `rule` 和 `path` 同时匹配的诊断会被隐藏；同一批文件仍会继续接受其他规则检查。`reason` 可选，但建议填写，方便后续 reviewer 和 AI agent 理解为什么这里不是目录 ignore。

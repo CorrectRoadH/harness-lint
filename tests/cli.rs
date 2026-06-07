@@ -64,7 +64,7 @@ fn cli_check_rejects_positional_paths() {
 }
 
 #[test]
-fn cli_check_applies_rule_path_suppressions() {
+fn cli_check_applies_rule_path_exceptions() {
     if !grit_available() {
         return;
     }
@@ -83,7 +83,7 @@ local = ["rules"]
 [ignore]
 paths = []
 
-[[suppressions]]
+[[exceptions]]
 rule = "local.no-print"
 paths = ["src/generated/**"]
 reason = "Generated fixtures intentionally use print."
@@ -126,7 +126,7 @@ logger.info("user=%s", user)
     fs::write(tempdir.path().join("src/app.py"), "print('visible')\n").unwrap();
     fs::write(
         tempdir.path().join("src/generated/adapter.py"),
-        "print('suppressed')\n",
+        "print('hidden')\n",
     )
     .unwrap();
 
@@ -146,6 +146,44 @@ logger.info("user=%s", user)
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("src/app.py"), "{stdout}");
     assert!(!stdout.contains("src/generated/adapter.py"), "{stdout}");
+}
+
+#[test]
+fn cli_warns_for_legacy_suppressions_key() {
+    let tempdir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(tempdir.path().join("rules")).unwrap();
+    fs::write(
+        tempdir.path().join("harness.toml"),
+        r#"
+[rules]
+local = ["rules"]
+
+[[suppressions]]
+rule = "local.no-print"
+paths = ["src/generated/**"]
+"#,
+    )
+    .unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let output = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["rule", "list"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("`[[suppressions]]` is deprecated"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("[[exceptions]]"), "{stderr}");
 }
 
 #[test]

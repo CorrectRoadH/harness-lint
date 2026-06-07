@@ -1,0 +1,230 @@
+---
+title: "harness-lint 配置：harness.toml 参考指南"
+sidebarTitle: "配置"
+description: "harness.toml 控制检查哪些文件、安装哪些规则包、如何覆盖规则级别，以及排除哪些路径。"
+---
+
+## 概览
+
+`harness.toml` 是 harness-lint 项目的唯一配置文件。它位于仓库根目录，和 `.git` 放在一起。harness-lint 会从当前工作目录向上查找它，所以你可以从任意子目录运行命令。
+
+运行 `harness-lint init` 会在当前目录生成一份起始 `harness.toml`。
+
+## 完整带注释示例
+
+下面的示例展示所有支持的 section。你可以复制它作为起点，然后删除不需要的部分。
+
+```toml
+# Optional project name shown in generated config.
+[project]
+name = "my-service"
+
+# Default lint behavior.
+[lint]
+# warn reports a problem; error makes the check fail.
+default_level = "warn"
+# Used by `harness-lint check --changed`.
+changed_base = "origin/main"
+# Reuse file-level results between runs.
+cache = true
+
+# Local project-owned rule files.
+[rules]
+local = ["rules"]
+
+# Shared rule packs to install and restore.
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+
+# Change the level of one rule without editing the rule file.
+[overrides]
+"typescript.no-console-log" = "error"
+
+# Turn off specific rules.
+[disabled]
+rules = ["typescript.no-explicit-any"]
+
+# Skip these paths for every rule.
+[ignore]
+paths = ["dist/**", "coverage/**"]
+
+# Hide one rule only for matching paths; other rules still check those files.
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+
+# Override the catalog URL (optional — defaults to the public harness-lint catalog).
+[registry]
+url = "https://raw.githubusercontent.com/CorrectRoadH/harness-lint/main/site/catalog.json"
+```
+
+## Section 参考
+
+### `[project]`
+
+```toml
+[project]
+name = "my-service"
+```
+
+可选。`name` 是生成配置输出中显示的人类可读标签。它不会影响规则加载或检查行为。
+
+---
+
+### `[lint]`
+
+```toml
+[lint]
+default_level = "warn"
+changed_base = "origin/main"
+cache = true
+```
+
+| Key | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `default_level` | `"warn"` \| `"error"` | `"warn"` | 应用于未指定自身 `level` 的规则的严重级别。 |
+| `changed_base` | string | `"origin/main"` | `harness-lint check --changed` 用来判断文件变化的 Git ref。 |
+| `cache` | boolean | `true` | 为 `true` 时，harness-lint 会把逐文件结果保存在 `.harness/cache/`，并跳过自上次运行以来未变化的文件。设为 `false` 会每次都完整扫描。 |
+
+`default_level` 只影响规则文件中省略 `level` 字段的规则。显式设置 `level: error` 的规则不会因为 `default_level = "warn"` 而降级。要修改单条规则的级别，请使用 `[overrides]`。
+
+---
+
+### `[rules]`
+
+```toml
+[rules]
+local = ["rules"]
+```
+
+`local` 是包含本地规则文件（`*.md`）的目录列表。路径相对仓库根目录。harness-lint 会加载所有列出目录中的规则。
+
+`harness-lint rule create` 会把新规则文件写入这个列表中的**第一个**目录。
+
+如果要把本地规则放在非默认位置：
+
+```toml
+[rules]
+local = ["custom-rules", "team-rules"]
+```
+
+---
+
+### `[packs]`
+
+```toml
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+go-concurrency = "github:CorrectRoadH/harness-lint@main#packs/go-concurrency"
+```
+
+这是规则包 ID 到 source spec 的映射。当你运行 `harness-lint install` 或 `harness-lint remove` 时，harness-lint 会自动管理这个 section。你也可以手动编辑，然后运行 `harness-lint update` 刷新 `harness.lock`。
+
+Git 托管规则包的 source spec 格式为：
+
+```
+github:<owner>/<repo>@<branch-or-tag>#<subdirectory>
+```
+
+---
+
+### `[overrides]`
+
+```toml
+[overrides]
+"typescript.no-console-log" = "error"
+"local.no-print-debug" = "warn"
+```
+
+这是规则 ID 到严重级别的映射。用 `[overrides]` 修改特定规则级别，而不需要编辑规则文件本身。对不能或不想修改的规则包规则尤其有用。
+
+有效值为 `"warn"` 和 `"error"`。
+
+---
+
+### `[disabled]`
+
+```toml
+[disabled]
+rules = ["typescript.no-explicit-any"]
+```
+
+要完全禁用的规则 ID 列表。禁用规则不会被加载、不会报告，也不会影响退出码。临时放宽规则时，优先用 `[overrides]` 降级为 `warn`，而不是彻底静默。
+
+---
+
+### `[ignore]`
+
+```toml
+[ignore]
+paths = ["dist/**", "coverage/**", "vendor/**"]
+```
+
+glob 模式列表。任何匹配这些模式的文件都会从每条规则、每次 `check` 运行中排除。`[ignore]` 适合没有任何规则应该扫描的目录，例如生成构建产物、第三方 vendored 代码或覆盖率报告。
+
+---
+
+### `[[exceptions]]`
+
+```toml
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+```
+
+exception 会隐藏某一条规则在匹配路径上的结果，同时让其他规则继续检查这些文件。你可以定义多个 `[[exceptions]]` 块，每个块对应一组规则和路径。
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `rule` | ✅ | 要为匹配路径抑制的规则 ID。 |
+| `paths` | ✅ | glob 模式列表。当被标记文件匹配其中任意一个模式时，exception 生效。 |
+| `reason` | 建议 | 简短解释为什么这个例外有效。harness-lint 不强制要求该字段，但缺失时 `harness-lint doctor` 会警告。 |
+
+<Note>
+  以前的 key 是 `[[suppressions]]`。这个拼写仍然可用，但已经弃用。harness-lint 会打印警告，并要求你改名为 `[[exceptions]]`。
+</Note>
+
+### `[registry]`
+
+```toml
+[registry]
+url = "https://raw.githubusercontent.com/CorrectRoadH/harness-lint/main/site/catalog.json"
+```
+
+| Key | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `url` | string | 公共目录 URL | harness-lint 在 `harness-lint install`、`harness-lint search` 和 `harness-lint list --available` 中解析规则包名称时使用的 URL。默认指向 GitHub 上的公共 harness-lint 目录。你可以把它改成自托管或企业内部目录。 |
+
+大多数项目不需要设置 `[registry]`。只有在运行私有目录服务器或内部镜像公共目录时才配置它。
+
+---
+
+## `ignore.paths` vs. `[[exceptions]]`：什么时候用哪个
+
+这两个机制看起来类似，但目的不同。
+
+**当某个目录不应该被任何规则扫描时，使用 `ignore.paths`。** 常见例子包括：
+
+- `dist/**`：编译产物
+- `coverage/**`：测试覆盖率报告
+- `vendor/**`：vendored 第三方代码
+
+```toml
+[ignore]
+paths = ["dist/**", "coverage/**"]
+```
+
+**当一条规则总体有效，但在某个路径下有合法例外时，使用 `[[exceptions]]`。** 其他规则仍然会正常检查这些文件。
+
+例如，假设你在代码库中执行 `typescript.no-console-log`，但 `src/generated/` 中的生成 SDK 会在本地 mock 调试时有意使用 `console.log`。你不想完全停止扫描 `src/generated/`，因为其他规则仍然应该生效。你只想在这些路径上静默这一条规则：
+
+```toml
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+```
+
+实用判断：如果你永远不希望任何 harness-lint 规则标记某个路径，用 `ignore.paths`。如果你只是在保留其他规则的同时，为某一条规则做窄例外，用 `[[exceptions]]`。

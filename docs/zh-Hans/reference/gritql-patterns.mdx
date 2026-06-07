@@ -1,0 +1,244 @@
+---
+title: "为 harness-lint 规则编写 GritQL 模式"
+sidebarTitle: "GritQL 模式"
+description: "了解 harness-lint 规则中使用的 GritQL 语法：language 声明、元变量、where 子句，以及带示例的 filename 条件。"
+---
+
+每条 harness-lint 规则都通过 GritQL 模式执行约束。GritQL 是 `grit` CLI 提供的模式匹配语言。理解 GritQL 基础能帮助你编写精确规则，只捕获你想捕获的代码，不多也不少。
+
+<Note>
+  用 `harness-lint rule verify` 和 `harness-lint doctor` 验证你写的每个模式。这些命令会确认 Grit CLI 能解析并执行你的模式，然后再把它放进 CI。
+</Note>
+
+---
+
+## 1. GritQL 是什么
+
+GritQL 是结构化代码搜索语言。正则表达式作用于原始文本，而 GritQL 作用于 **抽象语法树（AST）**，也就是按结构而不是字符序列匹配代码。这意味着像 `` `print($value)` `` 这样的模式会匹配任何单参数 `print` 调用，不受空白、换行或参数格式影响。
+
+GritQL 由 `grit` CLI 提供（通过 `brew install getgrit/tap/grit` 安装）。harness-lint 会在内部编排 `grit check`；使用 harness-lint 时不需要直接调用 `grit`。
+
+---
+
+## 2. 基本模式语法
+
+**反引号模式** 按字面匹配代码，但基于 AST 结构。把你想检测的代码放进反引号：
+
+```grit
+language python
+`print($value)`
+```
+
+这会匹配函数为 `print` 且恰好有一个参数的任意调用表达式。
+
+**元变量** 以 `$` 开头，并匹配该位置的任意表达式。它们像具名通配符：
+
+| 元变量 | 常见用途 |
+|---|---|
+| `$value` | 捕获单个参数 |
+| `$name` | 捕获标识符 |
+| `$body` | 捕获函数体或代码块 |
+| `$args` | 捕获参数列表 |
+| `$_` | 丢弃，匹配任意内容但不绑定 |
+
+同一模式中共享名称的元变量必须匹配同一段代码。例如，`` `$a == $a` `` 会匹配左右两侧完全相同的比较。
+
+**`or` 模式** 匹配多个备选之一：
+
+```grit
+language python
+or {
+  `eval($code)`,
+  `exec($code)`
+}
+```
+
+这会匹配 `eval` 或 `exec` 调用。
+
+---
+
+## 3. Language 声明
+
+规则文件中的每个 GritQL 代码块都必须以单独一行的 `language <name>` 指令开始：
+
+```grit
+language go
+`go $call`
+```
+
+这个指令告诉 Grit CLI 使用哪个 parser。没有它，`grit check` 无法解析源码文件。
+
+---
+
+## 4. 支持的语言名称
+
+在 GritQL 代码块的 `language` 指令和 frontmatter 的 `language` 字段中使用这些名称：
+
+| 语言名称 | 覆盖 |
+|---|---|
+| `js` | TypeScript 和 JavaScript（`.ts`、`.tsx`、`.js`、`.jsx`、`.mjs`、`.cjs`） |
+| `python` | Python（`.py`） |
+| `go` | Go（`.go`） |
+| `rust` | Rust（`.rs`） |
+| `ruby` | Ruby（`.rb`） |
+| `java` | Java（`.java`） |
+| `css` | CSS（`.css`） |
+| `yaml` | YAML（`.yml`、`.yaml`） |
+| `json` | JSON（`.json`） |
+| `markdown` | Markdown（`.md`、`.mdx`） |
+| `hcl` | HCL / Terraform（`.tf`、`.hcl`） |
+| `sql` | SQL（`.sql`） |
+| `php` | PHP（`.php`） |
+
+---
+
+## 5. TypeScript 特别说明
+
+对于 TypeScript 和 JavaScript 规则，GritQL 代码块中始终写 `language js`，即使规则 frontmatter 声明的是 `language: typescript`：
+
+```grit
+language js
+`console.log($value)`
+```
+
+`js` 语言名覆盖 TypeScript 和 JavaScript 文件。只有当你明确需要 TypeScript parser 变体时，才使用 `language js(typescript)`，例如匹配纯 JavaScript 中无效的语法：
+
+```grit
+language js(typescript)
+`$name as $type`
+```
+
+---
+
+## 6. `where` 子句
+
+添加 `where` 子句可以给模式附加条件。条件是逗号分隔的 predicates，在基础模式匹配后求值：
+
+```grit
+language go
+`time.After($duration)` where {
+  $duration <: r".*timeout.*"
+}
+```
+
+`where` 子句最常用于 `$filename` 条件（见下一节），也可以用 regex（`<: r"pattern"`）匹配元变量内容，或要求子模式匹配（`<: some_pattern`）。
+
+---
+
+## 7. `$filename` 条件
+
+`$filename` 是内置元变量，保存当前扫描文件相对项目根目录的路径。把它放在 `where` 子句中，可以把规则限制到特定文件。
+
+**Include pattern**：只有文件名匹配时规则才触发：
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts"
+}
+```
+
+**Exclude pattern**：只有文件名不匹配时规则才触发：
+
+```grit
+language js
+`console.log($value)` where {
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+**同时 include 和 exclude**：规则只在 `src/` TypeScript 文件且不是测试文件时触发：
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+regex 语法是标准 Rust regex（`r"pattern"`）。因为路径相对项目根目录，并可能包含目录片段，所以通常需要 `.*` 前缀。
+
+<Tip>
+  当你拥有规则时，在 GritQL 中用 `$filename` 直接编码文件范围。只有当规则来自外部规则包且你无法修改它时，才在 `harness.toml` 中使用 `[[exceptions]]`。
+</Tip>
+
+---
+
+## 8. 实用示例
+
+### 示例 1：Python 标记 `print` 调用
+
+**规则：** `python.no-print-debug`
+
+```grit
+language python
+`print($value)`
+```
+
+匹配 Python 源文件中的任意 `print(...)` 调用。无需 `where` 子句，因为 `language python` 指令已经把执行限制到 Python 文件。
+
+---
+
+### 示例 2：Go 标记未跟踪 goroutine
+
+**规则：** `go-concurrency.no-untracked-goroutine`
+
+```grit
+language go
+`go $call`
+```
+
+匹配 Go 源文件中的每个 goroutine 启动（`go someFunc(...)`）。`$call` 元变量会捕获函数调用，以便在诊断输出中显示。
+
+---
+
+### 示例 3：TypeScript 只在源文件中标记 `console.log`
+
+**规则：** `typescript.no-console-log`
+
+```grit
+language js
+`console.log($value)` where {
+  or {
+    $filename <: r".*\.ts",
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.js",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
+```
+
+显式文件扩展名可以防止 Grit parser 遇到非 JS/TS 文件时意外运行模式。`or` 块接受常见 TypeScript/JavaScript 扩展。
+
+---
+
+### 示例 4：Python 标记 `eval` 或 `exec`
+
+**规则：** `python.no-eval-exec`
+
+```grit
+language python
+or {
+  `eval($code)`,
+  `exec($code)`
+}
+```
+
+顶层 `or` 匹配 `eval(...)` 或 `exec(...)`。两个分支都使用 `$code` 元变量捕获参数，供诊断显示。
+
+---
+
+## 模式编写检查清单
+
+在 CI 中依赖新模式前：
+
+1. 在规则文件中写一个应该被模式匹配的 `## Bad` 示例。
+2. 运行 `harness-lint rule verify <rule-id>`，确认 Bad 示例会触发。
+3. 运行 `harness-lint check --all --rule <rule-id>`，审查项目中的所有匹配。
+4. 如果存在误报，用 `$filename` 条件或更具体的反引号表达式收窄模式。
+5. 运行 `harness-lint doctor`，确认 Grit CLI 接受编译后的模式。
+
+如果某个编码约束无法表达成可靠 GritQL 模式，不要为它创建 harness-lint 规则。把指导保留在代理说明、审查清单或项目文档中。

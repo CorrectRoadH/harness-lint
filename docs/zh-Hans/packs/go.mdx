@@ -1,0 +1,205 @@
+---
+title: "harness-lint Go 规则包：三个规则包说明"
+sidebarTitle: "Go"
+description: "三个 Go 规则包覆盖服务代码卫生、goroutine 和 context 生命周期管理，以及 Effective Go 编码模式。"
+---
+
+harness-lint 提供三个 Go 规则包。`go` 规则包覆盖服务层卫生。`go-concurrency` 规则包聚焦 goroutine 和 context 生命周期。`go-effective-go` 规则包执行官方 [Effective Go](https://go.dev/doc/effective_go) 指南中的模式。你可以按需组合安装。
+
+## go
+
+**Go Service Conventions**：面向 Go 服务代码卫生的 GritQL 规则。
+
+```sh
+harness-lint install go
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `go.no-context-todo` | Avoid context.TODO in application flow | 接收或派生显式 context，让取消和 deadline 保持可见 |
+| `go.no-fmt-print-debug` | Avoid fmt print debugging | 在服务代码中使用仓库 logger，而不是提交 `fmt.Print` 调试调用 |
+| `go.no-panic-flow` | Avoid panic in normal service flow | 在应用代码中返回或处理错误；把 `panic` 留给不可恢复的初始化失败 |
+| `go.no-process-exit-flow` | Avoid process exits in normal service flow | 把错误返回到应用边界，而不是调用 `log.Fatal` 或 `os.Exit` |
+
+### 规则示例
+
+#### no-context-todo
+
+`context.TODO()` 是一个占位符，不携带 deadline、取消信号或值。在服务代码中，这意味着下游调用永远无法取消，可能把慢依赖变成 goroutine 泄漏。
+
+<CodeGroup>
+```go Bad
+ctx := context.TODO()
+```
+
+```go Good
+ctx, cancel := context.WithTimeout(parentCtx, timeout)
+defer cancel()
+```
+</CodeGroup>
+
+#### no-fmt-print-debug
+
+`fmt.Println` 等调用直接写 stdout，没有日志级别、结构化字段，也无法在生产环境中抑制输出。使用仓库 logger，让输出一致且可配置。
+
+<CodeGroup>
+```go Bad
+fmt.Println(userID)
+```
+
+```go Good
+logger.Info("loaded user", "user_id", userID)
+```
+</CodeGroup>
+
+---
+
+## go-concurrency
+
+**Go Concurrency Hygiene**：面向 goroutine 生命周期、请求 context 流和可取消服务代码的规则。
+
+```sh
+harness-lint install go-concurrency
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `go-concurrency.no-untracked-goroutine` | Review untracked goroutines | 把 goroutine 绑定到 context、errgroup、worker pool 或显式生命周期所有者 |
+| `go-concurrency.no-background-context-flow` | Avoid context.Background in request flow | 使用调用方 context，让取消、deadline 和 tracing 沿调用链传播 |
+| `go-concurrency.no-time-after-loop` | Review time.After allocations | 在热循环中使用可复用 timer，避免 timer 分配和延迟清理堆积 |
+
+### 规则示例
+
+#### no-untracked-goroutine
+
+裸 `go someFunc()` 会创建没有所有者、没有取消、没有错误处理的 goroutine。如果它阻塞或 panic，就无法检测或恢复。把 goroutine 绑定到 `errgroup`、worker pool 或 context，让生命周期可追踪。
+
+<CodeGroup>
+```go Bad
+go sendEmail(user)
+```
+
+```go Good
+group.Go(func() error {
+    return sendEmail(ctx, user)
+})
+```
+</CodeGroup>
+
+#### no-background-context-flow
+
+`context.Background()` 不携带 deadline、取消信号或 trace span。在 request handler 内使用它，会切断与传入请求 context 的连接，导致下游调用可能比请求活得更久，trace 也会丢失父 span。
+
+<CodeGroup>
+```go Bad
+ctx := context.Background()
+```
+
+```go Good
+ctx := req.Context()
+```
+</CodeGroup>
+
+#### no-time-after-loop
+
+`time.After` 每次调用都会分配新的 timer channel。在紧密循环中，每个 timer channel 都会泄漏到 duration 到期才清理，内存消耗会随循环次数增长。请使用 `time.NewTimer` 并显式调用 `Stop()`。
+
+<CodeGroup>
+```go Bad
+func Wait(timeout time.Duration) error {
+    select {
+    case <-time.After(timeout):
+        return ErrTimeout
+    }
+}
+```
+
+```go Good
+func Wait(timeout time.Duration) error {
+    timer := time.NewTimer(timeout)
+    defer timer.Stop()
+
+    select {
+    case <-timer.C:
+        return ErrTimeout
+    }
+}
+```
+</CodeGroup>
+
+---
+
+## go-effective-go
+
+**Effective Go Inspired**：受 Effective Go 启发的规则，覆盖分配、控制流、显式错误、简单 API 和可读包行为。
+
+```sh
+harness-lint install go-effective-go
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `go-effective-go.no-else-after-return` | Omit else after return | guard clause return 后，让成功路径继续向下，而不是放在 else 中 |
+| `go-effective-go.no-blank-placeholder-assignment` | Remove blank identifier placeholders | 使用该值或删除占位；`_ = value` 表示未完成代码 |
+| `go-effective-go.no-empty-interface-api` | Avoid empty interface API boundaries | 优先使用具体类型、类型参数或窄接口，而不是 `interface{}` |
+| `go-effective-go.no-ignored-error-blank` | Do not discard call errors with blank identifiers | 检查调用返回的 error，而不是用 `_` 静默 |
+| `go-effective-go.no-init-flow` | Review init functions | 优先使用显式构造器和依赖设置，而不是隐藏包初始化 |
+| `go-effective-go.no-nil-nil-return` | Avoid nil nil returns | 返回 `(nil, nil)` 会让调用者既没有数据也没有解释 |
+| `go-effective-go.no-panic-flow` | Avoid panic in library flow | 对可恢复失败返回 error，而不是把 panic 暴露给调用者 |
+| `go-effective-go.no-new-channel-allocation` | Review new channel allocation | 确认 channel 容量和所有权是有意设计的 |
+| `go-effective-go.no-new-map-allocation` | Review new map allocation | 对已知大小的 map，优先使用带容量提示的 `make` |
+| `go-effective-go.no-new-slice-allocation` | Review new slice allocation | 对已知大小的 slice，优先使用带长度和容量提示的 `make` |
+| `go-effective-go.no-pointer-array-parameter` | Review pointer array parameters | 优先使用 slice 参数，而不是 pointer-to-array，让所有权更清楚 |
+| `go-effective-go.no-recursive-stringer-format` | Avoid recursive Stringer format | 在类型自己的 `String()` 方法中用 `%s` 或 `%v` 格式化自身会导致无限递归 |
+| `go-effective-go.no-redundant-delete-guard` | Remove redundant delete guards | 删除缺失的 map key 是 no-op，存在性检查是多余的 |
+| `go-effective-go.no-single-result-type-assertion` | Avoid single-result type assertions | 使用 comma-ok 形式，避免类型断言失败时 panic |
+
+### 规则示例
+
+#### no-else-after-return
+
+当 guard clause 已经提前 return，`else` 块在结构上是多余的。去掉它能让 happy path 保持在左边界，减少嵌套。
+
+<CodeGroup>
+```go Bad
+func Name(user *User) string {
+    if user == nil {
+        return "anonymous"
+    } else {
+        return user.Name
+    }
+}
+```
+
+```go Good
+func Name(user *User) string {
+    if user == nil {
+        return "anonymous"
+    }
+    return user.Name
+}
+```
+</CodeGroup>
+
+#### no-ignored-error-blank
+
+用 `_` 静默错误会隐藏调用失败原因，让调试显著更难。始终检查 error，即使处理只是记录日志并提前返回。
+
+<CodeGroup>
+```go Bad
+func IsDir(path string) bool {
+    info, _ := os.Stat(path)
+    return info.IsDir()
+}
+```
+
+```go Good
+func IsDir(path string) (bool, error) {
+    info, err := os.Stat(path)
+    if err != nil {
+        return false, err
+    }
+    return info.IsDir(), nil
+}
+```
+</CodeGroup>

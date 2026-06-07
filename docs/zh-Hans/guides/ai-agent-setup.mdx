@@ -1,0 +1,113 @@
+---
+title: "为 AI 编码代理和 LDD 工作流设置 harness-lint"
+sidebarTitle: "AI 代理设置"
+description: "配置 harness-lint，让 Codex、Claude 等 AI 代理在每次编码会话中自动执行并修复 lint 规则。"
+---
+
+AI 编码代理（Codex、Claude、Cursor 等）会遵循 `AGENTS.md` 和 `CLAUDE.md` 中的说明，但它们并不天然理解 harness-lint 的规则格式、CLI 命令或 Lint Driven Development (LDD) 工作流。本指南会带你把 harness-lint 接入代理环境，让代理正确创建规则、自动运行检查，并修复违规，而不是忽略或删除规则。
+
+## 目标
+
+正确为 AI 代理配置 harness-lint 后，每次编码会话都会获得自动执行能力：
+
+- 代理在每次代码变更后运行 `harness-lint check --changed`。
+- 当规则触发时，代理用 `harness-lint rule explain` 阅读规则，并修改代码以符合规则。
+- 当代理引入团队已经标记过的一类代码时，它会先把反馈转成 harness-lint 规则，再修复当前实例。
+
+你得到的是 LDD 飞轮：反馈 → 规则 → 执行 → 干净代码，无需人类反复解释同一条约束。
+
+## 安装 Codex skill
+
+Codex skill 会教代理 harness-lint 的规则格式、CLI 命令和完整 LDD 工作流。每个开发环境安装一次：
+
+```bash
+npx skills add CorrectRoadH/harness-lint
+```
+
+<Note>
+Codex skill 是可选的，但它能显著提高规则编写质量。没有它，代理仍然可以遵循 `AGENTS.md` 中的说明，但更不容易一次性写出格式良好的 GritQL 模式。
+</Note>
+
+安装后，代理的 skill set 会包含：
+
+- 有效规则文件的结构：frontmatter、GritQL 代码块、Bad/Good 示例。
+- TypeScript/JavaScript 规则什么时候使用 `language js`。
+- 如何用 `$filename` 编写按路径限制的规则。
+- 创建和验证规则的完整八步 LDD 工作流。
+
+## 添加 AGENTS.md 片段
+
+在项目根目录运行 `harness-lint init` 来初始化 `harness.toml`，并打印可粘贴进 `AGENTS.md` 或 `CLAUDE.md` 的代码块：
+
+```bash
+harness-lint init
+```
+
+复制打印出的代码块，它以 `<!--HARNESS LINT START-->` 开始，以 `<!--HARNESS LINT END-->` 结束，然后粘贴到项目的 `AGENTS.md` 或 `CLAUDE.md`。
+
+这个片段会指导代理遵循 LDD 工作流：
+
+1. 创建新规则前先检查 `harness-lint rule list`，避免重复。
+2. 判断反馈能否表达成可靠 GritQL，再决定是否创建规则。
+3. 运行 `harness-lint rule create` 脚手架生成规则文件。
+4. 补全描述和 Bad / Good 示例。
+5. 运行 `harness-lint doctor` 验证环境健康。
+6. 运行 `harness-lint rule verify <rule-id>`，确认 Bad 示例会触发。
+7. 运行 `harness-lint check --all --rule <rule-id>` 验证范围。
+8. 运行 `harness-lint check --changed`，确认规则能在上下文中加载并工作。
+
+它还会告诉代理遵循最佳实践：每条规则一个 GritQL 代码块、可读的 kebab-case ID、最小 Bad 示例，以及只有规则无歧义时才使用 `level: error`。
+
+## 用 INIT.md prompt 接入新仓库
+
+要在尚未配置 harness-lint 的仓库中快速初始化，可以把下面的 prompt 直接粘贴到 AI 代理对话中：
+
+```
+READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/INIT.md and install harness lint for this code repo
+```
+
+代理会获取 `INIT.md`。这个文件包含结构化接入 prompt，会指示代理：
+
+- 如果缺失，则安装 harness-lint 和 `grit`。
+- 运行 `harness-lint init` 创建 `harness.toml` 和本地规则目录。
+- 检测仓库使用的语言。
+- 搜索规则包目录，推荐要安装的相关规则包。
+- 扫描已有代码注释、`AGENTS.md` 和审查笔记，寻找可表达成本地规则的约束，并创建这些规则。
+
+代理完成 INIT.md 工作流后，你会得到一个可用的 harness-lint 设置，包括填好的 `harness.toml`、`rules/` 目录，以及可提交的 `harness.lock`。
+
+## 代理 LDD 工作流
+
+harness-lint 在代理环境中运行后，每当代理引入触发规则的代码，它会遵循这个工作流：
+
+1. **阅读规则。** 运行 `harness-lint rule explain <rule-id>`，显示完整规则：描述、GritQL 模式和 Bad / Good 示例。
+
+   ```bash
+   harness-lint rule explain local.no-context-todo
+   ```
+
+2. **修复代码，而不是修规则。** 如果规则正确，就修改代码直到检查通过。不要为了让 lint 通过而删除或削弱规则。
+
+3. **谨慎处理误报。** 如果规则命中了确实应该允许的代码，就收窄 GritQL 模式、改进描述，或优化 Bad / Good 示例。只有对代理不拥有的代码存在确认过的路径特定例外时，才在 `harness.toml` 中使用 `[[exceptions]]`。
+
+## 通过代理创建规则
+
+当用户告诉代理某件事不应该做时，代理应当：
+
+1. 运行 `harness-lint rule suggest "<feedback>"` 搜索是否已有规则覆盖这个问题：
+
+   ```bash
+   harness-lint rule suggest "avoid using context.TODO in Go"
+   ```
+
+   如果已有匹配的规则包规则，命令会打印安装命令。应安装规则包，而不是在本地重复创建。
+
+2. 如果没有匹配规则，且反馈可以表达成 GritQL，则运行 `harness-lint rule create`：
+
+   ```bash
+   harness-lint rule create "Do not use context.TODO" --language go --grit '`context.TODO()`'
+   ```
+
+3. 编辑生成的文件，用 `harness-lint rule verify` 验证，并运行 `harness-lint check --all --rule <rule-id>` 确认范围后再提交。
+
+代理绝不应该为需要理解意图或跨文件上下文的反馈创建规则。如果模式无法表达成可靠 GritQL，它就应该作为普通指导放在 `AGENTS.md` 中，而不是成为 harness-lint 规则。

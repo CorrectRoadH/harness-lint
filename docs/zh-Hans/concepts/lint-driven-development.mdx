@@ -1,0 +1,71 @@
+---
+title: "Lint Driven Development：面向 AI 代理的持久规则"
+sidebarTitle: "LDD"
+description: "了解 Lint Driven Development 如何把一次性的 AI 反馈转成永久、机器可执行的规则，让代码库保持一致。"
+---
+
+## 问题：AI 代理会忘
+
+现代 AI 编码代理（Codex、Claude、Cursor 等）很擅长生成代码，但它们有一个根本的记忆问题。当你告诉代理不要做某件事（“生产代码不要用 `console.log`”、“goroutine 必须绑定到 context”）时，它会修复当前实例，然后很快忘记这条约束。下一个文件又犯同样的错。你再次纠正，循环无限重复。
+
+把说明写进 `AGENTS.md` 有帮助，但代理并不总是可靠地读取或应用自然语言指导。一段说明只是建议，代理可以忽略，也确实会忽略。代码审查清单也有同样问题：它们让你变慢，却不能保证正确性。
+
+根因很简单：口头和书面说明依赖代理的记忆。机器强制执行的规则不依赖记忆。
+
+## LDD 工作流
+
+**Lint Driven Development** 会在你识别出问题的那一刻，把一次性反馈转成 GritQL lint 规则，从而打断循环。从此以后，`harness-lint check` 自动执行这条约束。代理必须修复代码让 lint 通过；它不能“忘记”一条规则，就像不能忘记一个失败的测试。
+
+<Steps>
+  <Step title="代理生成违反标准的代码">
+    你的 AI 代理生成了破坏团队约定的代码。例如，在 TypeScript 文件中调用 `console.log`，而不是使用结构化 logger。
+  </Step>
+  <Step title="运行 `harness-lint rule create` 捕获约束">
+    不只是修复当前实例，而是把反馈转成永久 GritQL 规则：
+
+    ```sh
+    harness-lint rule create "Avoid committed console.log" \
+      --language typescript \
+      --grit '`console.log($value)`'
+    ```
+
+    harness-lint 会把规则文件写入本地 `rules/` 目录，并在 `harness.toml` 中注册它。
+  </Step>
+  <Step title="运行 `harness-lint check`，报告违规">
+    对当前代码库运行 linter。它会找到所有仍然违反新规则的文件，并用文件路径、行号和规则 ID 报告每次出现。
+
+    ```sh
+    harness-lint check --all --rule local.no-console-log
+    ```
+  </Step>
+  <Step title="代理修复代码直到 lint 通过">
+    你或代理修复被标记的代码。代理不需要记住规则，只需要让 `harness-lint check` 干净退出。Lint 输出是精确、明确的信号，会迫使行为正确。
+  </Step>
+  <Step title="规则对未来所有变更保持启用">
+    规则文件和代码一起进入版本控制。未来每个 PR、每个代理会话、每次 `harness-lint check --changed` 都会自动执行同一条约束。无需提醒，也无需重复解释。
+  </Step>
+</Steps>
+
+## 为什么 LDD 比文档或注释更有效
+
+| 方式 | 依赖记忆？ | 机器强制执行？ | 跨代理会话保留？ |
+|---|---|---|---|
+| AGENTS.md / 审查笔记 | ✅ 是 | ❌ 否 | ❌ 否 |
+| 代码注释 | ✅ 是 | ❌ 否 | ❌ 否 |
+| ESLint / 现有 linter | ❌ 否 | ✅ 是 | ✅ 是 |
+| **harness-lint 规则** | ❌ 否 | ✅ 是 | ✅ 是 |
+
+harness-lint 规则是嵌入 GritQL 模式的 Markdown 文件。它们具备：
+
+- **人类可读**：规则文件解释为什么某种模式被禁止，而不仅仅是禁止什么。当代理运行 `harness-lint rule explain local.no-console-log` 时，它会读到完整理由和示例。
+- **机器强制执行**：GritQL 匹配 AST 级代码模式，而不是文本。代理无法通过表面改写绕过规则。
+- **版本控制**：规则随仓库一起流转。新贡献者和新的代理会话会自动继承所有约束。
+- **可组合**：你可以从目录安装共享规则包来覆盖通用模式，也可以为项目特定约束编写本地规则。
+
+## 指导原则
+
+不是每条反馈都适合成为 harness-lint 规则。运行 `rule create` 之前，先问一句：**这条约束能否表达成可靠的 GritQL 模式？**
+
+如果可以，就创建规则。如果不可以，就把指导保留在 `AGENTS.md`、审查笔记或项目文档里。把模糊反馈硬塞进 GritQL 会产生误报，削弱大家对 linter 的信任，也让代理更可能禁用或绕过它。
+
+一条运行稳定、能抓到真实违规的规则，比一条制造噪音的规则有价值得多。

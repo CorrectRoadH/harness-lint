@@ -1,0 +1,139 @@
+---
+title: "用于 harness-lint 的 TypeScript 和 React 规则包"
+sidebarTitle: "TypeScript"
+description: "typescript 和 typescript-react 规则包为 TypeScript/JavaScript 代码质量和 React 组件最佳实践提供 GritQL 规则。"
+---
+
+harness-lint 为 TypeScript 代码库提供两个规则包。`typescript` 规则包覆盖通用 TypeScript 和 JavaScript 卫生问题。`typescript-react` 规则包增加 React 组件模式规则；它设计为与 `typescript` 搭配使用，而不是替代它。
+
+## typescript
+
+**TypeScript Application Conventions**：面向 TypeScript 和 JavaScript 应用代码的 GritQL 规则。
+
+```sh
+harness-lint install typescript
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `typescript.no-console-log` | Avoid committed console.log | 使用仓库 logging 或 telemetry，而不是提交 `console.log` 调用 |
+| `typescript.no-debugger` | Avoid committed debugger statements | 提交应用代码前移除 `debugger` 语句 |
+| `typescript.no-explicit-any` | Avoid explicit any | 优先使用 `unknown`、泛型、可辨识联合或领域类型，而不是 `any` |
+| `typescript.no-var` | Avoid var declarations | 默认使用 `const`，需要重新赋值时使用 `let` |
+
+### 规则示例
+
+#### no-console-log
+
+使用仓库的结构化 logger 替代 `console.log`，让日志输出一致、可过滤，也不会意外提交调试输出。
+
+<CodeGroup>
+```ts Bad
+console.log(user)
+```
+
+```ts Good
+logger.info({ userId: user.id }, "loaded user")
+```
+</CodeGroup>
+
+#### no-explicit-any
+
+`any` 会关闭被标注值以及所有流经它的数据的类型检查。优先使用具体领域类型、`unknown` 或泛型，让编译器继续帮你。
+
+<CodeGroup>
+```ts Bad
+function serialize(value: any) {
+  return JSON.stringify(value)
+}
+```
+
+```ts Good
+function serialize(value: UserEvent) {
+  return JSON.stringify(value)
+}
+```
+</CodeGroup>
+
+#### no-var
+
+`var` 具有函数作用域和提升行为，容易让读者意外。永不变化的值使用 `const`，只有需要重新赋值时使用 `let`。
+
+<CodeGroup>
+```ts Bad
+var total = 0
+```
+
+```ts Good
+let total = 0
+```
+</CodeGroup>
+
+---
+
+## typescript-react
+
+**TypeScript React**：面向使用 TypeScript 且追求可预测组件生命周期的 React 代码库的规则。
+
+```sh
+harness-lint install typescript-react
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `typescript-react.no-async-use-effect` | Avoid async useEffect callbacks | 保持 effect callback 同步，并在内部处理取消 |
+| `typescript-react.no-children-prop` | Avoid passing children as a prop | 把 children 嵌套在 JSX 标签之间，让组件所有权保持可见 |
+| `typescript-react.no-clone-element` | Review cloneElement usage | 优先使用显式 props、render props 或 context，而不是克隆元素 |
+| `typescript-react.no-dangerous-html` | Review dangerous HTML rendering | 除非内容有可信 sanitizer 和所有权边界，否则避免直接注入 HTML |
+| `typescript-react.no-default-props` | Avoid defaultProps on function components | 使用默认参数值，让 TypeScript 能看到默认行为 |
+| `typescript-react.no-find-dom-node` | Avoid findDOMNode | 使用显式 refs，而不是从组件实例查询 DOM 节点 |
+| `typescript-react.no-index-key` | Avoid array index keys | 使用稳定领域 ID 作为 React key，避免重排混淆组件状态 |
+| `typescript-react.no-string-ref` | Avoid string refs | 使用 callback refs 或 `useRef`，让 ref 所有权明确 |
+
+### 规则示例
+
+#### no-async-use-effect
+
+把 `async` 函数直接传给 `useEffect` 会让 effect 返回一个 `Promise`，而不是 cleanup 函数。React 会静默忽略返回的 promise，这意味着 cleanup 时无法取消异步工作。
+
+<CodeGroup>
+```tsx Bad
+useEffect(async () => {
+  await loadUser()
+}, [])
+```
+
+```tsx Good
+useEffect(() => {
+  void loadUser()
+}, [])
+```
+</CodeGroup>
+
+#### no-index-key
+
+使用数组下标作为 `key` 时，React 无法区分一个元素被删除还是被重排。这会导致陈旧状态和视觉问题。请使用领域数据中的稳定唯一 ID。
+
+<CodeGroup>
+```tsx Bad
+items.map((item, index) => <Row key={index} item={item} />)
+```
+
+```tsx Good
+items.map((item) => <Row key={item.id} item={item} />)
+```
+</CodeGroup>
+
+#### no-dangerous-html
+
+`dangerouslySetInnerHTML` 会把原始 HTML 直接注入 DOM。没有 sanitizer 时，这会打开 XSS 攻击面。优先使用从结构化数据渲染安全标记的组件。
+
+<CodeGroup>
+```tsx Bad
+<article dangerouslySetInnerHTML={{ __html: body }} />
+```
+
+```tsx Good
+<Markdown content={body} />
+```
+</CodeGroup>

@@ -1,0 +1,115 @@
+---
+title: "五分钟内开始使用 harness-lint"
+sidebarTitle: "快速开始"
+description: "安装 harness-lint 及其 GritQL 引擎，初始化项目，添加规则包，并在五分钟内运行第一次 lint 检查。"
+---
+
+本指南会带你安装 harness-lint、设置项目并运行第一次 GritQL lint 检查。完成后，你会拥有一份可用配置，以及一个能在仓库中执行编码标准的规则包。
+
+<Steps>
+  <Step title="安装依赖">
+    harness-lint 依赖 `grit` CLI 作为 GritQL 引擎。通过 Homebrew 安装这两个工具：
+
+    <CodeGroup>
+      ```sh Install grit
+      brew install getgrit/tap/grit
+      ```
+
+      ```sh Install harness-lint
+      brew install CorrectRoadH/tap/harness-lint
+      ```
+    </CodeGroup>
+
+    确认两个工具都可用：
+
+    ```sh
+    grit --version
+    harness-lint --version
+    ```
+  </Step>
+
+  <Step title="初始化仓库">
+    在项目根目录运行 `harness-lint init`。它会创建 `harness.toml`（项目配置文件）和 `rules/` 目录（本地规则所在位置）。它还会打印 AI 代理可以遵循的说明，让代理能代表你创建和运行规则。
+
+    ```sh
+    harness-lint init
+    ```
+
+    初始化后，运行 `harness-lint doctor`，确认配置、规则、`grit` 二进制和 git 集成都正常：
+
+    ```sh
+    harness-lint doctor
+    ```
+
+    <Note>
+      把 `harness.toml`、`rules/` 和 `harness.lock` 提交到仓库，这样每个开发者和 CI job 都会运行同样的规则。把 `.harness/` 加入 `.gitignore`，它包含生成的工作文件和本地锁状态，不应该进入版本控制。
+    </Note>
+  </Step>
+
+  <Step title="安装规则包">
+    规则包是面向特定语言或框架的精选 GritQL 规则集合。安装与你项目主要语言匹配的规则包：
+
+    ```sh
+    # TypeScript / JavaScript
+    harness-lint install typescript
+
+    # Python
+    harness-lint install python
+
+    # Go
+    harness-lint install go
+    ```
+
+    harness-lint 会获取规则包，把版本固定到 `harness.lock`，并把规则包引用写入 `harness.toml`。列出所有可用规则包：
+
+    ```sh
+    harness-lint list --available
+    ```
+
+    <Tip>
+      安装配套的 Codex AI skill，让代理学会自动创建规则、运行检查并修复 lint 失败：
+
+      ```sh
+      npx skills add CorrectRoadH/harness-lint
+      ```
+    </Tip>
+  </Step>
+
+  <Step title="运行第一次检查">
+    只检查相对 `origin/main` 变更过的文件。这是最快的模式，也最适合日常开发：
+
+    ```sh
+    harness-lint check --changed
+    ```
+
+    如果要一次扫描整个项目，使用 `--all`：
+
+    ```sh
+    harness-lint check --all
+    ```
+
+    你也可以用 `--rule` 缩小到单条规则，或用 `--base` 指定基准分支：
+
+    ```sh
+    harness-lint check --changed --rule typescript.no-console-log
+    harness-lint check --changed --base origin/develop
+    ```
+  </Step>
+
+  <Step title="查看结果">
+    harness-lint 每个违规打印一条诊断，格式如下：
+
+    ```
+    src/api/client.ts:42:5  warn  typescript.no-console-log  Avoid console.log in production code
+    src/utils/helpers.ts:17:3  error  typescript.no-explicit-any  Avoid explicit `any` type annotations
+    ```
+
+    每一行包含：
+    - **文件路径** 和违规所在的 **行:列**
+    - **严重级别**：`warn` 报告问题；`error` 会让 `harness-lint check` 以非零状态退出，从而让 CI 失败
+    - **规则 ID**：用它可以运行 `harness-lint rule explain <rule-id>` 查看规则
+    - **消息**：来自规则标题的简短说明
+
+    在编辑器中修复被标记的行，然后重新运行 `harness-lint check --changed` 确认检查通过。
+  </Step>
+</Steps>

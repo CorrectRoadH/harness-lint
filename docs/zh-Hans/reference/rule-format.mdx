@@ -1,0 +1,202 @@
+---
+title: "harness-lint 规则文件格式：Frontmatter 和 GritQL"
+sidebarTitle: "规则格式"
+description: "Markdown 规则文件格式参考：YAML frontmatter 字段、GritQL fenced code block，以及 Bad 和 Good 示例 section。"
+---
+
+每条 harness-lint 规则都是一个 Markdown 文件。文件组合了用于元数据的 YAML frontmatter、定义模式的 GritQL fenced code block，以及用于文档化和验证规则的可选 `## Bad` / `## Good` section。
+
+规则文件位于 `harness.toml` 中 `[rules] local` 列出的目录（默认是 `rules/`）。你可以手写，也可以用 `harness-lint rule create` 创建。
+
+---
+
+## YAML Frontmatter
+
+frontmatter 块位于文件最顶部的 `---` 分隔符之间。
+
+<ParamField query="id" type="string" required>
+  唯一规则标识符，格式为 `<pack>.<slug>`。pack 片段把相关规则分组，并会出现在 `harness-lint check` 输出、`[overrides]` 和 `[disabled]` 条目中。
+
+  - 本地规则使用 `local` 包：`local.no-print-debug`
+  - 规则包规则使用包名：`typescript.no-console-log`
+
+  slug 部分只使用小写字母、数字和连字符。
+
+  ```yaml
+  id: local.no-print-debug
+  ```
+</ParamField>
+
+<ParamField query="title" type="string" required>
+  简短的人类可读描述，说明规则执行什么。会显示在 `harness-lint rule list` 和 `harness-lint rule explain` 中。
+
+  ```yaml
+  title: Avoid print debugging
+  ```
+</ParamField>
+
+<ParamField query="language" type="string">
+  规则面向的语言。存在时，harness-lint 只会在扩展名匹配该语言的文件上评估规则。省略时，GritQL 代码块自身的 `language` 指令仍然控制模式解析哪些文件，但 harness-lint 不会按扩展名预过滤。
+
+  使用 Grit CLI 接受的同一组语言名：`js`（TypeScript 和 JavaScript）、`python`、`go`、`rust`、`ruby`、`java`、`css`、`yaml`、`json`、`markdown`、`hcl`、`sql`、`php`。
+
+  ```yaml
+  language: python
+  ```
+</ParamField>
+
+<ParamField query="level" type="string" required>
+  匹配的默认严重级别。接受值：`warn` 和 `error`。
+
+  - `warn`：报告诊断，但不导致 `harness-lint check` 非零退出。
+  - `error`：报告诊断，**并且**导致 `harness-lint check` 失败。
+
+  你可以在 `harness.toml` 的 `[overrides]` 中按项目覆盖规则级别。
+
+  ```yaml
+  level: warn
+  ```
+</ParamField>
+
+<ParamField query="skill" type="string">
+  当这条规则报告违规时，要触发的 Codex skill 名称。AI 代理集成可用它自动调用合适的 skill 来修复。可选。
+
+  ```yaml
+  skill: tdd
+  ```
+</ParamField>
+
+<ParamField query="tags" type="array of strings">
+  自由字符串标签数组。标签让你可以在检查时用 `harness-lint check --tag <tag>` 过滤规则。用标签按主题（例如 `security`、`logging`、`concurrency`）、语言或团队分组规则。
+
+  ```yaml
+  tags: [local, python, logging]
+  ```
+</ParamField>
+
+---
+
+## GritQL Fenced Code Block
+
+规则文件必须包含**恰好一个**可执行 GritQL fenced code block，并标记为 `grit`。
+
+````markdown
+```grit
+language python
+`print($value)`
+```
+````
+
+**要求：**
+
+- 代码块必须以单独一行的 `language <name>` 指令开始。这个指令告诉 Grit CLI 使用哪个 parser。
+- 代码块必须包含至少一个真实模式表达式。空代码块、只包含注释的代码块、只包含 `TODO` 行的代码块，都会被 `harness-lint doctor` 和 `harness-lint rule verify` 拒绝。
+- 每个规则文件必须恰好有一个 `grit` 代码块。多个代码块是错误。
+
+**TypeScript / JavaScript 规则：** 即使 frontmatter 写的是 `language: typescript`，GritQL 代码块也要写 `language js`。`js` 语言名覆盖 TypeScript 和 JavaScript 源文件。只有当你明确需要 TypeScript parser 变体时，才使用 `language js(typescript)`，例如匹配纯 JavaScript 中非法的语法。
+
+**按文件限制规则：** 如果模式只应应用于特定文件路径，请在 GritQL 代码块中用 `$filename` 元变量编码范围，而不是依赖单独路径配置。参见 [GritQL 模式](/zh-Hans/reference/gritql-patterns) 参考中的示例。
+
+---
+
+## \#\# Bad Section
+
+`## Bad` section 包含一个 fenced code block，展示**应该触发规则**的代码。harness-lint 在 `harness-lint rule verify` 中使用这个 section，确认 GritQL 模式确实匹配示例。
+
+````markdown
+## Bad
+
+```python
+print(user_id)
+```
+````
+
+**`rule verify` 的要求：**
+
+- 在运行 `harness-lint rule verify` 前，Bad section 必须存在。
+- 代码必须包含至少一行非空、非 TODO 的内容。
+- GritQL 模式必须对示例产生至少一个匹配。如果没有，`verify` 会失败，并提示你调整模式或示例。
+
+`## Bad` 中的 fenced code block 应使用与 `language` frontmatter 字段相同的语言标识符。
+
+---
+
+## \#\# Good Section
+
+`## Good` section 包含一个 fenced code block，展示 `## Bad` 中被标记模式的**推荐替代写法**。harness-lint 不会自动验证 Good 示例，但它会出现在 `harness-lint rule explain` 输出中，也会被想理解如何修复违规的 AI 代理和开发者阅读。
+
+````markdown
+## Good
+
+```python
+logger.info("loaded user %s", user_id)
+```
+````
+
+把 Good 示例写成现实、完整的替代方案，而不是简单删除坏代码。替代写法应该清楚展示推荐模式。
+
+---
+
+## 完整带注释规则文件
+
+````markdown
+---
+id: local.no-print-debug
+title: Avoid print debugging
+language: python
+level: warn
+skill: tdd
+tags: [local, python, logging]
+---
+
+# Avoid print debugging
+
+Use repository logging or structured diagnostics instead of committed
+`print` calls. `print` is useful for quick exploration but should not
+be committed to shared branches.
+
+```grit
+language python
+`print($value)`
+```
+
+## Bad
+
+```python
+print(user_id)
+```
+
+## Good
+
+```python
+logger.info("loaded user %s", user_id)
+```
+````
+
+---
+
+## 规则命名约定
+
+| 约定 | 示例 |
+|---|---|
+| 本地规则包前缀 | `local.` |
+| 已安装规则包前缀 | `typescript.`、`python.`、`go-concurrency.` |
+| Slug 使用小写和连字符 | `no-print-debug`、`no-console-log` |
+| 标题使用 sentence case | `Avoid print debugging` |
+| 级别默认 `warn`，在 `[overrides]` 中升级 | — |
+
+---
+
+## 验证命令
+
+写入或编辑规则文件后，运行这两个命令确认它正确：
+
+```sh
+# Confirm the GritQL parses and Bad examples trigger matches
+harness-lint rule verify local.no-print-debug
+
+# Run the rule against the full project and review results
+harness-lint check --all --rule local.no-print-debug
+```
+
+如果 `verify` 通过，但 `check --all` 没有报告匹配，GritQL 模式可能太窄，或 `$filename` 范围排除了你预期的文件。调整模式后重新运行。

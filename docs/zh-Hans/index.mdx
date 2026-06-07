@@ -1,0 +1,74 @@
+---
+title: "harness-lint：面向 AI 代码库的 Lint Driven Development"
+sidebarTitle: "首页"
+description: "harness-lint 把反馈转成 AI 代理无法忽略的 GritQL lint 规则，从而在 AI 辅助项目中持续执行你的编码标准。"
+---
+
+AI 编码代理很强，但它们会忘。你纠正同一个错误，更新 `AGENTS.md`，下一次会话它又犯一次。harness-lint 用 **Lint Driven Development (LDD)** 解决这个问题：每当你告诉 AI 什么不该做，就把这条反馈沉淀成一条 lint 规则。从此以后，一个快速、严格的 GritQL 检查会自动执行你的标准。代理可以忽略 Markdown 注释，却不能忽略失败的 lint 检查。
+
+<CardGroup cols={2}>
+  <Card title="介绍" icon="book-open" href="/zh-Hans/introduction">
+    了解 harness-lint 是什么，以及 Lint Driven Development 如何工作。
+  </Card>
+  <Card title="快速开始" icon="rocket" href="/zh-Hans/quickstart">
+    在几分钟内运行你的第一次 lint 检查。
+  </Card>
+  <Card title="编写规则" icon="pen-to-square" href="/zh-Hans/guides/writing-rules">
+    创建适合项目约定的自定义规则。
+  </Card>
+  <Card title="规则包" icon="box-open" href="/zh-Hans/packs/overview">
+    浏览面向常见语言的预置规则包。
+  </Card>
+</CardGroup>
+
+## 开始使用
+
+<Steps>
+  <Step title="安装 harness-lint">
+    通过 Homebrew 安装 GritQL 引擎和 harness-lint：
+
+    ```sh
+    brew install getgrit/tap/grit
+    brew install CorrectRoadH/tap/harness-lint
+    ```
+  </Step>
+  <Step title="初始化仓库">
+    在项目根目录运行 `harness-lint init`，创建 `harness.toml` 和 `rules/` 目录：
+
+    ```sh
+    harness-lint init
+    ```
+  </Step>
+  <Step title="安装规则包或创建本地规则">
+    你可以为当前语言安装一个精选规则包，也可以从反馈脚手架生成自己的规则：
+
+    ```sh
+    # 安装规则包
+    harness-lint install typescript
+
+    # 或创建本地规则
+    harness-lint rule create "Avoid print debugging" --language python --grit '`print($value)`'
+    ```
+  </Step>
+  <Step title="运行第一次检查">
+    只检查相对 `origin/main` 变更过的文件。这个模式快速、聚焦，也适合 CI：
+
+    ```sh
+    harness-lint check --changed
+    ```
+  </Step>
+</Steps>
+
+## 为什么使用 harness-lint
+
+<CardGroup cols={3}>
+  <Card title="Lint Driven Development" icon="rotate">
+    把反复出现的 AI 反馈转成永久 lint 规则。错误一旦变成规则，任何代理再次引入它都会让检查失败。
+  </Card>
+  <Card title="规则可读" icon="file-lines">
+    规则是带有嵌入式 GritQL 的 Markdown 文件。你可以在任何编辑器中阅读、审查和修改它们，而不是面对不透明的配置格式。
+  </Card>
+  <Card title="Git 感知检查" icon="code-branch">
+    用 `--changed` 只检查基准分支以来修改过的文件，或用 `--staged` 做 pre-commit hook。即使在大型仓库中，检查也能保持快速。
+  </Card>
+</CardGroup>

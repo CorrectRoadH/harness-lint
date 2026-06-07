@@ -1,0 +1,114 @@
+---
+title: "harness-lint macOS 和 Linux 安装指南"
+sidebarTitle: "安装"
+description: "通过 Homebrew 安装 harness-lint 及其 GritQL 依赖，用 doctor 命令验证安装，并初始化你的第一个项目。"
+---
+
+harness-lint 通过 Homebrew 分发，并依赖 `grit` CLI。按照下面的步骤安装两个工具、验证环境，并初始化你的第一个项目。
+
+<Warning>
+  运行 `harness-lint check` 前必须先安装 `grit` CLI。没有它，harness-lint 无法执行 GritQL 模式，check 命令会失败。请先按下面的步骤安装 `grit`。
+</Warning>
+
+<Steps>
+  <Step title="安装 grit（GritQL 引擎）">
+    harness-lint 把所有模式匹配都委托给 `grit` 二进制。通过官方 Homebrew tap 安装：
+
+    ```sh
+    brew install getgrit/tap/grit
+    ```
+
+    确认 `grit` 可用：
+
+    ```sh
+    grit --version
+    ```
+  </Step>
+
+  <Step title="安装 harness-lint">
+    从 harness-lint 的 Homebrew tap 安装：
+
+    ```sh
+    brew install CorrectRoadH/tap/harness-lint
+    ```
+
+    确认安装成功：
+
+    ```sh
+    harness-lint --version
+    ```
+  </Step>
+
+  <Step title="验证安装">
+    运行 `harness-lint doctor`，检查 `grit` 二进制、git 集成以及已有项目配置是否健康：
+
+    ```sh
+    harness-lint doctor
+    ```
+
+    `doctor` 会为每项检查打印状态行：`[ok]`、`[warn]` 或 `[error]`。检查项包括：
+
+    - **project-root**：是否找到 `harness.toml`
+    - **config**：`harness.toml` 是否能成功解析
+    - **local-rules**：本地规则目录是否存在，且所有规则都包含可执行 GritQL
+    - **grit**：`grit` 二进制是否已安装并能响应 `--version`
+    - **git**：是否位于 git worktree 中（`--changed` 和 `--staged` 检查需要）
+
+    运行检查前，先修复所有 `[error]` 项。
+  </Step>
+
+  <Step title="安装 Codex AI skill（可选）">
+    Codex skill 会教你的 AI 代理如何创建 harness-lint 规则、运行检查并修复 lint 失败。你不需要每次都重新解释工作流。
+
+    ```sh
+    npx skills add CorrectRoadH/harness-lint
+    ```
+
+    安装后，代理会理解诸如“为这个反馈创建一条 harness-lint 规则”这样的指令，并知道在修改代码后运行 `harness-lint check --changed`。
+  </Step>
+
+  <Step title="初始化项目">
+    在项目根目录运行一次 `harness-lint init`，生成配置和规则脚手架：
+
+    ```sh
+    harness-lint init
+    ```
+
+    这个命令会创建：
+
+    - **`harness.toml`**：项目配置文件，控制安装了哪些规则包、本地规则在哪里、哪些文件被忽略，以及如何应用严重级别。
+    - **`rules/`**：本地项目规则的默认目录。在这里添加自己的 `.md` 规则文件。
+
+    `init` 之后，harness-lint 还会打印 AI 代理说明，描述如何创建规则、运行检查并解释结果。如果你希望代理自主管理 lint 规则，可以把这些说明复制到 `AGENTS.md` 或 `CLAUDE.md`。
+
+    如果目录里已经有 `harness.toml`，并且你想重新初始化，使用 `--force`：
+
+    ```sh
+    harness-lint init --force
+    ```
+  </Step>
+</Steps>
+
+## 需要提交什么，忽略什么
+
+把下面的条目加入 **`.gitignore`**：
+
+```
+.harness/
+```
+
+`.harness/` 目录保存生成的 GritQL 工作文件、运行锁和本地规则包缓存。它会在每次 `check` 运行时自动重建，不应该进入版本控制。
+
+提交下面这些文件，让每个开发者和 CI job 都使用相同规则集：
+
+| 文件 / 目录 | 作用 |
+|---|---|
+| `harness.toml` | 项目配置：规则包、覆盖项、忽略路径 |
+| `rules/` | 团队编写的本地项目规则 |
+| `harness.lock` | 固定的规则包版本，确保安装可复现 |
+
+克隆已有 `harness.toml` 和 `harness.lock` 的仓库后，用下面的命令恢复固定的规则包：
+
+```sh
+harness-lint restore
+```

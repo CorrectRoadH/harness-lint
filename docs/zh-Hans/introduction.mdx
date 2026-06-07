@@ -1,0 +1,62 @@
+---
+title: "harness-lint：面向 AI 编码代理的 Lint Driven Development"
+sidebarTitle: "介绍"
+description: "了解 harness-lint 如何用 GritQL 支持的 Markdown 规则执行编码标准，让 AI 代理每次都可靠遵守。"
+---
+
+## 问题：代理会忘
+
+你花时间纠正 AI 编码代理的输出。你把说明写进 `AGENTS.md`，也写进 `CLAUDE.md`。下一次会话，代理还是做了同样的事。
+
+自然语言说明写得再清楚，也在代理的反馈回路之外。代理会在会话开始时读取它们，但在生成代码的过程中，环境里没有东西持续提醒它遵守这些说明。上下文变长或会话重启后，这些说明就会逐渐淡出。
+
+结果就是：你不断重复自己，代理不断重复错误，代码库开始漂移。
+
+## 解决方案：Lint Driven Development
+
+**Lint Driven Development (LDD)** 把反复出现的 AI 反馈当作反复出现的 bug 来处理：修一次，然后让它不可能再次引入。
+
+当代理做了你不想要的事时，你可以：
+
+1. 把约束表达成 GritQL 模式，也就是一个快速的结构化代码匹配。
+2. 把它封装成 harness-lint 规则，也就是代理能阅读和理解的 Markdown 文件。
+3. 在工作流里运行 `harness-lint check`。
+
+现在，只要检查失败，代理就不能把任务标记为完成。它不能依赖记忆，而必须修改代码直到 lint 通过。约束从你的脑子里进入了构建流程。
+
+## harness-lint 如何工作
+
+harness-lint 是一个用 Rust 编写的 CLI 工具。它的核心做三件事：
+
+**规则是嵌入 GritQL 的 Markdown 文件。** 一个规则文件包含 frontmatter 区块（规则 ID、标题、语言、严重级别）、普通英文描述，以及一个带有匹配模式的 `grit` 代码块。随后是 Bad 和 Good 示例，让规则同时面向人类和代理自解释。
+
+**`check` 命令通过 `grit` CLI 运行 GritQL。** 当你运行 `harness-lint check` 时，harness-lint 会把所有启用的规则编译成 GritQL 模式，并交给 `grit` 二进制执行结构化匹配。结果会以诊断形式返回，包括规则 ID、文件路径、行号和严重级别（`warn` 或 `error`）。`error` 级别的违规会让命令以非零状态退出，从而让检查失败。
+
+**`harness.toml` 控制一切。** 你的配置文件声明要加载哪些本地规则目录、安装了哪些规则包、哪些规则被覆盖或禁用，以及哪些路径需要忽略。`check` 命令每次运行都会读取这个配置，所以你的团队和仓库里的每个代理都使用同一套规则。
+
+## harness-lint 规则有什么不同
+
+传统 lint 规则通常是写给编译器和工具看的，格式对非专家不透明。harness-lint 规则是为代码库里的开发者和代理阅读而设计的：
+
+- **人类可读。** 每条规则都是 Markdown 文档。描述解释的是模式为什么有问题，而不只是说它有问题。任何开发者都能打开规则文件、理解规则并提出改进。
+- **AI 友好。** 规则格式刻意结构化，方便 AI 代理读懂规则、理解意图，并知道怎样修改才能让检查通过。当代理看到 lint 失败时，它会看到规则 ID、违规行；如果读取规则文件，还能看到应该遵循的 Good 示例。
+- **适合 vibe coding 工作流。** harness-lint 能融入 AI 辅助开发循环：`--changed` 只检查修改过的文件，`--staged` 可用于 pre-commit hook，`rule create` 能直接从你的反馈字符串脚手架生成新规则。
+
+## 规则包
+
+你不需要自己写所有规则。harness-lint 有一个精选 **规则包** 目录，里面是面向热门语言和框架的 GritQL 规则集合。安装规则包只需要一个命令：
+
+```sh
+harness-lint install typescript
+```
+
+规则包会被固定在 `harness.lock` 中，所以 CI 始终运行与你的队友在本地测试过的相同规则版本。使用 `harness-lint outdated` 检查更新，用 `harness-lint update` 拉取更新。
+
+<CardGroup cols={2}>
+  <Card title="快速开始" icon="rocket" href="/zh-Hans/quickstart">
+    在五分钟内安装 harness-lint 并运行第一次检查。
+  </Card>
+  <Card title="Lint Driven Development" icon="lightbulb" href="/zh-Hans/concepts/lint-driven-development">
+    深入了解 LDD 工作流，以及什么时候该创建规则，什么时候该把指导保留在文档里。
+  </Card>
+</CardGroup>

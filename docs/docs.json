@@ -19,59 +19,126 @@
     }
   },
   "navigation": {
-    "tabs": [
+    "languages": [
       {
-        "tab": "Documentation",
-        "groups": [
+        "language": "en",
+        "default": true,
+        "tabs": [
           {
-            "group": "Get Started",
-            "pages": [
-              "introduction",
-              "quickstart",
-              "installation"
+            "tab": "Documentation",
+            "groups": [
+              {
+                "group": "Get Started",
+                "pages": [
+                  "introduction",
+                  "quickstart",
+                  "installation"
+                ]
+              },
+              {
+                "group": "Core Concepts",
+                "pages": [
+                  "concepts/lint-driven-development",
+                  "concepts/rules",
+                  "concepts/rule-packs",
+                  "concepts/configuration"
+                ]
+              },
+              {
+                "group": "Guides",
+                "pages": [
+                  "guides/writing-rules",
+                  "guides/managing-packs",
+                  "guides/ci-integration",
+                  "guides/ai-agent-setup"
+                ]
+              },
+              {
+                "group": "Reference",
+                "pages": [
+                  "reference/cli",
+                  "reference/harness-toml",
+                  "reference/rule-format",
+                  "reference/gritql-patterns",
+                  "reference/troubleshooting"
+                ]
+              }
             ]
           },
           {
-            "group": "Core Concepts",
-            "pages": [
-              "concepts/lint-driven-development",
-              "concepts/rules",
-              "concepts/rule-packs",
-              "concepts/configuration"
-            ]
-          },
-          {
-            "group": "Guides",
-            "pages": [
-              "guides/writing-rules",
-              "guides/managing-packs",
-              "guides/ci-integration",
-              "guides/ai-agent-setup"
-            ]
-          },
-          {
-            "group": "Reference",
-            "pages": [
-              "reference/cli",
-              "reference/harness-toml",
-              "reference/rule-format",
-              "reference/gritql-patterns",
-              "reference/troubleshooting"
+            "tab": "Rule Packs",
+            "groups": [
+              {
+                "group": "Available Packs",
+                "pages": [
+                  "packs/overview",
+                  "packs/typescript",
+                  "packs/python",
+                  "packs/go",
+                  "packs/rust"
+                ]
+              }
             ]
           }
         ]
       },
       {
-        "tab": "Rule Packs",
-        "groups": [
+        "language": "zh-Hans",
+        "tabs": [
           {
-            "group": "Available Packs",
-            "pages": [
-              "packs/overview",
-              "packs/typescript",
-              "packs/python",
-              "packs/go",
-              "packs/rust"
+            "tab": "文档",
+            "groups": [
+              {
+                "group": "开始使用",
+                "pages": [
+                  "zh-Hans/introduction",
+                  "zh-Hans/quickstart",
+                  "zh-Hans/installation"
+                ]
+              },
+              {
+                "group": "核心概念",
+                "pages": [
+                  "zh-Hans/concepts/lint-driven-development",
+                  "zh-Hans/concepts/rules",
+                  "zh-Hans/concepts/rule-packs",
+                  "zh-Hans/concepts/configuration"
+                ]
+              },
+              {
+                "group": "指南",
+                "pages": [
+                  "zh-Hans/guides/writing-rules",
+                  "zh-Hans/guides/managing-packs",
+                  "zh-Hans/guides/ci-integration",
+                  "zh-Hans/guides/ai-agent-setup"
+                ]
+              },
+              {
+                "group": "参考",
+                "pages": [
+                  "zh-Hans/reference/cli",
+                  "zh-Hans/reference/harness-toml",
+                  "zh-Hans/reference/rule-format",
+                  "zh-Hans/reference/gritql-patterns",
+                  "zh-Hans/reference/troubleshooting"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "规则包",
+            "groups": [
+              {
+                "group": "可用规则包",
+                "pages": [
+                  "zh-Hans/packs/overview",
+                  "zh-Hans/packs/typescript",
+                  "zh-Hans/packs/python",
+                  "zh-Hans/packs/go",
+                  "zh-Hans/packs/rust"
+                ]
+              }
             ]
           }
         ]

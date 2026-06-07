@@ -1,0 +1,53 @@
+---
+title: "harness-lint 规则包目录：所有语言规则包"
+sidebarTitle: "概览"
+description: "浏览所有可用的 harness-lint 规则包，覆盖 TypeScript、Python、Go 和 Rust。用 harness-lint install <id> 安装任意规则包。"
+---
+
+规则包是版本化、可共享的 [GritQL](https://docs.grit.io/language/overview) lint 规则集合，你可以用一个命令把它安装到项目中。每个规则包面向某种语言或技术栈层，包含会标记真实代码质量问题的规则，而不是单纯风格偏好。你可以浏览完整目录，在安装前检查规则包里的规则，并固定特定版本以保证 CI 可复现。
+
+## 按语言浏览规则包
+
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="js" href="/zh-Hans/packs/typescript">
+    **TypeScript Application Conventions** 和 **TypeScript React**，包含四条核心
+    TypeScript 规则，以及八条覆盖 hooks、refs、props 和渲染模式的 React 组件规则。
+  </Card>
+  <Card title="Python" icon="python" href="/zh-Hans/packs/python">
+    **Python**、**PEP 8**、**Typing** 和 **Async**，四个规则包覆盖应用约定、风格、类型标注卫生和 async/await 正确性。
+  </Card>
+  <Card title="Go" icon="code" href="/zh-Hans/packs/go">
+    **Go Service Conventions**、**Go Concurrency Hygiene** 和 **Effective Go Inspired**，三个规则包覆盖服务代码卫生、goroutine 生命周期和惯用控制流。
+  </Card>
+  <Card title="Rust" icon="code" href="/zh-Hans/packs/rust">
+    **Rust Application Conventions**，覆盖 debug macro、panic 路径、脚手架宏，以及 Rust 应用代码中的错误传播。
+  </Card>
+</CardGroup>
+
+## 快速参考
+
+| Pack ID | 描述 | 语言 |
+|---|---|---|
+| `typescript` | TypeScript Application Conventions | TypeScript, JavaScript |
+| `typescript-react` | React Component Conventions | TypeScript, JavaScript |
+| `python` | Python Application Conventions | Python |
+| `python-pep8` | PEP 8 Style Rules | Python |
+| `python-typing` | Python Type Annotation Rules | Python |
+| `python-async` | Python Async/Await Rules | Python |
+| `go` | Go Service Conventions | Go |
+| `go-concurrency` | Go Concurrency Hygiene | Go |
+| `go-effective-go` | Effective Go Patterns | Go |
+| `rust` | Rust Application Conventions | Rust |
+
+## 安装命令
+
+使用下面的命令发现和安装规则包：
+
+```sh
+harness-lint list --available   # browse all packs
+harness-lint search "typescript"  # search by keyword
+harness-lint inspect <pack-id>    # see rules before installing
+harness-lint install <pack-id>    # install a pack
+```
+
+你可以安装项目需要的任意多个规则包。添加到工作流前，先运行 `harness-lint inspect <pack-id>` 审查规则包中的每条规则，包括严重级别和违规示例。

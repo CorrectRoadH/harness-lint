@@ -1,0 +1,92 @@
+---
+title: "Rust 规则包：harness-lint 应用约定"
+sidebarTitle: "Rust"
+description: "rust 规则包为 Rust 代码质量提供 GritQL 规则，覆盖 debug macro、panic 处理和错误传播模式。"
+---
+
+`rust` 规则包（**Rust Application Conventions**）面向 Rust 应用代码卫生：移除提交的 debug 脚手架，从正常流程中消除 panic 路径，并鼓励使用 `?` 和领域错误类型进行正确错误传播。
+
+## rust
+
+**Rust Application Conventions**：面向 Rust 应用代码卫生的规则，强调显式错误、不提交脚手架，以及减少 panic 路径。
+
+```sh
+harness-lint install rust
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `rust.no-dbg-macro` | Avoid committed dbg macros | 使用结构化日志、断言或显式测试期望，而不是提交 `dbg!` 调用 |
+| `rust.no-panic-flow` | Avoid panic in normal application flow | 返回错误或显式处理非法状态，让调用者决定如何呈现失败 |
+| `rust.no-todo-unimplemented` | Avoid committed todo and unimplemented macros | 用真实行为、显式错误或失败测试替换脚手架宏 |
+| `rust.no-unwrap-expect` | Review unwrap and expect calls | 优先使用 `?`、显式 match 或领域错误，而不是在 `Option` 和 `Result` 上 panic |
+
+### 规则示例
+
+#### no-unwrap-expect
+
+当值是 `Err` 或 `None` 时，`.unwrap()` 和 `.expect()` 会 panic。在应用流程中，这会产生对调用者缺乏错误上下文的崩溃。使用 `?` 把错误向上传播，或显式 match 就地处理失败。
+
+<CodeGroup>
+```rust Bad
+let token = request.headers().get("token").unwrap();
+```
+
+```rust Good
+let token = request
+    .headers()
+    .get("token")
+    .ok_or_else(|| anyhow::anyhow!("missing token"))?;
+```
+</CodeGroup>
+
+#### no-dbg-macro
+
+`dbg!` 会打印到 stderr 并返回它的参数，所以很容易混进提交代码。它产生无结构输出，没有日志级别或上下文。使用 tracing 或 logging 框架，让诊断一致且可过滤。
+
+<CodeGroup>
+```rust Bad
+let user = dbg!(load_user(id)?);
+```
+
+```rust Good
+let user = load_user(id)?;
+tracing::debug!(user_id = %user.id, "loaded user");
+```
+</CodeGroup>
+
+#### no-panic-flow
+
+`panic!` 会 unwind 当前线程，或根据 panic strategy 终止进程，调用者没有机会优雅处理失败。在 library 和 application code 中，返回 `Result`，让调用者决定如何展示错误。
+
+<CodeGroup>
+```rust Bad
+fn load_config(path: &Path) -> Config {
+    panic!("missing config: {}", path.display())
+}
+```
+
+```rust Good
+fn load_config(path: &Path) -> anyhow::Result<Config> {
+    anyhow::bail!("missing config: {}", path.display())
+}
+```
+</CodeGroup>
+
+#### no-todo-unimplemented
+
+`todo!()` 和 `unimplemented!()` 会在运行时 panic。它们适合早期开发，但不应该出现在可提交、可审查的状态中。用真实实现、typed error 或记录缺失分支的 `#[cfg(test)]` 失败断言替换它们。
+
+<CodeGroup>
+```rust Bad
+fn render() -> Html {
+    todo!("wire renderer")
+}
+```
+
+```rust Good
+fn render() -> anyhow::Result<Html> {
+    anyhow::bail!("renderer is not configured")
+}
+```
+</CodeGroup>

@@ -1,0 +1,135 @@
+---
+title: "把 harness-lint 集成到 CI Pipeline 工作流"
+sidebarTitle: "CI 集成"
+description: "在 CI 中运行 harness-lint，当 error 级规则失败时阻止合并，从 lock 文件恢复规则包，并缓存结果以加速运行。"
+---
+
+harness-lint 设计成能以最少配置接入任何 CI pipeline。当任意 `level: error` 规则触发时，它会以非零状态退出，让你无需额外脚本就能自动让 PR 失败。
+
+## CI 失败如何工作
+
+当没有 `error` 级规则触发时，`harness-lint check` 以状态码 `0` 退出。当至少产生一个 `error` 级诊断时，它会以非零状态退出。`level: warn` 的规则始终会出现在输出中，但不会导致非零退出。
+
+只有当规则的 GritQL、描述和示例都清楚时，才把规则提升为 `error`。关于规则级别的指导，参见[编写规则](/zh-Hans/guides/writing-rules)。
+
+## 在 CI 中安装 harness-lint
+
+harness-lint 依赖 `grit` CLI。运行任何检查前，先安装两个工具：
+
+```bash
+brew install getgrit/tap/grit
+brew install CorrectRoadH/tap/harness-lint
+```
+
+在 Linux CI runner 上，通常也可以使用 Homebrew，所以上面两个命令同样适用。如果你的 runner 使用其他包管理器，请从 [Grit releases 页面](https://github.com/getgrit/gritql/releases) 手动安装 `grit` 二进制，然后从 [harness-lint releases 页面](https://github.com/CorrectRoadH/harness-lint/releases) 安装 `harness-lint` 二进制。
+
+## 在 CI 中恢复规则包
+
+不要在 CI 中运行 `harness-lint update`。它会获取最新版本，可能在 pipeline 中途引入意外变化。使用 `restore`，它会读取 `harness.lock` 并从精确固定版本重建本地规则包缓存：
+
+```bash
+harness-lint restore
+```
+
+如果 `harness.lock` 与 `harness.toml` 不同步，`restore` 会快速失败。此时在本地运行 `harness-lint update`，提交更新后的 lock 文件，然后重新触发 CI。
+
+## 运行检查
+
+完整扫描项目中的每个文件：
+
+```bash
+harness-lint check --all
+```
+
+只扫描 PR 中变更过的文件：
+
+```bash
+harness-lint check --changed --base origin/main
+```
+
+<Tip>
+在 PR 检查中使用 `--changed --base origin/main`，让运行快速并聚焦当前变更。把 `--all` 留给每次合并后在 main 分支运行的完整检查，它能捕获只有全量扫描才会出现的问题。
+</Tip>
+
+## 面向 CI 工具的 JSON 输出
+
+在子命令前传 `--json`，获得机器可读诊断。你可以把输出传给下游工具、上传为构建 artifact，或在自定义通知步骤中解析：
+
+```bash
+harness-lint --json check --all
+```
+
+JSON 输出中的每条诊断都包含规则 ID、严重级别、文件路径、行列号，以及是否可自动修复。
+
+## 启用结果缓存
+
+在 `harness.toml` 的 `[lint]` section 中设置 `cache = true`，启用逐文件结果缓存。重复运行时，harness-lint 会跳过内容和规则 fingerprint 都未变化的文件，并从缓存加载结果：
+
+```toml
+[lint]
+cache = true
+```
+
+缓存命中能显著加快重复 CI 运行，尤其适合大多数文件没有变化的 PR。把缓存和 CI cache 步骤配合使用，持久化缓存目录。下面的 GitHub Actions 示例展示了这种做法。
+
+## GitHub Actions 示例
+
+下面的 workflow 会安装所需工具、从 lock 文件恢复规则包并运行完整检查。把它复制到 `.github/workflows/lint.yml`，并按项目调整触发条件和分支名。
+
+```yaml
+name: harness-lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for --changed with a base branch
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Install grit
+        run: brew install getgrit/tap/grit
+
+      - name: Install harness-lint
+        run: brew install CorrectRoadH/tap/harness-lint
+
+      - name: Cache harness-lint results
+        uses: actions/cache@v4
+        with:
+          path: .harness/cache
+          key: harness-lint-${{ runner.os }}-${{ hashFiles('harness.lock') }}
+          restore-keys: |
+            harness-lint-${{ runner.os }}-
+
+      - name: Restore packs from lock file
+        run: harness-lint restore
+
+      - name: Run lint (full scan on main, changed files on PRs)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            harness-lint check --changed --base origin/${{ github.base_ref }}
+          else
+            harness-lint check --all
+          fi
+```
+
+### 每一步做什么
+
+| 步骤 | 作用 |
+|---|---|
+| `checkout` with `fetch-depth: 0` | 获取完整历史，让 `--changed` 能和基准分支 diff |
+| Install `grit` | 提供 harness-lint 委托执行模式匹配的 GritQL 引擎 |
+| Install `harness-lint` | 安装 lint 编排器 |
+| `actions/cache` | 在运行之间持久化结果缓存以加快检查 |
+| `harness-lint restore` | 从 `harness.lock` 重建规则包缓存，不会意外更新 |
+| `harness-lint check` | 运行相应扫描，并在 `error` 级违规时非零退出 |

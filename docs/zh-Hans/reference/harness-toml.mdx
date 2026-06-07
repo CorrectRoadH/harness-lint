@@ -1,0 +1,260 @@
+---
+title: "harness.toml：完整配置文件参考"
+sidebarTitle: "harness.toml"
+description: "harness.toml 中每个 section 和字段的完整参考：lint 设置、规则路径、规则包、覆盖项、禁用规则、忽略和例外。"
+---
+
+`harness.toml` 是 harness-lint 项目的唯一配置文件。把它放在仓库根目录，也就是 `.git` 旁边。harness-lint 会从当前工作目录向上遍历查找它，所以正常使用时不需要传 `--config`。
+
+运行 `harness-lint init` 创建起始 `harness.toml` 和规则目录。之后直接打开文件，随着项目增长继续扩展。
+
+---
+
+## \[project\]
+
+可选的项目级元数据 section。
+
+<ParamField query="name" type="string">
+  在生成配置和诊断输出中显示的人类可读项目名。不会影响规则评估。
+
+  ```toml
+  [project]
+  name = "my-service"
+  ```
+</ParamField>
+
+---
+
+## \[lint\]
+
+控制整个项目的默认 lint 行为。
+
+<ParamField query="default_level" type="string" default="warn">
+  应用于未显式指定级别的规则的严重级别。接受值：`"warn"` 和 `"error"`。
+
+  - `"warn"`：报告匹配，但不导致 `harness-lint check` 非零退出。
+  - `"error"`：报告匹配，**并且**导致 `harness-lint check` 失败。
+
+  ```toml
+  [lint]
+  default_level = "warn"
+  ```
+</ParamField>
+
+<ParamField query="changed_base" type="string" default="origin/main">
+  `harness-lint check --changed` 用来判断哪些文件发生变化的 git ref。接受任何 `git diff` 理解的 ref：远程分支、本地分支、tag 或 commit SHA。
+
+  ```toml
+  [lint]
+  changed_base = "origin/main"
+  ```
+</ParamField>
+
+<ParamField query="cache" type="boolean" default="true">
+  为 `true` 时，harness-lint 会把逐文件诊断结果保存在 `.harness/cache/`，并在文件内容、规则 fingerprint 和 config fingerprint 都匹配时复用结果。调试规则时可设为 `false` 禁用缓存。
+
+  ```toml
+  [lint]
+  cache = true
+  ```
+</ParamField>
+
+---
+
+## \[rules\]
+
+声明 harness-lint 在哪里查找本地编写的规则文件。
+
+<ParamField query="local" type="array of paths" default='["rules"]'>
+  包含本地规则 Markdown 文件的目录列表，相对项目根目录。harness-lint 会发现每个目录中的所有 `*.md` 文件并作为规则加载。
+
+  当你运行 `harness-lint rule create` 时，新规则文件会写入这个列表中的**第一个**目录。
+
+  ```toml
+  [rules]
+  local = ["rules"]
+  ```
+
+  你可以指向多个目录：
+
+  ```toml
+  [rules]
+  local = ["rules", "team-rules", "security-rules"]
+  ```
+</ParamField>
+
+---
+
+## \[packs\]
+
+外部分发规则包的 ID 到 source spec 的映射。每个 key 是规则包 ID，它会出现在 `typescript.no-console-log` 这样的规则 ID 中；每个 value 是 source spec。
+
+```toml
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+python     = "github:CorrectRoadH/harness-lint@main#packs/python"
+```
+
+**Source spec 格式：**
+
+- `github:<owner>/<repo>@<ref>#<subpath>`：从 GitHub 仓库指定 ref clone，并把 `<subpath>` 视为规则包根目录。
+- `local:<path>`：使用项目根目录下的本地磁盘目录。适合在 monorepo 中跨 package 共享规则。
+
+用 `harness-lint install <id>` 添加规则包，这会同时写入 `harness.toml` 和 `harness.lock`；也可以手动编辑此 section 后运行 `harness-lint update`。
+
+---
+
+## \[overrides\]
+
+规则 ID 到严重级别的映射。覆盖项会修改规则的有效级别，而不触碰规则源文件。适合把某条规则包规则在当前项目中收紧为 `"error"`。
+
+<ParamField query="<rule-id>" type="string">
+  key 是完整规则 ID，例如 `"typescript.no-console-log"`。value 是 `"warn"` 或 `"error"`。
+
+  ```toml
+  [overrides]
+  "typescript.no-console-log" = "error"
+  "python.no-print-debug"     = "error"
+  ```
+</ParamField>
+
+---
+
+## \[disabled\]
+
+完全关闭特定规则。禁用规则在 `harness-lint check` 中不会被加载。
+
+<ParamField query="rules" type="array of strings" default="[]">
+  要禁用的完整规则 ID 列表。
+
+  ```toml
+  [disabled]
+  rules = [
+    "typescript.no-explicit-any",
+    "go-concurrency.no-time-after-loop",
+  ]
+  ```
+</ParamField>
+
+---
+
+## \[ignore\]
+
+为**所有**规则跳过整个文件路径。用于永远不想扫描的生成产物、vendored 代码或构建 artifact。
+
+<ParamField query="paths" type="array of glob patterns" default="[]">
+  glob 模式列表。路径匹配任一模式的文件会被排除在所有规则检查之外。
+
+  ```toml
+  [ignore]
+  paths = [
+    "dist/**",
+    "coverage/**",
+    "vendor/**",
+    "**/*.generated.ts",
+  ]
+  ```
+
+  <Tip>
+    当你只需要对一部分文件排除**某条特定规则**时，使用 `[[exceptions]]`。把 `[ignore]` 留给完全不应该运行任何规则的路径。
+  </Tip>
+</ParamField>
+
+---
+
+## \[\[exceptions\]\]
+
+隐藏单条规则在特定文件集合上的结果。其他规则仍然正常检查这些文件。当一条规则总体正确，但在代码库某部分存在已知、已记录的例外时，使用 `[[exceptions]]`。
+
+`[[exceptions]]` 是 TOML array of tables；每个 `[[exceptions]]` 块都会向列表追加一个条目。
+
+<ParamField query="rule" type="string" required>
+  应该在匹配路径上隐藏结果的完整规则 ID。
+</ParamField>
+
+<ParamField query="paths" type="array of strings" required>
+  glob 模式列表。来自 `rule` 的诊断会在文件匹配任一模式时被隐藏。
+</ParamField>
+
+<ParamField query="reason" type="string">
+  解释这个例外为什么存在的人类可读说明。可选但强烈建议填写，它会告诉审查者和 AI 代理为什么这次抑制是有意的。
+
+  ```toml
+  [[exceptions]]
+  rule   = "typescript.no-console-log"
+  paths  = ["src/generated/**"]
+  reason = "Generated SDK code emits debug output during local mocks."
+
+  [[exceptions]]
+  rule   = "go-concurrency.no-untracked-goroutine"
+  paths  = ["internal/bootstrap/*.go"]
+  reason = "Bootstrap goroutines are intentionally fire-and-forget."
+  ```
+</ParamField>
+
+<Note>
+  `[[suppressions]]` 是 `[[exceptions]]` 的已弃用别名。harness-lint 仍会读取它，但会打印警告。把它改名为 `[[exceptions]]` 可消除警告。
+</Note>
+
+---
+
+## 完整示例
+
+一个展示所有 section 的真实 `harness.toml`：
+
+```toml
+# Optional project name shown in generated config.
+[project]
+name = "my-service"
+
+# Default lint behavior.
+[lint]
+# warn reports a problem; error makes the check fail.
+default_level = "warn"
+# Used by `harness-lint check --changed`.
+changed_base = "origin/main"
+# Reuse file-level results between runs.
+cache = true
+
+# Local project-owned rule files.
+[rules]
+local = ["rules"]
+
+# Shared rule packs to install and restore.
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+python     = "github:CorrectRoadH/harness-lint@main#packs/python"
+
+# Change the level of one rule without editing the rule file.
+[overrides]
+"typescript.no-console-log" = "error"
+
+# Turn off specific rules entirely.
+[disabled]
+rules = ["typescript.no-explicit-any"]
+
+# Skip these paths for every rule.
+[ignore]
+paths = ["dist/**", "coverage/**", "**/*.generated.ts"]
+
+# Hide one rule only for matching paths; other rules still check those files.
+[[exceptions]]
+rule   = "typescript.no-console-log"
+paths  = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+
+[[exceptions]]
+rule   = "go-concurrency.no-untracked-goroutine"
+paths  = ["internal/bootstrap/*.go"]
+reason = "Bootstrap goroutines are intentionally fire-and-forget at startup."
+```
+
+---
+
+## harness.lock
+
+`harness.lock` 是自动生成的配套文件，记录每个已安装规则包的精确 checksum、版本和本地路径。不要手动编辑它。
+
+- 拉取新规则包版本时运行 `harness-lint update` 刷新它。
+- 在 CI 中运行 `harness-lint restore`，从 lock 文件安装规则包而不获取更新。
+- 把 `harness.toml` 和 `harness.lock` 都提交到版本控制，让每个团队成员和 CI job 使用相同规则版本。

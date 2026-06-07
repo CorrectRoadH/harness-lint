@@ -1,0 +1,183 @@
+---
+title: "harness-lint 规则：结构、模式和严重级别"
+sidebarTitle: "规则"
+description: "规则是 Markdown 文件，包含 YAML frontmatter、人类可读的理由，以及定义要标记代码的嵌入式 GritQL 模式。"
+---
+
+## 什么是规则？
+
+harness-lint 规则是保存在 `rules/` 目录中的 Markdown 文件，也可以放在 `harness.toml` 的 `[rules] local` 中列出的其他目录。每个规则文件包含：
+
+1. 一个 **YAML frontmatter 头部**，用于标识规则、设置严重级别并附加元数据。
+2. 一段 **人类可读描述**，解释这个模式为什么有问题。
+3. **恰好一个可执行 GritQL fenced code block**，定义要标记的代码。
+4. **Bad** 和 **Good** 示例，展示最小违规片段和推荐替代写法。
+
+## 完整规则示例
+
+下面的规则直接来自 harness-lint TypeScript 规则包。你可以把它作为编写自定义规则的模板：
+
+````markdown
+---
+id: typescript.no-console-log
+title: Avoid committed console.log
+language: typescript
+level: warn
+tags: [typescript, javascript, logging]
+---
+
+# Avoid committed console.log
+
+Use repository logging, telemetry, or explicit UI state instead of committed `console.log` calls.
+
+```grit
+language js
+`console.log($value)` where {
+  or {
+    $filename <: r".*\.ts",
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.js",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
+```
+
+## Bad
+
+```ts
+console.log(user)
+```
+
+## Good
+
+```ts
+logger.info({ userId: user.id }, "loaded user")
+```
+````
+
+这里还有一个遵循同样结构的本地 Python 规则：
+
+````markdown
+---
+id: local.no-print-debug
+title: Avoid print debugging
+language: python
+level: warn
+skill: tdd
+tags: [local, python]
+---
+
+# Avoid print debugging
+
+Use logging instead of committed print calls.
+
+```grit
+language python
+`print($value)`
+```
+
+## Bad
+
+```python
+print(user)
+```
+
+## Good
+
+```python
+logger.info("user=%s", user)
+```
+````
+
+## 规则 frontmatter 字段
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `id` | ✅ | 唯一规则标识，格式为 `<pack>.slug`，例如 `local.no-print-debug`。英文使用小写 kebab-case；其他语言可使用短语。 |
+| `title` | ✅ | 显示在 lint 输出和 `rule list` 中的简短可读名称。 |
+| `language` | ✅ | 目标语言，例如 `python`、`typescript`、`go`。用于把文件路由到正确的 GritQL 引擎。 |
+| `level` | ✅ | 严重级别：`warn` 或 `error`。 |
+| `skill` | ❌ | 可选标签，用于把规则连接到更大的工程实践，例如 `tdd` 或 `observability`。 |
+| `tags` | ❌ | 自由标签列表，可用 `harness-lint check --tag` 过滤。 |
+
+`id` 格式为 `<pack>.slug`。本地规则使用 `local` 作为包前缀，例如 `local.no-print-debug`。规则包里的规则使用包名作为前缀，例如 `typescript.no-console-log`。
+
+## 规则级别
+
+- **`warn`**：harness-lint 报告违规，但以状态码 `0` 退出。调试新规则时默认使用 `warn`。
+- **`error`**：harness-lint 报告违规并以非零状态退出，从而让 CI 检查失败，并阻止代理在修复代码前完成任务。只有当 GritQL 模式、描述和示例都清晰可靠时，才把规则提升为 `error`。
+
+你可以在 `harness.toml` 中覆盖规则级别，而不需要编辑规则文件本身。参见[配置](/zh-Hans/concepts/configuration)。
+
+## GritQL 代码块
+
+每条规则必须包含恰好一个可执行 GritQL fenced code block（` ```grit `）。代码块必须以 `language` 声明开始，并至少包含一个具体模式。
+
+**元变量** 让你匹配不同调用点中变化的代码：
+
+- `$value`：匹配任意单个表达式，例如参数、字面量、标识符。
+- `$name`：匹配任意标识符或绑定名称。
+- `$body`：匹配任意代码块或多语句主体。
+
+例如，模式 `` `print($value)` `` 会匹配 `print(user)`、`print(f"id={id}")` 和 `print(result)`，也就是传给 `print` 的任何内容。
+
+对于 TypeScript 和 JavaScript 规则，即使 frontmatter 写的是 `language: typescript`，GritQL 代码块里也要写 `language js`。只有当 TypeScript 专用解析器变体确实重要时，才使用 `language js(typescript)`。
+
+## 按文件限制规则
+
+如果一条规则只应该应用到特定路径，例如只检查 TypeScript 源文件而不检查测试文件，请在 GritQL 中用 `$filename` 表达这个约束：
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+不要试图通过给 `harness-lint check` 传文件路径来限制规则范围。把范围写进 GritQL，才能保证无论检查如何调用，规则都会一致执行。
+
+## Bad 和 Good 示例
+
+- **Bad**：展示会触发规则的最小代码片段。保持简洁，一两行最理想。
+- **Good**：展示规则希望推动的推荐替代写法。让它符合项目真实约定。
+
+Bad 和 Good 示例代码块的语言应当与规则的 `language` 字段匹配。
+
+<Note>
+  每条规则必须包含恰好一个可执行 GritQL 代码块。空 GritQL 代码块、只包含注释的代码块（例如 `// TODO`）、只包含空白的代码块，或包含多个 GritQL 代码块的规则，都会在加载时被拒绝，并导致 `harness-lint check` 和 `harness-lint doctor` 失败。
+</Note>
+
+## 创建、验证和查看规则
+
+**从反馈和 GritQL 模式创建规则：**
+
+```sh
+harness-lint rule create "Avoid print debugging" \
+  --language python \
+  --grit '`print($value)`'
+```
+
+harness-lint 会把规则文件写入 `harness.toml` 中 `[rules] local` 列出的第一个目录，并打印路径。
+
+**验证规则**，确认 Bad 示例确实会触发 GritQL 模式：
+
+```sh
+harness-lint rule verify local.no-print-debug
+```
+
+创建或编辑规则后运行这个命令。如果 Bad 示例没有触发，说明 GritQL 模式需要调整。
+
+**查看从本地目录和已安装规则包加载的所有启用规则：**
+
+```sh
+harness-lint rule list
+```
+
+**阅读规则的完整描述和示例**，在 lint 报告违规时尤其有用：
+
+```sh
+harness-lint rule explain local.no-print-debug
+```

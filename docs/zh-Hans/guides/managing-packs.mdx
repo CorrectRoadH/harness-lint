@@ -1,0 +1,152 @@
+---
+title: "为团队安装和管理 harness-lint 规则包"
+sidebarTitle: "管理规则包"
+description: "搜索规则包目录，为你的语言安装规则包，在本地保持更新，并在 CI 中可靠恢复固定版本。"
+---
+
+规则包是面向特定语言或领域的精选 GritQL 规则集合。你不需要从零编写每条规则，可以安装一个规则包作为经过实践检验的基础检查，再用本地规则补充项目约定。
+
+## 查找规则包
+
+列出目录中的所有可用规则包：
+
+```bash
+harness-lint list --available
+```
+
+按关键词搜索与特定主题相关的规则包：
+
+```bash
+harness-lint search "python typing"
+```
+
+搜索命令会按相关性评分，并为每个匹配展示安装命令。
+
+## 检查规则包
+
+安装前，先检查规则包，查看完整规则列表、每条规则检查什么以及原因：
+
+```bash
+harness-lint inspect python-typing
+```
+
+输出会列出规则包中每条规则的 ID、标题和简短描述，也会打印精确安装命令。
+
+## 安装规则包
+
+按 ID 从目录安装规则包：
+
+```bash
+harness-lint install python
+```
+
+安装规则包会做两件事：
+
+1. 在 `harness.toml` 的 `[packs]` 下添加条目，并写入解析后的 source spec。
+2. 写入或更新 `harness.lock`，记录每个已安装规则包的精确版本和校验和。
+
+安装后，下一次运行 `harness-lint check` 时，规则包中的所有规则都会启用。
+
+### 从 Git 来源安装
+
+如果要直接从 Git 仓库安装规则包，例如组织内部托管的私有规则包，请提供规则包 ID 和 Git source spec：
+
+```bash
+harness-lint install my-pack github:org/repo@main#packs/my-pack
+```
+
+spec 格式为 `github:<owner>/<repo>@<ref>#<path-within-repo>`。解析后的规则包会在安装时解析到的 commit 上固定到 `harness.lock`。
+
+## 验证已安装规则包
+
+列出当前安装的规则包及其版本：
+
+```bash
+harness-lint list
+```
+
+每一行显示规则包 ID、source spec 和 `harness.lock` 中记录的版本。
+
+<Note>
+提交 `harness.lock` 到仓库。lock 文件记录每个已安装规则包的精确版本和校验和，让 `harness-lint restore` 在每台机器和每次 CI 运行中重建相同环境，不会拉取意外更新。
+</Note>
+
+## 检查更新
+
+查看哪些已安装规则包有新版本：
+
+```bash
+harness-lint outdated
+```
+
+每个过期规则包会列出当前安装的 checksum 和最新可用 checksum。如果某个规则包条目缺失于 `harness.lock`，命令会报告它未安装，并提示你运行 `harness-lint update`。
+
+## 更新所有规则包
+
+获取每个已安装规则包的最新版本，并重写 `harness.lock`：
+
+```bash
+harness-lint update
+```
+
+更新后，提交刷新的 `harness.lock`，让团队和 CI 使用新版本。
+
+## 从 lock 文件恢复（用于 CI）
+
+在 CI 环境中使用 `restore`，不要使用 `update`。它会从 `harness.lock` 中固定的精确版本重建本地规则包缓存，不会获取任何更新 commit：
+
+```bash
+harness-lint restore
+```
+
+如果 `harness.toml` 中的任何规则包缺失于 `harness.lock`，或 lock 文件 spec 与 `harness.toml` 不一致，`restore` 会失败。此时在本地运行 `harness-lint update`，提交更新后的 lock 文件，然后重新运行 CI。
+
+## 移除规则包
+
+卸载规则包，并同时从 `harness.toml` 和 `harness.lock` 中移除：
+
+```bash
+harness-lint remove python
+```
+
+这个命令还会从本地规则包存储中删除该规则包的缓存文件。
+
+## 覆盖规则包规则级别
+
+在不编辑规则文件的情况下修改规则包中某条规则的严重级别。向 `harness.toml` 的 `[overrides]` section 添加条目：
+
+```toml
+[overrides]
+"typescript.no-console-log" = "error"
+```
+
+有效级别为 `warn` 和 `error`。当你希望某条规则包规则让 CI 失败时，把它覆盖为 `error`，其余规则保持默认的 `warn`。
+
+## 禁用规则包规则
+
+在 `harness.toml` 的 `[disabled]` 下列出规则 ID，即可完全关闭某条规则包规则：
+
+```toml
+[disabled]
+rules = ["typescript.no-explicit-any"]
+```
+
+禁用规则不会被加载，也不会产生诊断。谨慎使用。如果某条规则对你的项目持续不合适，可以考虑向规则包提交问题或 PR 来改进它。
+
+---
+
+## 参考：`harness.toml` 规则包配置
+
+一个同时展示规则包、覆盖项和禁用规则的完整示例：
+
+```toml
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+python     = "github:CorrectRoadH/harness-lint@main#packs/python"
+
+[overrides]
+"typescript.no-console-log" = "error"
+
+[disabled]
+rules = ["typescript.no-explicit-any"]
+```

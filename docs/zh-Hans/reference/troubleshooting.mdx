@@ -1,0 +1,262 @@
+---
+title: "排查常见 harness-lint 错误和问题"
+sidebarTitle: "排障"
+description: "修复常见 harness-lint 错误：缺失 grit、找不到配置、规则没有 GritQL、规则包损坏，以及误报诊断。"
+---
+
+本页覆盖使用 harness-lint 时最常见的错误和意外行为，并给出每个问题的分步修复方式。
+
+<Tip>
+  遇到任何问题时，第一步运行 `harness-lint doctor`。它会检查每个前置条件：项目根、配置文件、本地规则、已安装规则包、`grit` CLI 和 git 集成，并准确告诉你哪个检查失败以及原因。
+</Tip>
+
+---
+
+<Accordion title="找不到 `grit`">
+
+**症状：** `harness-lint check` 或 `harness-lint doctor` 打印类似错误：
+
+```
+[error] grit: grit is required for `check` but was not found: No such file or directory
+```
+
+**原因：** `grit` CLI 未安装，或不在你的 `PATH` 上。harness-lint 把所有 GritQL 模式执行委托给 `grit check`。
+
+**修复：** 使用 Homebrew 安装 `grit`：
+
+```sh
+brew install getgrit/tap/grit
+```
+
+安装后，确认 harness-lint 能找到它：
+
+```sh
+harness-lint doctor
+```
+
+你应该在输出中看到 `[ok] grit: grit is installed: <version>`。如果你通过其他方式安装了 `grit`，请确保二进制位于 shell 的 `PATH` 中。
+
+</Accordion>
+
+---
+
+<Accordion title="找不到 `harness.toml`">
+
+**症状：** 任意 harness-lint 命令打印：
+
+```
+could not find project root from <path>; run `harness-lint init` first
+```
+
+或：
+
+```
+missing harness.toml; run `harness-lint init` in <path>
+```
+
+**原因：** harness-lint 会向上遍历目录树查找 `harness.toml` 或 `.git`。如果直到文件系统根目录都找不到，就会放弃。
+
+**修复（新项目）：** 在仓库根目录运行 `harness-lint init`，创建 `harness.toml` 和默认 `rules/` 目录：
+
+```sh
+cd /path/to/your/repo
+harness-lint init
+```
+
+**修复（目录不对）：** 如果你是在项目子目录中运行 harness-lint，使用 `--cwd` 指向仓库根目录：
+
+```sh
+harness-lint --cwd /path/to/your/repo check --changed
+```
+
+**修复（显式配置路径）：** 也可以直接指向配置文件：
+
+```sh
+harness-lint --config /path/to/harness.toml check --changed
+```
+
+</Accordion>
+
+---
+
+<Accordion title="规则没有可执行 GritQL">
+
+**症状：** `harness-lint doctor` 或 `harness-lint rule verify` 打印：
+
+```
+validated N local rule(s), but only M include executable GritQL
+```
+
+或：
+
+```
+has a ```grit block but no executable GritQL
+```
+
+**原因：** 每个规则文件必须包含恰好一个带真实模式的 GritQL fenced code block。harness-lint 会拒绝空代码块、只包含注释的代码块，或只包含 `TODO` 行的代码块。
+
+**修复：** 打开规则文件，在 `grit` 代码块中加入有效模式。代码块必须以 `language <name>` 指令开始，并跟随至少一个模式表达式：
+
+````markdown
+```grit
+language python
+`print($value)`
+```
+````
+
+如果你还不能把约束表达成 GritQL 模式，不要创建 harness-lint 规则。把指导保留在 `AGENTS.md`、审查笔记或项目文档中。
+
+添加模式后，验证它能工作：
+
+```sh
+harness-lint rule verify local.your-rule-id
+```
+
+</Accordion>
+
+---
+
+<Accordion title="规则包未安装">
+
+**症状：** `harness-lint check` 或 `harness-lint doctor` 打印：
+
+```
+pack `typescript` is not installed; run `harness-lint update`
+```
+
+或：
+
+```
+pack `typescript` is missing from harness.lock; run `harness-lint update` first
+```
+
+**原因：** 规则包被列在 `harness.toml` 的 `[packs]` 下，但尚未获取到本地。fresh clone 后、队友添加规则包但没运行 `update`、或 `.harness/packs/` 被意外删除时会发生。
+
+**修复（fresh clone 或缓存被删）：** 从已有 lock 文件恢复规则包：
+
+```sh
+harness-lint restore
+```
+
+**修复（lock 文件缺失或过期）：** 获取并锁定最新规则包版本：
+
+```sh
+harness-lint update
+```
+
+然后提交更新后的 `harness.lock`，避免队友和 CI 遇到同样错误。
+
+</Accordion>
+
+---
+
+<Accordion title="误报：规则触发了不该触发的代码">
+
+**症状：** `harness-lint check` 在规则不该应用的文件中报告违规，例如生成文件、测试 helper 或有意例外。
+
+**方案 1：对已知且有文档说明的例外使用 `[[exceptions]]`：**
+
+在 `harness.toml` 中添加条目，在特定路径上隐藏这条规则。始终填写 `reason`，让审查者和 AI 代理理解为什么这个抑制是有意的：
+
+```toml
+[[exceptions]]
+rule   = "typescript.no-console-log"
+paths  = ["src/generated/**"]
+reason = "Generated SDK code emits debug output during local mocks."
+```
+
+其他规则仍会正常检查这些文件，只有指定规则被隐藏。
+
+**方案 2：用 `$filename` 条件收窄 GritQL：**
+
+如果你拥有这条规则，把文件范围编码进 GritQL 代码块。这比 `[[exceptions]]` 更精确，因为它自解释，也不需要配置变更：
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+**方案 3：对永远不应扫描的路径使用 `[ignore]`：**
+
+如果没有任何规则应该扫描某个目录，例如 `dist/` 或 `coverage/`，把它加入 `[ignore]`：
+
+```toml
+[ignore]
+paths = ["dist/**", "coverage/**"]
+```
+
+</Accordion>
+
+---
+
+<Accordion title="`check` 拒绝扫描：文件太多">
+
+**症状：** 不带范围 flag 运行 `harness-lint check` 时打印：
+
+```
+refusing implicit full scan of N files; use `harness-lint check --changed` or run `harness-lint check --all` to force it
+```
+
+**原因：** 当你不带 `--changed`、`--staged` 或 `--all` 运行 `harness-lint check` 时，harness-lint 会执行隐式完整扫描。为了避免意外扫描大型项目，当文件数超过 1,000 时它会拒绝。
+
+**修复（多数工作流推荐）：** 只扫描相对基准分支发生变化的文件。这是 pre-push 检查最快的选择：
+
+```sh
+harness-lint check --changed
+```
+
+**修复（CI 完整扫描）：** 如果你确实要扫描每个文件，例如夜间 CI job，显式传 `--all`：
+
+```sh
+harness-lint check --all
+```
+
+**修复（pre-commit）：** 只扫描 staged 文件：
+
+```sh
+harness-lint check --staged
+```
+
+</Accordion>
+
+---
+
+<Accordion title="`rule verify` 失败：Bad 示例没有触发">
+
+**症状：** `harness-lint rule verify` 打印：
+
+```
+Bad example 1 for rule `local.your-rule` did not trigger; adjust the GritQL, Bad example, or `$filename` scope
+```
+
+**原因：** GritQL 模式没有对 `## Bad` 示例代码产生匹配。通常有三种原因：
+
+1. GritQL 模式太具体，没有匹配 Bad 示例的形状。
+2. 模式中的 `$filename` 条件排除了验证时使用的合成文件名（`src/bad-example.<ext>`）。
+3. Bad 示例代码对该规则语言而言语法无效。
+
+**修复：检查模式：**
+
+打开规则文件，对比 GritQL 模式和 Bad 示例。运行 `harness-lint rule explain <rule-id>` 并并排查看两者。简化模式，或扩展 Bad 示例让它匹配。
+
+**修复：检查 `$filename` 范围：**
+
+`harness-lint rule verify` 会把 Bad 示例写入临时文件，路径为 `src/bad-example.<ext>`。如果模式使用 `$filename` 条件，确认它会匹配类似 `src/bad-example.ts` 的路径：
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts"   ✅ matches src/bad-example.ts
+}
+```
+
+像 `$filename <: r".*apps/.*\.ts"` 这样的条件会排除验证文件。开发规则时，可以调整条件或临时放宽它。
+
+**修复：检查 Bad 示例语言：**
+
+确认 `## Bad` 中的 fenced code block 使用正确语言标识符，并且代码对该语言而言语法有效。
+
+</Accordion>

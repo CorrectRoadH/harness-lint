@@ -1,0 +1,230 @@
+---
+title: "harness-lint Python 规则包：四个规则包指南"
+sidebarTitle: "Python"
+description: "四个 Python 规则包覆盖应用约定、PEP 8 风格、类型标注卫生和 async/await 正确性模式。"
+---
+
+harness-lint 提供四个 Python 规则包。你可以单独安装，也可以组合使用。例如，大多数 typed async service 都适合一起运行四个规则包。
+
+## python
+
+**Python Application Conventions**：面向 typed Python 应用代码的 GritQL 规则。
+
+```sh
+harness-lint install python
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `python.no-print-debug` | Avoid committed print debugging | 使用仓库 logging 或结构化诊断，而不是提交 `print` 调用 |
+| `python.no-eval-exec` | Avoid eval and exec | 避免动态代码执行；优先使用显式 parser、registry 或 strategy object |
+| `python.no-broad-object-type` | Avoid broad object types | 优先使用具体 model、显式 union 或 protocol，而不是裸 `object` 标注 |
+| `python.no-getattr-flow` | Avoid getattr in normal application flow | 优先使用显式 typed fields 或 adapters；把 `getattr` 留给真正的动态互操作 |
+| `python.no-runtime-assert` | Avoid assert for runtime validation | 使用显式异常或校验 helper；assert 在优化构建中可能被移除 |
+
+### 规则示例
+
+#### no-print-debug
+
+`print` 是快速调试工具，不是日志机制。提交的 `print` 调用会产生无结构输出，没有日志级别、上下文，也无法在生产环境中路由或静默。
+
+<CodeGroup>
+```python Bad
+print(user_id)
+```
+
+```python Good
+logger.info("loaded user %s", user_id)
+```
+</CodeGroup>
+
+#### no-eval-exec
+
+`eval` 和 `exec` 会在运行时执行任意代码字符串，让行为无法静态审计。如果输入来自用户控制数据，还会打开注入面。
+
+<CodeGroup>
+```python Bad
+result = eval(expression)
+```
+
+```python Good
+result = expression_parser.parse(expression)
+```
+</CodeGroup>
+
+#### no-runtime-assert
+
+当 Python 以 `-O` 标志运行时，`assert` 语句会被移除。任何写成 `assert` 的校验都会在优化生产构建中消失。请使用显式 `raise`。
+
+<CodeGroup>
+```python Bad
+assert user.email
+```
+
+```python Good
+if not user.email:
+    raise ValueError("user email is required")
+```
+</CodeGroup>
+
+---
+
+## python-pep8
+
+**Python PEP 8 Style**：受 PEP 8 启发、用于提升 Python 模块可读性的规则。
+
+```sh
+harness-lint install python-pep8
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `python-pep8.no-boolean-equality` | Avoid boolean equality comparisons | 使用 truthiness、`not` 或显式 predicate，而不是与 `True` 或 `False` 比较 |
+| `python-pep8.no-lambda-assignment` | Avoid assigning lambdas | 使用 `def` 定义命名函数，让 traceback 和文档显示真实函数名 |
+| `python-pep8.no-negated-membership-identity` | Use not in and is not operators | 优先使用 `x not in y` 和 `x is not y`，而不是对 `in` 或 `is` 表达式取反 |
+| `python-pep8.no-none-equality` | Use identity comparisons for None | 使用 `is None` 和 `is not None`，避免重载 equality 带来的意外 |
+| `python-pep8.no-type-equality` | Use isinstance for type checks | 使用 `isinstance`，正确处理子类行为 |
+| `python-pep8.no-wildcard-import` | Avoid wildcard imports | 显式导入名称，让模块依赖可读且可追踪 |
+
+### 规则示例
+
+#### no-boolean-equality
+
+用 `==` 把值和 `True` 或 `False` 比较是冗余的，并且在非布尔 truthy 值上可能表现意外。直接把值用作条件。
+
+<CodeGroup>
+```python Bad
+if is_active == True:
+    enable()
+```
+
+```python Good
+if is_active:
+    enable()
+```
+</CodeGroup>
+
+#### no-none-equality
+
+`None` 是单例。用 `==` 比较会调用 `__eq__`，而它可能被自定义类重载。使用 `is` 和 `is not` 才能可靠检查 `None`。
+
+<CodeGroup>
+```python Bad
+if user != None:
+    return
+```
+
+```python Good
+if user is not None:
+    return
+```
+</CodeGroup>
+
+#### no-wildcard-import
+
+通配导入会污染模块命名空间，让人无法知道名称来自哪里，也会破坏静态分析工具。
+
+<CodeGroup>
+```python Bad
+from models import *
+```
+
+```python Good
+from models import User, Team
+```
+</CodeGroup>
+
+---
+
+## python-typing
+
+**Python Typing Boundaries**：面向 typed Python API 和减少静态分析逃逸口的规则。
+
+```sh
+harness-lint install python-typing
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `python-typing.no-untyped-def` | Avoid untyped public functions | 公共函数应暴露参数和返回类型，让调用者了解契约 |
+| `python-typing.no-any-import` | Avoid importing Any as a default escape hatch | 引入 `Any` 前，先尝试具体 model、protocol 或 union |
+| `python-typing.no-type-ignore` | Avoid broad type ignore comments | 优先用更窄的类型修复、adapter 或 protocol，而不是静默 type checker |
+
+### 规则示例
+
+#### no-untyped-def
+
+未标注的公共函数对调用者、IDE 和静态分析都是不透明的。添加参数和返回标注会让契约明确，并支持跨模块类型检查。
+
+<CodeGroup>
+```python Bad
+def load_user(user_id):
+    return repo.get(user_id)
+```
+
+```python Good
+def load_user(user_id: str) -> User:
+    return repo.get(user_id)
+```
+</CodeGroup>
+
+#### no-type-ignore
+
+裸 `# type: ignore` 会静默该行所有类型错误，却不解释哪个错误或为什么。这会隐藏真实问题。如果必须抑制检查，请使用带说明的定向 ignore，或修复底层类型不匹配。
+
+<CodeGroup>
+```python Bad
+payload = load_raw()  # type: ignore
+```
+
+```python Good
+payload: UserPayload = parse_payload(load_raw())
+```
+</CodeGroup>
+
+---
+
+## python-async
+
+**Python Async Services**：面向 async Python 服务的规则，避免 blocking call 和隐藏 event loop 损害可靠性。
+
+```sh
+harness-lint install python-async
+```
+
+| Rule ID | 标题 | 说明 |
+|---|---|---|
+| `python-async.no-asyncio-run-library` | Avoid asyncio.run inside library flow | Library code 应从调用方接收 event loop，而不是在流程中创建 |
+| `python-async.no-time-sleep` | Avoid time.sleep in async-capable code | 使用 `asyncio.sleep`，避免一个请求阻塞整个 event loop |
+| `python-async.no-untracked-create-task` | Avoid untracked create_task calls | 保持 task handle 可见，让取消、错误和关闭流程明确 |
+
+### 规则示例
+
+#### no-time-sleep
+
+`time.sleep` 会阻塞 OS 线程。在 async 服务中，这会让整个 event loop 在 sleep 期间停住，阻止所有其他并发任务继续执行。
+
+<CodeGroup>
+```python Bad
+time.sleep(1)
+```
+
+```python Good
+await asyncio.sleep(1)
+```
+</CodeGroup>
+
+#### no-untracked-create-task
+
+用 `asyncio.create_task` 创建 fire-and-forget task 没有所有者。如果 task 抛出异常，异常会被静默丢弃；关闭时也无法等待 task 完成或干净取消。
+
+<CodeGroup>
+```python Bad
+asyncio.create_task(send_email(user))
+```
+
+```python Good
+task = asyncio.create_task(send_email(user))
+pending_tasks.add(task)
+```
+</CodeGroup>

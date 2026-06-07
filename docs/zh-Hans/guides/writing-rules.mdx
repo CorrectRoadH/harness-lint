@@ -1,0 +1,264 @@
+---
+title: "为你的项目编写并验证自定义 harness-lint 规则"
+sidebarTitle: "编写规则"
+description: "使用 harness-lint rule create 创建项目特定的 GritQL lint 规则，验证它们，并自动在代码库中运行。"
+---
+
+自定义规则让你可以把团队约定和项目特定反馈编码成机器可执行的 lint 检查。当某个模式不断出现在代码审查或 AI 生成代码中时，把它转成规则，让 harness-lint 自动捕获。
+
+## 什么时候创建本地规则，什么时候使用规则包
+
+在以下情况下创建本地规则：
+
+- 反馈是 **项目特定** 的：它适用于你的代码库约定，而不是通用语言实践。
+- 你能把坏模式表达成 **可靠的 GritQL 匹配**：这个形状会稳定地出现在源码中，不需要理解意图或跨文件上下文。
+
+当模式是语言级通用问题，并且已有社区规则覆盖时，使用现有规则包，或用 `harness-lint install` 安装一个。
+
+如果反馈需要理解意图、跨文件上下文，或不能表达成可靠的 GritQL 模式，**不要创建 harness-lint 规则**。把指导保留在 `AGENTS.md`、审查清单或项目文档中。弱规则或过宽规则会制造误报，削弱大家对 linter 的信任。
+
+## 用 CLI 创建规则
+
+运行 `harness-lint rule create`，提供人类可读反馈、目标语言，以及匹配坏代码形状的 GritQL 模式：
+
+```bash
+harness-lint rule create "Avoid print debugging" --language python --grit '`print($value)`'
+```
+
+`--grit` 参数必须是 **可执行 GritQL**，也就是使用 `$value` 等元变量表达变化部分的具体模式。如果你还写不出可靠模式，就先把反馈放在文档里，直到可以表达为止。
+
+## 会生成什么
+
+`rule create` 会把新的 Markdown 文件写入 `harness.toml` 中配置的第一个本地规则目录（默认是 `rules/`）。上面的示例会创建：
+
+```
+rules/avoid-print-debugging.md
+```
+
+生成的文件包含 frontmatter 和一个 GritQL fenced block：
+
+````markdown
+---
+id: local.avoid-print-debugging
+title: Avoid print debugging
+language: python
+level: warn
+tags: [local, python]
+---
+
+# Avoid print debugging
+
+```grit
+language python
+`print($value)`
+```
+
+## Bad
+
+```python
+# TODO: add a Bad example
+```
+
+## Good
+
+```python
+# TODO: add a Good example
+```
+````
+
+## 编辑生成的文件
+
+打开生成的文件并补全：
+
+1. **标题**：简洁、祈使式地描述规则，例如 `Avoid print debugging`。
+2. **描述**：用一两句话解释为什么不鼓励这个模式，以及应该改用什么。
+3. **Bad 示例**：最小违规代码片段。保持简洁，让模式一眼可见。
+4. **Good 示例**：当前项目推荐的替代模式。
+
+完成后的规则文件示例：
+
+````markdown
+---
+id: local.no-print-debug
+title: Avoid print debugging
+language: python
+level: warn
+tags: [local, python]
+---
+
+# Avoid print debugging
+
+Use structured logging instead of committed `print` calls.
+
+```grit
+language python
+`print($value)`
+```
+
+## Bad
+
+```python
+print(user)
+```
+
+## Good
+
+```python
+logger.info("user=%s", user)
+```
+````
+
+## 验证规则
+
+运行 `harness-lint rule verify`，确认 Bad 示例确实会触发 GritQL 模式。这个命令会把每个 Bad 示例传给规则；如果任一示例没有产生诊断，命令会失败：
+
+```bash
+harness-lint rule verify local.no-print-debug
+```
+
+如果验证失败，调整规则文件中的 GritQL 模式并重新运行，直到通过。不能匹配自身 Bad 示例的规则不可用。
+
+## 运行规则
+
+验证后，在完整代码库上运行这条规则，查看模式出现在哪里：
+
+```bash
+harness-lint check --all --rule local.no-print-debug
+```
+
+确认输出符合预期。如果规则报告了意外文件，或漏掉了你知道包含该模式的文件，请调整 GritQL 并重新验证后再提交。
+
+## 把规则限制到特定文件路径
+
+在 GritQL 代码块中使用 `$filename` 元变量，把规则限制到匹配某个路径模式的文件。**不要** 依赖给 `harness-lint check` 传路径来模拟范围；`check` 命令不接受位置路径。
+
+<Warning>
+给 `harness-lint check` 传路径并不会限制规则扫描哪些文件。`check` 命令只接受 `--changed`、`--staged` 或 `--all` 来选择文件集合。如果规则只应该应用到特定路径，请在 GritQL 中用 `$filename` 直接编码范围。
+</Warning>
+
+例如，只检查 TypeScript 源文件并排除测试文件：
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+## GritQL 语言名称
+
+在 `grit` 代码块中使用下面的语言标识符：
+
+| 语言 | GritQL 标识符 |
+|---|---|
+| TypeScript / JavaScript | `language js`，当 TypeScript parser 重要时可用 `language js(typescript)` |
+| Python | `language python` |
+| Go | `language go` |
+| Rust | `language rust` |
+| Ruby | `language ruby` |
+| Java | `language java` |
+| CSS | `language css` |
+| YAML | `language yaml` |
+| JSON | `language json` |
+| HCL | `language hcl` |
+| SQL | `language sql` |
+| PHP | `language php` |
+| Markdown | `language markdown` |
+
+注意：即使规则 frontmatter 写的是 `language: typescript`，GritQL 代码块也必须使用 `language js`。
+
+## 规则级别
+
+默认保持 `level: warn`。只有同时满足下面三点时才使用 `level: error`：
+
+- GritQL 模式精确，不会产生误报。
+- 描述清楚解释了为什么禁止该模式。
+- Bad 和 Good 示例具体且无歧义。
+
+`error` 级规则会让 `harness-lint check` 以非零状态退出，从而让 CI 失败。只有在确信规则可靠时，才把规则提升为 `error`。
+
+## 什么时候不要创建规则
+
+在以下情况下不要创建 harness-lint 规则：
+
+- 反馈依赖 **理解意图**，例如“不要过度设计这个模块”。
+- 模式需要 **跨文件上下文**，例如“这个函数只能由 auth 层调用”。
+- 你无法写出可靠匹配坏代码且不会产生大量误报的 GritQL。
+
+这些约束应该写进 `AGENTS.md` 或设计文档，让人类和 AI 代理作为指导阅读，而不是作为 harness-lint 规则。
+
+---
+
+## 示例：禁止 Go 中的 `context.TODO()`
+
+假设你的团队规定永远不要提交 `context.TODO()`，因为它表示 context 还没接好，合并前应该替换成真正的 context。
+
+### 第 1 步：创建规则
+
+```bash
+harness-lint rule create "Do not use context.TODO" --language go --grit '`context.TODO()`'
+```
+
+这会创建 `rules/do-not-use-context-todo.md`。
+
+### 第 2 步：编辑规则文件
+
+打开 `rules/do-not-use-context-todo.md`，补全描述和示例：
+
+````markdown
+---
+id: local.no-context-todo
+title: Do not use context.TODO
+language: go
+level: warn
+tags: [local, go]
+---
+
+# Do not use context.TODO
+
+`context.TODO()` is a placeholder for an unfinished context wiring. Replace it
+with a real context — typically the `ctx` parameter passed to the enclosing
+function — before merging.
+
+```grit
+language go
+`context.TODO()`
+```
+
+## Bad
+
+```go
+func HandleRequest(w http.ResponseWriter, r *http.Request) {
+    result, err := db.Query(context.TODO(), query)
+}
+```
+
+## Good
+
+```go
+func HandleRequest(w http.ResponseWriter, r *http.Request) {
+    result, err := db.Query(r.Context(), query)
+}
+```
+````
+
+### 第 3 步：验证规则
+
+```bash
+harness-lint rule verify local.no-context-todo
+```
+
+预期输出：
+
+```
+Verified 1 rule(s), 1 Bad example(s).
+```
+
+### 第 4 步：在代码库上运行规则
+
+```bash
+harness-lint check --all --rule local.no-context-todo
+```
+
+查看输出并确认它报告了你预期的文件。如果报告了太多无关文件，就收窄 GritQL，例如添加 `$filename` 条件来排除生成路径。

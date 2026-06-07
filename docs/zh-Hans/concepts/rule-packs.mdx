@@ -1,0 +1,134 @@
+---
+title: "规则包：安装可共享的 GritQL 规则集合"
+sidebarTitle: "规则包"
+description: "规则包是版本化、可共享的 GritQL lint 规则集合，可从目录安装，也可从 Git 仓库引用。"
+---
+
+## 什么是规则包？
+
+规则包是一个版本化、可共享的 GritQL lint 规则集合。在磁盘上，规则包是一个目录，包含：
+
+- `harness-pack.toml` manifest，声明规则包 ID、标题、描述和支持的语言。
+- `rules/` 子目录，其中每条规则对应一个 Markdown 规则文件。
+
+你可以从目录安装规则包，也可以直接从 Git 仓库安装。安装后，harness-lint 会在每次 `check` 运行时把规则包规则和本地规则一起加载。
+
+## 本地规则 vs. 规则包规则
+
+| | 本地规则 | 规则包规则 |
+|---|---|---|
+| **位置** | 项目的 `rules/` 目录，或 `[rules] local` 中列出的目录 | `.harness/packs/<pack-id>/`，由 harness-lint 管理 |
+| **范围** | 项目特定，存在于你的仓库中，由你的团队拥有 | 跨项目共享，版本化并分发 |
+| **版本控制** | 跟随你自己的 git 历史 | 在 `harness.lock` 中用精确校验和锁定 |
+| **适合场景** | 一次性约束、领域特定模式、进行中的规则 | 成熟语言约定、框架规则 |
+
+对只适用于当前代码库的约束，使用本地规则。想在多个仓库共享规则，或采用社区维护的规则集时，使用规则包。
+
+<Tip>
+  写本地规则前，运行 `harness-lint search <keyword>` 查找与你的语言或框架相关的规则包。规则包中的规则已经测试、文档化并持续维护，没有必要在本地重新创建。
+
+  ```sh
+  harness-lint search "python typing"
+  harness-lint search "go concurrency"
+  harness-lint search "react hooks"
+  ```
+</Tip>
+
+## 安装规则包
+
+**按名称从目录安装规则包：**
+
+```sh
+harness-lint install typescript
+harness-lint install python
+harness-lint install python-pep8
+```
+
+harness-lint 会在目录中查找规则包，从已注册的 Git 来源获取它，并把条目加入 `harness.toml` 和 `harness.lock`。
+
+**直接从 Git 来源安装规则包**，需要同时提供 ID 和 source spec：
+
+```sh
+harness-lint install go-concurrency \
+  github:CorrectRoadH/harness-lint@main#packs/go-concurrency
+```
+
+spec 格式为 `github:<owner>/<repo>@<branch-or-tag>#<subdirectory>`。这让你可以引用任意仓库中的规则包，包括私有 fork 或 monorepo。
+
+安装后，harness-lint 会在 `harness.toml` 中记录条目：
+
+```toml
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+go-concurrency = "github:CorrectRoadH/harness-lint@main#packs/go-concurrency"
+```
+
+## 列出和浏览规则包
+
+**列出已安装规则包：**
+
+```sh
+harness-lint list
+```
+
+输出包含规则包 ID、source spec 和安装版本（来自 `harness.lock`）。
+
+**浏览目录中的所有可用规则包：**
+
+```sh
+harness-lint list --available
+```
+
+**按关键词搜索目录：**
+
+```sh
+harness-lint search "python typing"
+```
+
+搜索会按相关性返回匹配的规则包，并给出每个匹配原因和精确安装命令。
+
+## 安装前检查规则包
+
+安装规则包前，你可以阅读它的描述并查看完整规则列表：
+
+```sh
+harness-lint inspect go-concurrency
+```
+
+输出会展示规则包标题、描述、支持语言、每条规则的 ID 和理由、source spec 以及安装命令。用它来确认规则包是否适合当前项目。
+
+## 更新和维护规则包
+
+**把所有已安装规则包更新到最新版本，并重写 `harness.lock`：**
+
+```sh
+harness-lint update
+```
+
+**只检查是否有规则包可更新，不应用更新：**
+
+```sh
+harness-lint outdated
+```
+
+**移除不再需要的规则包：**
+
+```sh
+harness-lint remove typescript
+```
+
+这会从 `harness.toml`、`harness.lock` 和 `.harness/packs/` 下的本地缓存目录移除该规则包。
+
+## lock 文件和可复现安装
+
+每次安装或更新规则包时，harness-lint 都会把精确校验和写入 `harness.lock`。lock 文件保证每台机器和每个 CI job 运行 `harness-lint restore` 时，都得到完全相同的规则包内容，没有漂移，也没有意外规则变化。
+
+**从 lock 文件重建所有规则包**，非常适合 CI：
+
+```sh
+harness-lint restore
+```
+
+`restore` 读取 `harness.lock`、校验 checksum，并重新获取本地缓存中缺失的规则包。如果 `harness.lock` 与 `harness.toml` 不同步，它会失败；此时先运行 `harness-lint update` 进行协调。
+
+把 `harness.toml` 和 `harness.lock` 都提交到版本控制，让整个团队和 CI pipeline 使用完全相同的规则。

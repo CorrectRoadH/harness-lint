@@ -1,0 +1,332 @@
+---
+title: "harness-lint CLI：完整命令和 Flag 参考"
+sidebarTitle: "CLI 参考"
+description: "harness-lint 每个命令的完整参考：check、rule、install、update、restore、search、inspect、list、remove、outdated、doctor 和 init。"
+---
+
+harness-lint 是一个基于 GritQL 的 lint 工具，用于在 AI 辅助工作流中执行编码规则。本页记录 `harness-lint` 二进制提供的每个命令和 flag。
+
+## 全局 Flags
+
+这些 flags 作用于根 `harness-lint` 二进制，并可用于每个子命令。
+
+<ParamField query="--config <PATH>" type="path">
+  指向 `harness.toml` 文件的路径。覆盖自动发现；默认会向上遍历目录树查找 `harness.toml` 或 `.git`。
+</ParamField>
+
+<ParamField query="--cwd <PATH>" type="path">
+  用作项目根发现起点的工作目录。默认是 shell 当前目录。
+</ParamField>
+
+<ParamField query="--json" type="boolean">
+  以 JSON 输出所有内容，而不是人类可读文本。适合 CI 集成和编辑器工具。
+</ParamField>
+
+<ParamField query="-v / --verbose" type="boolean">
+  显示额外诊断输出，包括启用规则数量、缓存命中/未命中计数，以及 GritQL batch 进度。
+</ParamField>
+
+---
+
+## harness-lint init
+
+在当前项目根目录创建 `harness.toml` 配置文件，并脚手架生成本地规则目录。
+
+```sh
+harness-lint init
+harness-lint init --force
+```
+
+<ParamField query="--force" type="boolean">
+  覆盖已有 `harness.toml` 和规则目录。没有这个 flag 时，如果二者任一已经存在，`init` 会停止。
+</ParamField>
+
+初始化后，命令会打印可复制到 `AGENTS.md` 的 AI 代理说明。
+
+---
+
+## harness-lint check
+
+对选定项目文件运行所有启用规则。如果任意 `error` 级规则匹配，则以非零状态退出。
+
+```sh
+harness-lint check --changed
+harness-lint check --staged
+harness-lint check --all
+harness-lint check --changed --rule typescript.no-console-log
+harness-lint check --all --tag security
+```
+
+<ParamField query="--all" type="boolean">
+  扫描项目中的每个文件，同时遵守 `harness.toml` 中的 `[ignore]` 路径。当项目超过 1,000 个文件时必须显式传入，避免意外全量扫描。
+</ParamField>
+
+<ParamField query="--changed" type="boolean">
+  只扫描相对 `harness.toml` 中 `changed_base` git ref 发生变化的文件，默认基准是 `origin/main`。适合 pre-push 检查。
+</ParamField>
+
+<ParamField query="--staged" type="boolean">
+  只扫描已 staged、准备进入下一次 commit 的文件。适合 pre-commit hooks。
+</ParamField>
+
+<ParamField query="--base <REF>" type="string">
+  覆盖 `--changed` 使用的 git ref。接受任何 `git diff` 理解的 ref，例如分支名、tag 或 commit SHA。
+</ParamField>
+
+<ParamField query="--rule <ID>" type="string">
+  把检查限制到单条规则 ID。可重复传入以包含多条规则。例如：`--rule typescript.no-console-log --rule python.no-print-debug`。
+</ParamField>
+
+<ParamField query="--tag <TAG>" type="string">
+  把检查限制到 `tags` 数组包含指定值的规则。可重复传入。例如：`--tag security --tag logging`。
+</ParamField>
+
+<Tip>
+  `harness-lint check` 不接受位置文件路径。用 `--changed`、`--staged` 或 `--all` 选择文件集合，用 `--rule` 或 `--tag` 选择规则。
+</Tip>
+
+当项目少于 1,000 个文件，且你运行 `harness-lint check` 时没有传三个范围 flag，harness-lint 会隐式执行完整扫描。超过 1,000 个文件时，它会拒绝并要求你显式传 `--changed` 或 `--all`。
+
+---
+
+## harness-lint rule
+
+`rule` 子命令组管理本地规则。所有子命令都会加载项目配置，并从已配置本地目录和已安装规则包中发现规则。
+
+### harness-lint rule list
+
+列出 harness-lint 当前加载的每条规则，包括本地目录和已安装规则包中的规则。
+
+```sh
+harness-lint rule list
+harness-lint rule list --json
+```
+
+每个条目显示规则 ID、级别、语言和标签。
+
+---
+
+### harness-lint rule explain \<rule-id\>
+
+打印单条规则的完整描述：标题、级别、语言、标签、描述正文、GritQL 模式和 Bad/Good 示例。
+
+```sh
+harness-lint rule explain typescript.no-console-log
+harness-lint rule explain local.no-print
+```
+
+---
+
+### harness-lint rule create \<feedback\>
+
+在第一个配置的本地规则目录中脚手架生成新规则文件。
+
+```sh
+harness-lint rule create "Avoid print debugging" \
+  --language python \
+  --grit '`print($value)`'
+```
+
+<ParamField query="feedback" type="string" required>
+  规则执行内容的简短描述。它会成为生成文件中的 `title`。如果包含空格，请加引号。
+</ParamField>
+
+<ParamField query="--language <lang>" type="string" required>
+  规则的语言名称。使用 Grit CLI 名称：`js`、`python`、`go`、`rust`、`ruby`、`java`、`css`、`yaml`、`json`、`markdown`、`hcl`、`sql`、`php`。TypeScript 和 JavaScript 使用 `js`。
+</ParamField>
+
+<ParamField query="--grit <pattern>" type="string" required>
+  有效 GritQL 模式。该模式会被嵌入生成规则文件的 fenced code block 中，生成的代码块会自动添加 `language <lang>` 指令。
+</ParamField>
+
+创建规则后，用 `harness-lint rule verify` 验证，并在真实文件上测试：
+
+```sh
+harness-lint rule verify local.no-print
+harness-lint check --all --rule local.no-print
+```
+
+---
+
+### harness-lint rule verify \[\<rule-id\>\]
+
+把每条规则的 `## Bad` 示例传给规则的 GritQL 模式，并确认每个 Bad 示例都会触发匹配。如果任一 Bad 示例没有触发，则失败。
+
+```sh
+# Verify all rules
+harness-lint rule verify
+
+# Verify a single rule
+harness-lint rule verify local.no-print
+```
+
+<ParamField query="rule-id" type="string">
+  可选规则 ID。省略时，会验证所有带 Bad 示例的已加载规则。
+</ParamField>
+
+验证会在以下情况下失败：
+- 规则没有 `## Bad` section。
+- Bad 示例为空或只包含 `TODO` 行。
+- GritQL 模式没有匹配 Bad 示例中的任何行。
+
+---
+
+### harness-lint rule suggest \<feedback\>
+
+在远程规则包目录中搜索与反馈文本匹配的规则。当已有规则覆盖该反馈时，会推荐规则包安装命令；没有匹配时，会显示 `rule create` 命令。
+
+```sh
+harness-lint rule suggest "avoid committing debug output"
+harness-lint rule suggest "no goroutine leaks"
+```
+
+<ParamField query="feedback" type="string" required>
+  你希望执行的编码约束的自然语言描述。
+</ParamField>
+
+---
+
+## harness-lint install \<id\> \[\<spec\>\]
+
+把规则包加入 `harness.toml` 并安装到本地。
+
+```sh
+harness-lint install typescript
+harness-lint install typescript "github:CorrectRoadH/harness-lint@main#packs/typescript"
+```
+
+<ParamField query="id" type="string" required>
+  要安装的规则包标识符。必须匹配目录中的条目，或匹配你要分配给本地或 Git 来源规则包的 ID。
+</ParamField>
+
+<ParamField query="spec" type="string">
+  显式规则包 source spec。省略时，harness-lint 会从目录获取推荐 spec。格式：Git 规则包使用 `github:<owner>/<repo>@<ref>#<subpath>`，本地规则包使用 `local:<path>`。
+</ParamField>
+
+安装后，`harness.toml` 会在 `[packs]` 中新增条目，`harness.lock` 会更新。把两个文件都提交到版本控制。
+
+---
+
+## harness-lint update
+
+重新获取 `harness.toml` 中列出的每个规则包，并用最新 checksum 和版本重写 `harness.lock`。
+
+```sh
+harness-lint update
+```
+
+使用这个命令从远程规则包拉取新版本。运行后提交更新后的 `harness.lock`。
+
+---
+
+## harness-lint restore
+
+从 `harness.lock` 中记录的精确版本重建本地规则包缓存。不会获取新版本。
+
+```sh
+harness-lint restore
+```
+
+在 CI 或 fresh clone 后使用它安装规则包，而不改变 lock 文件。如果 `harness.toml` 中列出某个规则包，但 `harness.lock` 缺失它，命令会失败；此时运行 `harness-lint update`。
+
+---
+
+## harness-lint outdated
+
+比较已安装规则包版本和可用版本，并列出有更新的规则包。
+
+```sh
+harness-lint outdated
+```
+
+打印包含规则包 ID、已安装 checksum 和可用 checksum 的表格。没有更新时打印 `All packs are up to date.`。
+
+---
+
+## harness-lint remove \<id\>
+
+从 `harness.toml` 移除规则包，从 `harness.lock` 删除它，并移除缓存文件。
+
+```sh
+harness-lint remove typescript
+```
+
+<ParamField query="id" type="string" required>
+  要移除的规则包 ID，必须与 `harness.toml` 中出现的 ID 完全一致。
+</ParamField>
+
+---
+
+## harness-lint list
+
+列出已安装规则包；带 `--available` 时列出目录中的所有规则包。
+
+```sh
+# List installed packs
+harness-lint list
+
+# List all packs available in the catalog
+harness-lint list --available
+```
+
+<ParamField query="--available" type="boolean">
+  查询远程目录并打印每个可安装规则包。没有这个 flag 时，只列出已配置在 `harness.toml` 中的规则包。
+</ParamField>
+
+---
+
+## harness-lint search \<query...\>
+
+用自然语言反馈搜索规则包目录，并返回排序结果。
+
+```sh
+harness-lint search "python typing"
+harness-lint search "no goroutine leaks"
+harness-lint search "avoid console log typescript"
+```
+
+<ParamField query="query" type="string" required>
+  描述编码约束的一个或多个词。多个词会合并成一个搜索短语。没有提供 query 词时，会列出所有可用规则包。
+</ParamField>
+
+每个结果显示规则包 ID、规则标题、匹配分数和安装建议。
+
+---
+
+## harness-lint inspect \<id\>
+
+显示目录中单个规则包的详细信息：标题、描述、支持语言、包含的规则和 install spec。
+
+```sh
+harness-lint inspect typescript
+harness-lint inspect go-concurrency
+```
+
+<ParamField query="id" type="string" required>
+  要检查的规则包 ID。必须存在于目录中。
+</ParamField>
+
+---
+
+## harness-lint doctor
+
+诊断项目配置、本地规则、GritQL 有效性、`grit` CLI 可用性和 git 集成。为每个检查打印 `ok`、`warn` 或 `error` 状态。
+
+```sh
+harness-lint doctor
+harness-lint doctor --json
+```
+
+执行的检查：
+
+| 检查 | 验证内容 |
+|---|---|
+| `project-root` | 在祖先目录中找到 `harness.toml` 或 `.git` |
+| `config` | `harness.toml` 无错误解析 |
+| `exceptions` | 每个 `[[exceptions]]` 条目都引用已知规则 ID |
+| `local-rules` | 本地规则目录存在，且所有规则都有可执行 GritQL |
+| `rules` | 所有配置的规则包能加载，规则能解析 |
+| `grit` | `grit` CLI 已安装并返回版本 |
+| `git` | 项目位于 git worktree 中 |
+
+如果任一检查状态为 `error`，`harness-lint doctor` 会以非零状态退出。遇到意外问题时，先运行它。

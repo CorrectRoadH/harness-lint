@@ -364,23 +364,72 @@ fn ensure_unique_rule_ids(rules: &[crate::model::RuleDefinition]) -> Result<()> 
     Ok(())
 }
 
-pub fn load_local_rules_pack(root: &Path, dirs: &[PathBuf]) -> Result<RulePack> {
-    let mut rules = Vec::new();
+pub fn load_local_rule_packs(root: &Path, dirs: &[PathBuf]) -> Result<Vec<RulePack>> {
+    let mut packs = Vec::new();
+    let mut direct_rules = Vec::new();
     for dir in dirs {
         let path = if dir.is_absolute() {
             dir.clone()
         } else {
             root.join(dir)
         };
-        rules.extend(discover_rules(&path, None)?);
+        if !path.exists() {
+            continue;
+        }
+
+        direct_rules.extend(discover_direct_rules(&path)?);
+        for pack_dir in direct_child_dirs(&path)? {
+            let name = pack_dir
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("local")
+                .to_string();
+            let rules = discover_rules(&pack_dir, None)?;
+            ensure_unique_rule_ids(&rules)?;
+            packs.push(RulePack {
+                id: format!("local.{name}"),
+                name,
+                version: "0.0.0".to_string(),
+                rules,
+            });
+        }
     }
-    ensure_unique_rule_ids(&rules)?;
-    Ok(RulePack {
-        id: "local".to_string(),
-        name: "Local Rules".to_string(),
-        version: "0.0.0".to_string(),
-        rules,
-    })
+    ensure_unique_rule_ids(&direct_rules)?;
+    if !direct_rules.is_empty() {
+        packs.push(RulePack {
+            id: "local".to_string(),
+            name: "Local Rules".to_string(),
+            version: "0.0.0".to_string(),
+            rules: direct_rules,
+        });
+    }
+    Ok(packs)
+}
+
+fn discover_direct_rules(dir: &Path) -> Result<Vec<crate::model::RuleDefinition>> {
+    let mut rules = Vec::new();
+    for entry in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
+        let entry = entry.with_context(|| format!("failed to read entry in {}", dir.display()))?;
+        let path = entry.path();
+        if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("md") {
+            rules.push(parse_rule_file(&path, None)?);
+        }
+    }
+    rules.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(rules)
+}
+
+fn direct_child_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut dirs = Vec::new();
+    for entry in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
+        let entry = entry.with_context(|| format!("failed to read entry in {}", dir.display()))?;
+        let path = entry.path();
+        if path.is_dir() {
+            dirs.push(path);
+        }
+    }
+    dirs.sort();
+    Ok(dirs)
 }
 
 fn git_url(spec: &str) -> String {

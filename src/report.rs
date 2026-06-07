@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::model::{Diagnostic, RuleDefinition, Severity};
+use crate::model::{Diagnostic, RuleDefinition, RulePack, Severity};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ReportFormat {
@@ -108,22 +108,41 @@ fn caret_width(diagnostic: &Diagnostic) -> usize {
     1
 }
 
-pub fn print_rules(rules: &[RuleDefinition], format: ReportFormat) -> Result<()> {
+pub fn print_rule_packs(packs: &[RulePack], format: ReportFormat) -> Result<()> {
     match format {
-        ReportFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&rules_to_json(rules))?)
-        }
+        ReportFormat::Json => anyhow::bail!(
+            "`harness-lint --json rule list` is not supported; `rule list` always prints Markdown"
+        ),
         ReportFormat::Human => {
-            if rules.is_empty() {
+            let non_empty_packs = packs
+                .iter()
+                .filter(|pack| !pack.rules.is_empty())
+                .collect::<Vec<_>>();
+            if non_empty_packs.is_empty() {
                 println!("No rules found.");
+                return Ok(());
             }
-            for rule in rules {
-                println!(
-                    "{}\t{:?}\t{}",
-                    rule.id,
-                    rule.level,
-                    rule.source_path.display()
-                );
+            for (index, pack) in non_empty_packs.iter().enumerate() {
+                if index > 0 {
+                    println!();
+                }
+                println!("## {}", markdown_text(&pack.name));
+                println!();
+                println!("| Level | ID | Description |");
+                println!("| --- | --- | --- |");
+                for rule in &pack.rules {
+                    let description = if rule.description.is_empty() {
+                        &rule.title
+                    } else {
+                        &rule.description
+                    };
+                    println!(
+                        "| {} | `{}` | {} |",
+                        rule.level,
+                        markdown_text(&rule.id),
+                        markdown_text(description)
+                    );
+                }
             }
         }
     }
@@ -140,21 +159,15 @@ pub fn print_rule_explain(rule: &RuleDefinition) {
     }
 }
 
-fn rules_to_json(rules: &[RuleDefinition]) -> Vec<serde_json::Value> {
-    rules
-        .iter()
-        .map(|rule| {
-            serde_json::json!({
-                "id": rule.id,
-                "title": rule.title,
-                "language": rule.language,
-                "level": format!("{:?}", rule.level),
-                "skill": rule.skill,
-                "source_path": rule.source_path,
-                "pack_id": rule.pack_id,
-            })
-        })
-        .collect()
+fn markdown_text(value: &str) -> String {
+    value
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace('\\', "\\\\")
+        .replace('|', "\\|")
 }
 
 fn severity_label(severity: Severity) -> &'static str {

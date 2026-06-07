@@ -1263,8 +1263,8 @@ fn run_rule(
     match command {
         RuleCommand::List => {
             let config = config::load_config(&root, config_path)?;
-            let rules = load_rules(&root, &config)?;
-            report::print_rules(&rules, format)?;
+            let packs = load_rule_packs(&root, &config)?;
+            report::print_rule_packs(&packs, format)?;
         }
         RuleCommand::Explain { rule_id } => {
             let config = config::load_config(&root, config_path)?;
@@ -1496,7 +1496,7 @@ fn load_rule_packs(
             }
         }
     }
-    packs.push(pack::load_local_rules_pack(root, &config.rules.local)?);
+    packs.extend(pack::load_local_rule_packs(root, &config.rules.local)?);
     Ok(packs)
 }
 

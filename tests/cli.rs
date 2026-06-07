@@ -23,6 +23,36 @@ fn run_git(repo: &std::path::Path, args: &[&str]) {
     );
 }
 
+fn init_repo(binary: &str, repo: &std::path::Path) {
+    let init = Command::new(binary)
+        .arg("--cwd")
+        .arg(repo)
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(
+        init.status.success(),
+        "{}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+}
+
+fn assert_failure_contains(output: &std::process::Output, expected: &str) {
+    assert!(!output.status.success(), "command unexpectedly succeeded");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(expected),
+        "expected {expected:?} in:\n{stderr}"
+    );
+}
+
+fn assert_pack_not_configured(repo: &std::path::Path, id: &str) {
+    let config = fs::read_to_string(repo.join("harness.toml")).unwrap();
+    assert!(!config.contains(&format!("{id} =")), "{config}");
+    let lock = fs::read_to_string(repo.join("harness.lock")).unwrap_or_default();
+    assert!(!lock.contains(&format!("[packs.{id}]")), "{lock}");
+}
+
 #[test]
 fn cli_exposes_version_and_command_descriptions() {
     let binary = env!("CARGO_BIN_EXE_harness-lint");
@@ -411,6 +441,138 @@ logger.info("user=%s", user);
 }
 
 #[test]
+fn cli_rule_list_prints_markdown_tables_grouped_by_pack() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    init_repo(binary, tempdir.path());
+
+    let frontend_rules = tempdir.path().join("rules/frontend");
+    fs::create_dir_all(&frontend_rules).unwrap();
+    fs::write(
+        frontend_rules.join("no-var.md"),
+        r#"---
+id: local.no-var
+title: Avoid var declarations
+language: typescript
+level: error
+tags: [typescript]
+---
+
+# Avoid var declarations
+
+Use let or const.
+
+```grit
+language js
+`var $name = $value`
+```
+
+## Bad
+
+```typescript
+var total = 0
+```
+
+## Good
+
+```typescript
+let total = 0
+```
+"#,
+    )
+    .unwrap();
+
+    let pack_dir = tempdir.path().join("demo-pack");
+    let rules_dir = pack_dir.join("rules");
+    fs::create_dir_all(&rules_dir).unwrap();
+    fs::write(
+        pack_dir.join("harness-pack.toml"),
+        r#"[pack]
+id = "demo"
+name = "Demo Pack"
+version = "0.1.0"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        rules_dir.join("no-print.md"),
+        r#"---
+id: demo.no-print
+title: Avoid print
+language: python
+level: warn
+tags: [python]
+---
+
+# Avoid print
+
+Use logging.
+
+```grit
+language python
+`print($value)`
+```
+"#,
+    )
+    .unwrap();
+
+    let spec = format!("local:{}", pack_dir.display());
+    let install = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["install", "demo", &spec])
+        .output()
+        .unwrap();
+    assert!(
+        install.status.success(),
+        "{}",
+        String::from_utf8_lossy(&install.stderr)
+    );
+
+    let list = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["rule", "list"])
+        .output()
+        .unwrap();
+    assert!(
+        list.status.success(),
+        "{}",
+        String::from_utf8_lossy(&list.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    assert!(stdout.contains("## Demo Pack"), "{stdout}");
+    assert!(stdout.contains("## frontend"), "{stdout}");
+    assert!(stdout.contains("| Level | ID | Description |"), "{stdout}");
+    assert!(
+        stdout.contains("| warn | `demo.no-print` | Use logging. |"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("| error | `local.no-var` | Use let or const. |"),
+        "{stdout}"
+    );
+    assert!(stdout.find("## Demo Pack") < stdout.find("## frontend"));
+}
+
+#[test]
+fn cli_rule_list_rejects_json_output() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    init_repo(binary, tempdir.path());
+
+    let list = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["--json", "rule", "list"])
+        .output()
+        .unwrap();
+
+    assert_failure_contains(&list, "rule list` is not supported");
+    assert_failure_contains(&list, "always prints Markdown");
+}
+
+#[test]
 fn cli_pack_catalog_add_outdated_update_and_remove_work() {
     let tempdir = tempfile::tempdir().unwrap();
     let pack_dir = tempdir.path().join("demo-pack");
@@ -630,6 +792,181 @@ language python
     let lock = fs::read_to_string(tempdir.path().join("harness.lock")).unwrap();
     assert!(!config.contains("demo ="));
     assert!(!lock.contains("[packs.demo]"));
+}
+
+#[test]
+fn cli_install_reports_catalog_pack_not_found() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let catalog_path = tempdir.path().join("catalog.json");
+    fs::write(&catalog_path, "[]").unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    init_repo(binary, tempdir.path());
+    let config_path = tempdir.path().join("harness.toml");
+    let config = fs::read_to_string(&config_path).unwrap();
+    let config = config.replace(
+        "https://raw.githubusercontent.com/CorrectRoadH/harness-lint/main/site/catalog.json",
+        &catalog_path.to_string_lossy(),
+    );
+    fs::write(&config_path, config).unwrap();
+
+    let install = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["install", "missing-pack"])
+        .output()
+        .unwrap();
+
+    assert_failure_contains(&install, "pack `missing-pack` was not found in the catalog");
+    assert_pack_not_configured(tempdir.path(), "missing-pack");
+}
+
+#[test]
+fn cli_install_reports_missing_local_pack_path() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    init_repo(binary, tempdir.path());
+    let missing = tempdir.path().join("does-not-exist");
+    let spec = format!("local:{}", missing.display());
+
+    let install = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["install", "missing-local", &spec])
+        .output()
+        .unwrap();
+
+    assert_failure_contains(&install, "local pack path does not exist");
+    assert_failure_contains(&install, &missing.display().to_string());
+    assert_pack_not_configured(tempdir.path(), "missing-local");
+}
+
+#[test]
+fn cli_install_reports_local_pack_without_manifest() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let pack_dir = tempdir.path().join("not-a-pack");
+    fs::create_dir_all(&pack_dir).unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    init_repo(binary, tempdir.path());
+    let spec = format!("local:{}", pack_dir.display());
+
+    let install = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["install", "not-a-pack", &spec])
+        .output()
+        .unwrap();
+
+    assert_failure_contains(
+        &install,
+        "pack `not-a-pack` does not contain harness-pack.toml",
+    );
+    assert_pack_not_configured(tempdir.path(), "not-a-pack");
+}
+
+#[test]
+fn cli_install_reports_unsupported_pack_source() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    init_repo(binary, tempdir.path());
+
+    let install = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["install", "cargo-pack", "cargo:harness-rules"])
+        .output()
+        .unwrap();
+
+    assert_failure_contains(&install, "unsupported pack source for `cargo-pack`");
+    assert_pack_not_configured(tempdir.path(), "cargo-pack");
+}
+
+#[test]
+fn cli_install_reports_invalid_pack_manifest() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let pack_dir = tempdir.path().join("bad-manifest");
+    fs::create_dir_all(&pack_dir).unwrap();
+    fs::write(
+        pack_dir.join("harness-pack.toml"),
+        r#"[pack]
+id = "bad-manifest"
+name = "Bad Manifest"
+"#,
+    )
+    .unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    init_repo(binary, tempdir.path());
+    let spec = format!("local:{}", pack_dir.display());
+
+    let install = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["install", "bad-manifest", &spec])
+        .output()
+        .unwrap();
+
+    assert_failure_contains(&install, "failed to parse");
+    assert_failure_contains(&install, "harness-pack.toml");
+    assert_pack_not_configured(tempdir.path(), "bad-manifest");
+}
+
+#[test]
+fn cli_install_reports_duplicate_rule_ids_in_pack() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let pack_dir = tempdir.path().join("duplicate-rules");
+    let rules_dir = pack_dir.join("rules");
+    fs::create_dir_all(&rules_dir).unwrap();
+    fs::write(
+        pack_dir.join("harness-pack.toml"),
+        r#"[pack]
+id = "duplicate-rules"
+name = "Duplicate Rules"
+version = "0.1.0"
+"#,
+    )
+    .unwrap();
+    for file in ["first.md", "second.md"] {
+        fs::write(
+            rules_dir.join(file),
+            r#"---
+id: duplicate-rules.no-print
+title: Avoid print
+language: python
+level: warn
+tags: [python]
+---
+
+# Avoid print
+
+Use logging.
+
+```grit
+language python
+`print($value)`
+```
+"#,
+        )
+        .unwrap();
+    }
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    init_repo(binary, tempdir.path());
+    let spec = format!("local:{}", pack_dir.display());
+
+    let install = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["install", "duplicate-rules", &spec])
+        .output()
+        .unwrap();
+
+    assert_failure_contains(
+        &install,
+        "duplicate rule id in pack: duplicate-rules.no-print",
+    );
+    assert_pack_not_configured(tempdir.path(), "duplicate-rules");
 }
 
 #[cfg(unix)]

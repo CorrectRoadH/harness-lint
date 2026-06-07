@@ -1,0 +1,260 @@
+---
+title: "harness.toml: Complete Configuration File Reference"
+sidebarTitle: "harness.toml"
+description: "Full reference for every section and field in harness.toml: lint settings, rule paths, packs, overrides, disabled rules, ignores, and exceptions."
+---
+
+`harness.toml` is the single configuration file for a harness-lint project. Place it at the root of your repository (alongside `.git`). harness-lint walks up the directory tree from the current working directory to find it automatically, so you never need to pass `--config` during normal use.
+
+Run `harness-lint init` to create a starter `harness.toml` and rules directory. After that, open the file directly and extend it as your project grows.
+
+---
+
+## \[project\]
+
+Optional section for project-level metadata.
+
+<ParamField query="name" type="string">
+  A human-readable project name shown in generated configuration and diagnostic output. Has no effect on rule evaluation.
+
+  ```toml
+  [project]
+  name = "my-service"
+  ```
+</ParamField>
+
+---
+
+## \[lint\]
+
+Controls default lint behavior for the whole project.
+
+<ParamField query="default_level" type="string" default="warn">
+  The severity applied to rules that do not specify an explicit level. Accepted values: `"warn"` and `"error"`.
+
+  - `"warn"` — reports the match but does not cause `harness-lint check` to exit with a non-zero code.
+  - `"error"` — reports the match **and** causes `harness-lint check` to fail.
+
+  ```toml
+  [lint]
+  default_level = "warn"
+  ```
+</ParamField>
+
+<ParamField query="changed_base" type="string" default="origin/main">
+  The git ref that `harness-lint check --changed` compares against to determine which files have changed. Accepts any ref that `git diff` understands: a remote branch, local branch, tag, or commit SHA.
+
+  ```toml
+  [lint]
+  changed_base = "origin/main"
+  ```
+</ParamField>
+
+<ParamField query="cache" type="boolean" default="true">
+  When `true`, harness-lint stores per-file diagnostic results in `.harness/cache/` and reuses them on subsequent runs when the file content, rule fingerprint, and config fingerprint all match. Set to `false` to disable caching, for example when debugging a rule.
+
+  ```toml
+  [lint]
+  cache = true
+  ```
+</ParamField>
+
+---
+
+## \[rules\]
+
+Declares where harness-lint looks for locally authored rule files.
+
+<ParamField query="local" type="array of paths" default='["rules"]'>
+  A list of directories (relative to the project root) that contain local rule Markdown files. harness-lint discovers all `*.md` files in each directory and loads them as rules.
+
+  When you run `harness-lint rule create`, the new rule file is written to the **first** directory in this list.
+
+  ```toml
+  [rules]
+  local = ["rules"]
+  ```
+
+  You can point to multiple directories:
+
+  ```toml
+  [rules]
+  local = ["rules", "team-rules", "security-rules"]
+  ```
+</ParamField>
+
+---
+
+## \[packs\]
+
+A map of pack IDs to source specifications for externally distributed rule packs. Each key is the pack ID (used in rule IDs like `typescript.no-console-log`) and each value is the source spec.
+
+```toml
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+python     = "github:CorrectRoadH/harness-lint@main#packs/python"
+```
+
+**Source spec formats:**
+
+- `github:<owner>/<repo>@<ref>#<subpath>` — clone from a GitHub repository at the given ref and treat `<subpath>` as the pack root.
+- `local:<path>` — use a directory on disk relative to the project root. Useful for monorepos that share rules across packages.
+
+Add packs with `harness-lint install <id>` (which writes both `harness.toml` and `harness.lock`) or by editing this section directly and running `harness-lint update`.
+
+---
+
+## \[overrides\]
+
+A map of rule IDs to severity levels. Overrides change the effective level of a rule without touching its source file. Useful for tightening a pack rule to `"error"` for your project.
+
+<ParamField query="<rule-id>" type="string">
+  The key is a fully-qualified rule ID (e.g. `"typescript.no-console-log"`). The value is `"warn"` or `"error"`.
+
+  ```toml
+  [overrides]
+  "typescript.no-console-log" = "error"
+  "python.no-print-debug"     = "error"
+  ```
+</ParamField>
+
+---
+
+## \[disabled\]
+
+Turns off specific rules entirely. Disabled rules are never loaded during `harness-lint check`.
+
+<ParamField query="rules" type="array of strings" default="[]">
+  A list of fully-qualified rule IDs to disable.
+
+  ```toml
+  [disabled]
+  rules = [
+    "typescript.no-explicit-any",
+    "go-concurrency.no-time-after-loop",
+  ]
+  ```
+</ParamField>
+
+---
+
+## \[ignore\]
+
+Skips entire file paths for **all** rules. Use this for generated output, vendored code, or build artifacts that you never want scanned.
+
+<ParamField query="paths" type="array of glob patterns" default="[]">
+  A list of glob patterns. Any file whose path matches at least one pattern is excluded from every rule check.
+
+  ```toml
+  [ignore]
+  paths = [
+    "dist/**",
+    "coverage/**",
+    "vendor/**",
+    "**/*.generated.ts",
+  ]
+  ```
+
+  <Tip>
+    Use `[[exceptions]]` (see below) when you need to exclude a *specific rule* for a subset of files. Reserve `[ignore]` for paths where no rules should run at all.
+  </Tip>
+</ParamField>
+
+---
+
+## \[\[exceptions\]\]
+
+Hides results for a single rule on a specific set of files. Other rules still check those files normally. Use `[[exceptions]]` when a rule is correct in general but has a known, documented exception in part of your codebase.
+
+`[[exceptions]]` is a TOML array of tables — each block with `[[exceptions]]` appends one entry to the list.
+
+<ParamField query="rule" type="string" required>
+  The fully-qualified ID of the rule whose results should be hidden for the matching paths.
+</ParamField>
+
+<ParamField query="paths" type="array of strings" required>
+  A list of glob patterns. Diagnostics from `rule` are hidden for any file that matches at least one pattern.
+</ParamField>
+
+<ParamField query="reason" type="string">
+  A human-readable explanation of why the exception exists. Optional but strongly recommended — it tells reviewers and AI agents why the suppression is intentional.
+
+  ```toml
+  [[exceptions]]
+  rule   = "typescript.no-console-log"
+  paths  = ["src/generated/**"]
+  reason = "Generated SDK code emits debug output during local mocks."
+
+  [[exceptions]]
+  rule   = "go-concurrency.no-untracked-goroutine"
+  paths  = ["internal/bootstrap/*.go"]
+  reason = "Bootstrap goroutines are intentionally fire-and-forget."
+  ```
+</ParamField>
+
+<Note>
+  `[[suppressions]]` is a deprecated alias for `[[exceptions]]`. harness-lint still reads it but prints a warning. Rename it to `[[exceptions]]` to silence the warning.
+</Note>
+
+---
+
+## Complete Example
+
+A realistic `harness.toml` showing every section:
+
+```toml
+# Optional project name shown in generated config.
+[project]
+name = "my-service"
+
+# Default lint behavior.
+[lint]
+# warn reports a problem; error makes the check fail.
+default_level = "warn"
+# Used by `harness-lint check --changed`.
+changed_base = "origin/main"
+# Reuse file-level results between runs.
+cache = true
+
+# Local project-owned rule files.
+[rules]
+local = ["rules"]
+
+# Shared rule packs to install and restore.
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+python     = "github:CorrectRoadH/harness-lint@main#packs/python"
+
+# Change the level of one rule without editing the rule file.
+[overrides]
+"typescript.no-console-log" = "error"
+
+# Turn off specific rules entirely.
+[disabled]
+rules = ["typescript.no-explicit-any"]
+
+# Skip these paths for every rule.
+[ignore]
+paths = ["dist/**", "coverage/**", "**/*.generated.ts"]
+
+# Hide one rule only for matching paths; other rules still check those files.
+[[exceptions]]
+rule   = "typescript.no-console-log"
+paths  = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+
+[[exceptions]]
+rule   = "go-concurrency.no-untracked-goroutine"
+paths  = ["internal/bootstrap/*.go"]
+reason = "Bootstrap goroutines are intentionally fire-and-forget at startup."
+```
+
+---
+
+## harness.lock
+
+`harness.lock` is an auto-generated companion file that records the exact checksum, version, and local path of every installed pack. Do not edit it by hand.
+
+- Run `harness-lint update` to refresh it when pulling new pack versions.
+- Run `harness-lint restore` in CI to install packs from the lock file without fetching updates.
+- Commit both `harness.toml` and `harness.lock` to version control so every team member and CI job uses the same rule versions.

@@ -1,0 +1,135 @@
+---
+title: "Integrate harness-lint into Your CI Pipeline Workflows"
+sidebarTitle: "CI Integration"
+description: "Run harness-lint in CI to block merges when error-level rules fail, restore packs from the lock file, and cache results for fast runs."
+---
+
+harness-lint is designed to slot into any CI pipeline with minimal configuration. It exits with a non-zero code when any `level: error` rule triggers, which lets you fail pull requests automatically without any extra scripting.
+
+## How CI failure works
+
+`harness-lint check` exits with code `0` when no `error`-level rules fire. It exits with a non-zero code when at least one `error`-level diagnostic is produced. Rules at `level: warn` always appear in the output but never cause a non-zero exit.
+
+Promote a rule to `error` only when its GritQL, description, and examples are all clear. See [Writing Rules](/guides/writing-rules) for guidance on rule levels.
+
+## Install harness-lint in CI
+
+harness-lint depends on the `grit` CLI. Install both tools before running any checks:
+
+```bash
+brew install getgrit/tap/grit
+brew install CorrectRoadH/tap/harness-lint
+```
+
+On Linux CI runners (which typically have Homebrew available), the same two commands work. If your runner uses a different package manager, install the `grit` binary manually from the [Grit releases page](https://github.com/getgrit/gritql/releases), then install the `harness-lint` binary from the [harness-lint releases page](https://github.com/CorrectRoadH/harness-lint/releases).
+
+## Restore packs in CI
+
+Never run `harness-lint update` in CI — it fetches the latest versions and can introduce unexpected changes mid-pipeline. Use `restore` instead, which reads `harness.lock` and rebuilds the local pack cache from the exact pinned versions:
+
+```bash
+harness-lint restore
+```
+
+`restore` fails fast if `harness.lock` is out of sync with `harness.toml`. When that happens, run `harness-lint update` locally, commit the updated lock file, and re-trigger CI.
+
+## Run the check
+
+For a full scan of every file in the project:
+
+```bash
+harness-lint check --all
+```
+
+For a scan limited to files changed in a pull request:
+
+```bash
+harness-lint check --changed --base origin/main
+```
+
+<Tip>
+Use `--changed --base origin/main` in pull-request checks to keep runs fast and focused on what changed. Reserve `--all` for the main-branch check that runs after every merge — it catches issues that only appear when looking at the full codebase together.
+</Tip>
+
+## JSON output for CI tools
+
+Pass `--json` before the subcommand to get machine-readable diagnostics. Pipe the output to a downstream tool, upload it as a build artifact, or parse it in a custom notification step:
+
+```bash
+harness-lint --json check --all
+```
+
+Each diagnostic in the JSON output includes the rule ID, severity level, file path, line and column, and whether a fix is available.
+
+## Enable result caching
+
+Set `cache = true` in the `[lint]` section of `harness.toml` to enable file-level result caching. On repeated runs, harness-lint skips files whose content and rule fingerprint haven't changed and loads their results from cache:
+
+```toml
+[lint]
+cache = true
+```
+
+Cache hits significantly speed up repeated CI runs — especially useful when most files in a pull request haven't changed. Pair caching with a CI cache step (see the GitHub Actions example below) to persist the cache directory between runs.
+
+## GitHub Actions example
+
+The following workflow installs the required tools, restores packs from the lock file, and runs a full check. Copy it to `.github/workflows/lint.yml` and adjust the trigger and branch names for your project.
+
+```yaml
+name: harness-lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for --changed with a base branch
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Install grit
+        run: brew install getgrit/tap/grit
+
+      - name: Install harness-lint
+        run: brew install CorrectRoadH/tap/harness-lint
+
+      - name: Cache harness-lint results
+        uses: actions/cache@v4
+        with:
+          path: .harness/cache
+          key: harness-lint-${{ runner.os }}-${{ hashFiles('harness.lock') }}
+          restore-keys: |
+            harness-lint-${{ runner.os }}-
+
+      - name: Restore packs from lock file
+        run: harness-lint restore
+
+      - name: Run lint (full scan on main, changed files on PRs)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            harness-lint check --changed --base origin/${{ github.base_ref }}
+          else
+            harness-lint check --all
+          fi
+```
+
+### What each step does
+
+| Step | Purpose |
+|---|---|
+| `checkout` with `fetch-depth: 0` | Fetches full history so `--changed` can diff against the base branch |
+| Install `grit` | Provides the GritQL engine that harness-lint delegates pattern matching to |
+| Install `harness-lint` | Installs the lint orchestrator |
+| `actions/cache` | Persists the result cache between runs to speed up checks |
+| `harness-lint restore` | Rebuilds the pack cache from `harness.lock` — no surprise updates |
+| `harness-lint check` | Runs the appropriate scan and exits non-zero on `error`-level findings |

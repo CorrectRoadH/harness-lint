@@ -1,0 +1,114 @@
+---
+title: "harness-lint Installation Guide for macOS and Linux"
+sidebarTitle: "Installation"
+description: "Install harness-lint and its GritQL dependency via Homebrew, verify the setup with the doctor command, and initialize your first project."
+---
+
+harness-lint is distributed via Homebrew and requires the `grit` CLI as a prerequisite. Follow the steps below to get both tools installed, verify the setup, and initialize your first project.
+
+<Warning>
+  The `grit` CLI must be installed before you run `harness-lint check`. Without it, harness-lint cannot execute GritQL patterns and the check command will fail. Install `grit` first using the step below.
+</Warning>
+
+<Steps>
+  <Step title="Install grit (GritQL engine)">
+    harness-lint delegates all pattern matching to the `grit` binary. Install it from the official Homebrew tap:
+
+    ```sh
+    brew install getgrit/tap/grit
+    ```
+
+    Confirm `grit` is available:
+
+    ```sh
+    grit --version
+    ```
+  </Step>
+
+  <Step title="Install harness-lint">
+    Install harness-lint from its Homebrew tap:
+
+    ```sh
+    brew install CorrectRoadH/tap/harness-lint
+    ```
+
+    Confirm the installation:
+
+    ```sh
+    harness-lint --version
+    ```
+  </Step>
+
+  <Step title="Verify the installation">
+    Run `harness-lint doctor` to check that the `grit` binary, git integration, and any existing project config are all healthy:
+
+    ```sh
+    harness-lint doctor
+    ```
+
+    `doctor` prints a status line for each check — `[ok]`, `[warn]`, or `[error]` — covering:
+
+    - **project-root** — whether a `harness.toml` was found
+    - **config** — whether `harness.toml` parsed successfully
+    - **local-rules** — whether local rule directories exist and all rules include executable GritQL
+    - **grit** — whether the `grit` binary is installed and responds to `--version`
+    - **git** — whether you are inside a git worktree (needed for `--changed` and `--staged` checks)
+
+    Fix any `[error]` items before running checks.
+  </Step>
+
+  <Step title="Install the Codex AI skill (optional)">
+    The Codex skill teaches your AI agent how to create harness-lint rules, run checks, and fix lint failures — all without you having to explain the workflow each time.
+
+    ```sh
+    npx skills add CorrectRoadH/harness-lint
+    ```
+
+    Once installed, your agent understands commands like "create a harness-lint rule for this feedback" and knows to run `harness-lint check --changed` after making code changes.
+  </Step>
+
+  <Step title="Initialize your project">
+    Run `harness-lint init` once in your project root to set up the configuration and rule scaffolding:
+
+    ```sh
+    harness-lint init
+    ```
+
+    This command creates:
+
+    - **`harness.toml`** — the project config file. It controls which rule packs are installed, where local rules live, which files are ignored, and how severity levels are applied.
+    - **`rules/`** — the default directory for local project rules. Add your own `.md` rule files here.
+
+    After `init`, harness-lint also prints AI agent instructions that describe how to create rules, run checks, and interpret results. Copy these into your `AGENTS.md` or `CLAUDE.md` if you want your agent to manage lint rules autonomously.
+
+    If the directory already contains a `harness.toml` and you want to re-initialize, use `--force`:
+
+    ```sh
+    harness-lint init --force
+    ```
+  </Step>
+</Steps>
+
+## What to commit vs. what to ignore
+
+Add the following entries to your **`.gitignore`**:
+
+```
+.harness/
+```
+
+The `.harness/` directory holds generated GritQL working files, a run lock, and the local pack cache. It is rebuilt automatically on every `check` run and should not be versioned.
+
+Commit the following files so that every developer and CI job works from the same rule set:
+
+| File / directory | Purpose |
+|---|---|
+| `harness.toml` | Project configuration — packs, overrides, ignore paths |
+| `rules/` | Local project rules authored by your team |
+| `harness.lock` | Pinned pack versions — ensures reproducible installs |
+
+After cloning a repo that already has `harness.toml` and `harness.lock`, restore the pinned packs with:
+
+```sh
+harness-lint restore
+```

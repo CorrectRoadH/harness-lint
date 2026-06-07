@@ -1,0 +1,230 @@
+---
+title: "harness-lint Configuration: harness.toml Reference Guide"
+sidebarTitle: "Configuration"
+description: "harness.toml controls which files are checked, which packs are installed, how rule levels are overridden, and which paths are excluded."
+---
+
+## Overview
+
+`harness.toml` is the single configuration file for a harness-lint project. It lives at the repository root alongside `.git`. harness-lint searches upward from your working directory to find it, so you can run commands from any subdirectory.
+
+Run `harness-lint init` to generate a starter `harness.toml` in the current directory.
+
+## Full annotated example
+
+The example below shows every supported section. Copy it as a starting point and remove sections you do not need.
+
+```toml
+# Optional project name shown in generated config.
+[project]
+name = "my-service"
+
+# Default lint behavior.
+[lint]
+# warn reports a problem; error makes the check fail.
+default_level = "warn"
+# Used by `harness-lint check --changed`.
+changed_base = "origin/main"
+# Reuse file-level results between runs.
+cache = true
+
+# Local project-owned rule files.
+[rules]
+local = ["rules"]
+
+# Shared rule packs to install and restore.
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+
+# Change the level of one rule without editing the rule file.
+[overrides]
+"typescript.no-console-log" = "error"
+
+# Turn off specific rules.
+[disabled]
+rules = ["typescript.no-explicit-any"]
+
+# Skip these paths for every rule.
+[ignore]
+paths = ["dist/**", "coverage/**"]
+
+# Hide one rule only for matching paths; other rules still check those files.
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+
+# Override the catalog URL (optional — defaults to the public harness-lint catalog).
+[registry]
+url = "https://raw.githubusercontent.com/CorrectRoadH/harness-lint/main/site/catalog.json"
+```
+
+## Section reference
+
+### `[project]`
+
+```toml
+[project]
+name = "my-service"
+```
+
+Optional. `name` is a human-readable label shown in generated configuration output. It has no effect on rule loading or check behavior.
+
+---
+
+### `[lint]`
+
+```toml
+[lint]
+default_level = "warn"
+changed_base = "origin/main"
+cache = true
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `default_level` | `"warn"` \| `"error"` | `"warn"` | The severity applied to rules that do not specify their own `level`. |
+| `changed_base` | string | `"origin/main"` | The Git ref used by `harness-lint check --changed` to determine which files have changed. |
+| `cache` | boolean | `true` | When `true`, harness-lint stores per-file results in `.harness/cache/` and skips re-running GritQL on files that have not changed since the last run. Set to `false` to always do a full scan. |
+
+`default_level` affects only rules whose rule file omits the `level` field. Rules that explicitly set `level: error` are not downgraded by setting `default_level = "warn"`. Use `[overrides]` to change the level of a specific rule.
+
+---
+
+### `[rules]`
+
+```toml
+[rules]
+local = ["rules"]
+```
+
+`local` is a list of directories that contain local rule files (`*.md`). Paths are relative to the repository root. harness-lint loads rules from all listed directories.
+
+`harness-lint rule create` writes new rule files to the **first** directory in this list.
+
+To store local rules in a non-default location:
+
+```toml
+[rules]
+local = ["custom-rules", "team-rules"]
+```
+
+---
+
+### `[packs]`
+
+```toml
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+go-concurrency = "github:CorrectRoadH/harness-lint@main#packs/go-concurrency"
+```
+
+A map of pack IDs to their source specs. harness-lint manages this section automatically when you run `harness-lint install` or `harness-lint remove`. You can also edit it by hand — run `harness-lint update` afterward to refresh `harness.lock`.
+
+The source spec format for Git-hosted packs is:
+
+```
+github:<owner>/<repo>@<branch-or-tag>#<subdirectory>
+```
+
+---
+
+### `[overrides]`
+
+```toml
+[overrides]
+"typescript.no-console-log" = "error"
+"local.no-print-debug" = "warn"
+```
+
+A map of rule IDs to severity levels. Use `[overrides]` to change the level of a specific rule without editing the rule file itself. This is especially useful for pack rules that you cannot (or do not want to) modify.
+
+Valid values are `"warn"` and `"error"`.
+
+---
+
+### `[disabled]`
+
+```toml
+[disabled]
+rules = ["typescript.no-explicit-any"]
+```
+
+A list of rule IDs to disable entirely. Disabled rules are not loaded, not reported, and do not affect exit codes. Prefer `[overrides]` for temporarily downgrading a rule to `warn` rather than silencing it completely.
+
+---
+
+### `[ignore]`
+
+```toml
+[ignore]
+paths = ["dist/**", "coverage/**", "vendor/**"]
+```
+
+A list of glob patterns. Any file matching one of these patterns is excluded from **every** rule on every `check` run. Use `[ignore]` for directories that no rule should ever scan — generated build output, third-party vendored code, or coverage reports.
+
+---
+
+### `[[exceptions]]`
+
+```toml
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+```
+
+An exception hides the results of one specific rule for files matching the listed paths, while leaving all other rules active for those files. You can define multiple `[[exceptions]]` blocks — one per rule-and-path combination.
+
+| Field | Required | Description |
+|---|---|---|
+| `rule` | ✅ | The rule ID to suppress for matching paths. |
+| `paths` | ✅ | List of glob patterns. The exception applies when the flagged file matches any of them. |
+| `reason` | recommended | A short explanation of why the exception is valid. harness-lint does not enforce this field, but `harness-lint doctor` warns when a `reason` is missing. |
+
+<Note>
+  The key was previously `[[suppressions]]`. That spelling still works but is deprecated — harness-lint will print a warning and ask you to rename it to `[[exceptions]]`.
+</Note>
+
+### `[registry]`
+
+```toml
+[registry]
+url = "https://raw.githubusercontent.com/CorrectRoadH/harness-lint/main/site/catalog.json"
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `url` | string | (public catalog URL) | The URL harness-lint uses to resolve pack names during `harness-lint install`, `harness-lint search`, and `harness-lint list --available`. Defaults to the public harness-lint catalog hosted on GitHub. Override this to point to a self-hosted or enterprise catalog. |
+
+Most projects do not need to set `[registry]`. Configure it only if you are running a private catalog server or mirroring the public catalog internally.
+
+---
+
+## `ignore.paths` vs. `[[exceptions]]`: when to use each
+
+These two mechanisms look similar but serve different purposes.
+
+**Use `ignore.paths`** when a directory should never be scanned by *any* rule. Common examples are:
+
+- `dist/**` — compiled output
+- `coverage/**` — test coverage reports
+- `vendor/**` — vendored third-party code
+
+```toml
+[ignore]
+paths = ["dist/**", "coverage/**"]
+```
+
+**Use `[[exceptions]]`** when a rule is valid in general, but has a legitimate path-specific exception where the pattern is expected or unavoidable. Other rules continue to check those files normally.
+
+For example, suppose you enforce `typescript.no-console-log` across your codebase, but a generated SDK in `src/generated/` intentionally uses `console.log` for local mock debug output. You do not want to stop scanning `src/generated/` entirely — other rules should still apply. You only want to silence the one rule for those paths:
+
+```toml
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+```
+
+The practical test: if you would never want *any* harness-lint rule to flag a path, use `ignore.paths`. If you are making a narrow exception for one rule while keeping all other rules active, use `[[exceptions]]`.

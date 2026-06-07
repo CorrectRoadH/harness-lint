@@ -1,0 +1,152 @@
+---
+title: "Install and Manage harness-lint Rule Packs for Your Team"
+sidebarTitle: "Managing Packs"
+description: "Search the rule-pack catalog, install packs for your language, keep them updated locally, and restore pinned versions reliably in CI."
+---
+
+Rule packs are curated collections of GritQL rules for a specific language or domain. Instead of writing every rule from scratch, install a pack to get a baseline of battle-tested checks and then supplement it with local rules for your project's conventions.
+
+## Find packs
+
+List every pack available in the catalog:
+
+```bash
+harness-lint list --available
+```
+
+Search by keyword to find packs relevant to a specific topic:
+
+```bash
+harness-lint search "python typing"
+```
+
+The search command scores results by relevance and shows the install command for each match.
+
+## Inspect a pack
+
+Before installing, inspect a pack to see its full list of rules, what each rule checks, and why:
+
+```bash
+harness-lint inspect python-typing
+```
+
+The output lists every rule in the pack with its ID, title, and a short description. It also prints the exact install command to use.
+
+## Install a pack
+
+Install a pack from the catalog by its ID:
+
+```bash
+harness-lint install python
+```
+
+Installing a pack does two things:
+
+1. Adds an entry to `harness.toml` under `[packs]` with the resolved source spec.
+2. Writes (or updates) `harness.lock` with the exact version and checksum of every installed pack.
+
+After installation, all rules in the pack are active the next time you run `harness-lint check`.
+
+### Install from a Git source
+
+To install a pack directly from a Git repository — for example, a private pack your organization hosts — supply the pack ID and a Git source spec:
+
+```bash
+harness-lint install my-pack github:org/repo@main#packs/my-pack
+```
+
+The spec format is `github:<owner>/<repo>@<ref>#<path-within-repo>`. The resolved pack is pinned in `harness.lock` at the commit resolved at install time.
+
+## Verify installed packs
+
+List the packs that are currently installed, along with their versions:
+
+```bash
+harness-lint list
+```
+
+Each row shows the pack ID, source spec, and the version recorded in `harness.lock`.
+
+<Note>
+Commit `harness.lock` to your repository. The lock file records the exact version and checksum of every installed pack so that `harness-lint restore` rebuilds an identical environment on every machine and in every CI run without pulling unexpected updates.
+</Note>
+
+## Check for updates
+
+See which installed packs have newer versions available:
+
+```bash
+harness-lint outdated
+```
+
+Each outdated pack is listed with its currently installed checksum and the latest available checksum. If a pack entry is missing from `harness.lock`, the command reports it as not installed and prompts you to run `harness-lint update`.
+
+## Update all packs
+
+Fetch the latest version of every installed pack and rewrite `harness.lock`:
+
+```bash
+harness-lint update
+```
+
+After updating, commit the refreshed `harness.lock` so your team and CI use the new versions.
+
+## Restore from the lock file (for CI)
+
+In CI environments, use `restore` instead of `update`. It rebuilds the local pack cache from the exact versions pinned in `harness.lock` without fetching any newer commits:
+
+```bash
+harness-lint restore
+```
+
+`restore` fails if any pack in `harness.toml` is missing from `harness.lock` or if the lock file spec differs from `harness.toml`. When that happens, run `harness-lint update` locally, commit the updated lock file, and re-run CI.
+
+## Remove a pack
+
+Uninstall a pack and remove it from both `harness.toml` and `harness.lock`:
+
+```bash
+harness-lint remove python
+```
+
+The command also deletes the pack's cached files from the local pack store.
+
+## Override a pack rule's level
+
+Change the severity of a pack rule without editing the rule file itself. Add an entry to the `[overrides]` section of `harness.toml`:
+
+```toml
+[overrides]
+"typescript.no-console-log" = "error"
+```
+
+Valid levels are `warn` and `error`. Override to `error` when you want a specific pack rule to fail CI, and leave the rest at their default `warn` level.
+
+## Disable a pack rule
+
+Turn off a specific pack rule entirely by listing its ID under `[disabled]` in `harness.toml`:
+
+```toml
+[disabled]
+rules = ["typescript.no-explicit-any"]
+```
+
+Disabled rules are not loaded and produce no diagnostics. Use this sparingly — if a rule is consistently wrong for your project, consider filing a report against the pack or opening a pull request to improve it.
+
+---
+
+## Reference: `harness.toml` pack configuration
+
+A complete example showing packs, overrides, and disabled rules together:
+
+```toml
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+python     = "github:CorrectRoadH/harness-lint@main#packs/python"
+
+[overrides]
+"typescript.no-console-log" = "error"
+
+[disabled]
+rules = ["typescript.no-explicit-any"]
+```

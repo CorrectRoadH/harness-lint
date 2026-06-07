@@ -1,0 +1,230 @@
+---
+title: "Python Rule Packs for harness-lint: Four Pack Guide"
+sidebarTitle: "Python"
+description: "Four Python packs for harness-lint covering application conventions, PEP 8 style, type annotation hygiene, and async/await correctness patterns."
+---
+
+harness-lint ships four Python packs. You can install them individually or combine them — for example, most typed async services benefit from running all four together.
+
+## python
+
+**Python Application Conventions** — GritQL rules for typed Python application code.
+
+```sh
+harness-lint install python
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `python.no-print-debug` | Avoid committed print debugging | Use repository logging or structured diagnostics instead of committed `print` calls |
+| `python.no-eval-exec` | Avoid eval and exec | Avoid dynamic code execution; prefer explicit parsers, registries, or strategy objects |
+| `python.no-broad-object-type` | Avoid broad object types | Prefer concrete models, explicit unions, or protocols over bare `object` annotations |
+| `python.no-getattr-flow` | Avoid getattr in normal application flow | Prefer explicit typed fields or adapters; reserve `getattr` for true dynamic interop |
+| `python.no-runtime-assert` | Avoid assert for runtime validation | Use explicit exceptions or validation helpers — assertions can be stripped in optimized builds |
+
+### Rule examples
+
+#### no-print-debug
+
+`print` is a quick debugging tool, not a logging mechanism. Committed `print` calls produce unstructured output with no log level, no context, and no way to route or silence them in production.
+
+<CodeGroup>
+```python Bad
+print(user_id)
+```
+
+```python Good
+logger.info("loaded user %s", user_id)
+```
+</CodeGroup>
+
+#### no-eval-exec
+
+`eval` and `exec` execute arbitrary code strings at runtime, making behavior impossible to audit statically. They also open an injection surface if the input ever comes from user-controlled data.
+
+<CodeGroup>
+```python Bad
+result = eval(expression)
+```
+
+```python Good
+result = expression_parser.parse(expression)
+```
+</CodeGroup>
+
+#### no-runtime-assert
+
+Python strips `assert` statements when you run with the `-O` flag. Any validation you express as an `assert` disappears in optimized production builds. Use an explicit `raise` instead.
+
+<CodeGroup>
+```python Bad
+assert user.email
+```
+
+```python Good
+if not user.email:
+    raise ValueError("user email is required")
+```
+</CodeGroup>
+
+---
+
+## python-pep8
+
+**Python PEP 8 Style** — PEP 8-inspired rules for readable Python module style.
+
+```sh
+harness-lint install python-pep8
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `python-pep8.no-boolean-equality` | Avoid boolean equality comparisons | Use truthiness, `not`, or an explicit predicate instead of comparing to `True` or `False` |
+| `python-pep8.no-lambda-assignment` | Avoid assigning lambdas | Use `def` for named functions so tracebacks and documentation show a real function name |
+| `python-pep8.no-negated-membership-identity` | Use not in and is not operators | Prefer `x not in y` and `x is not y` over negating `in` or `is` expressions |
+| `python-pep8.no-none-equality` | Use identity comparisons for None | Prefer `is None` and `is not None` to avoid overloaded equality surprises |
+| `python-pep8.no-type-equality` | Use isinstance for type checks | Use `isinstance` so subclass behavior is handled correctly |
+| `python-pep8.no-wildcard-import` | Avoid wildcard imports | Import explicit names so module dependencies stay readable and traceable |
+
+### Rule examples
+
+#### no-boolean-equality
+
+Comparing a value to `True` or `False` with `==` is redundant and can behave unexpectedly with non-boolean truthy values. Use the value directly as a condition.
+
+<CodeGroup>
+```python Bad
+if is_active == True:
+    enable()
+```
+
+```python Good
+if is_active:
+    enable()
+```
+</CodeGroup>
+
+#### no-none-equality
+
+`None` is a singleton. Comparing with `==` invokes `__eq__`, which can be overridden by custom classes. Use `is` and `is not` to check for `None` reliably.
+
+<CodeGroup>
+```python Bad
+if user != None:
+    return
+```
+
+```python Good
+if user is not None:
+    return
+```
+</CodeGroup>
+
+#### no-wildcard-import
+
+Wildcard imports pollute the module namespace, make it impossible to know where a name comes from, and break static analysis tools.
+
+<CodeGroup>
+```python Bad
+from models import *
+```
+
+```python Good
+from models import User, Team
+```
+</CodeGroup>
+
+---
+
+## python-typing
+
+**Python Typing Boundaries** — Rules for typed Python APIs and fewer static-analysis escape hatches.
+
+```sh
+harness-lint install python-typing
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `python-typing.no-untyped-def` | Avoid untyped public functions | Public functions should expose parameter and return types so callers know the contract |
+| `python-typing.no-any-import` | Avoid importing Any as a default escape hatch | Reach for concrete models, protocols, or unions before introducing `Any` |
+| `python-typing.no-type-ignore` | Avoid broad type ignore comments | Prefer a narrower type fix, adapter, or protocol over silencing the type checker |
+
+### Rule examples
+
+#### no-untyped-def
+
+Untyped public functions are opaque to callers, IDEs, and static analysis. Adding parameter and return annotations makes the contract explicit and enables type checking across module boundaries.
+
+<CodeGroup>
+```python Bad
+def load_user(user_id):
+    return repo.get(user_id)
+```
+
+```python Good
+def load_user(user_id: str) -> User:
+    return repo.get(user_id)
+```
+</CodeGroup>
+
+#### no-type-ignore
+
+A bare `# type: ignore` silences all type errors on that line without explaining which error or why. This hides real problems. If you must suppress a check, use a targeted ignore with a comment explaining the reason, or fix the underlying type mismatch.
+
+<CodeGroup>
+```python Bad
+payload = load_raw()  # type: ignore
+```
+
+```python Good
+payload: UserPayload = parse_payload(load_raw())
+```
+</CodeGroup>
+
+---
+
+## python-async
+
+**Python Async Services** — Rules for async Python services where blocking calls and hidden event loops hurt reliability.
+
+```sh
+harness-lint install python-async
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `python-async.no-asyncio-run-library` | Avoid asyncio.run inside library flow | Library code should accept an event loop from the caller instead of creating one mid-flow |
+| `python-async.no-time-sleep` | Avoid time.sleep in async-capable code | Use `asyncio.sleep` so one request cannot block the entire event loop |
+| `python-async.no-untracked-create-task` | Avoid untracked create_task calls | Keep task handles visible so cancellation, errors, and shutdown are explicit |
+
+### Rule examples
+
+#### no-time-sleep
+
+`time.sleep` blocks the OS thread. In an async service this stalls the entire event loop for the duration of the sleep, preventing every other concurrent task from making progress.
+
+<CodeGroup>
+```python Bad
+time.sleep(1)
+```
+
+```python Good
+await asyncio.sleep(1)
+```
+</CodeGroup>
+
+#### no-untracked-create-task
+
+Fire-and-forget tasks created with `asyncio.create_task` have no owner. If the task raises an exception it is silently dropped, and during shutdown there is no way to wait for the task to finish or cancel it cleanly.
+
+<CodeGroup>
+```python Bad
+asyncio.create_task(send_email(user))
+```
+
+```python Good
+task = asyncio.create_task(send_email(user))
+pending_tasks.add(task)
+```
+</CodeGroup>

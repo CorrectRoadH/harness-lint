@@ -1,0 +1,59 @@
+---
+title: "harness-lint Rule Pack Catalog: All Language Packs"
+sidebarTitle: "Overview"
+description: "Browse all available harness-lint rule packs for TypeScript, Python, Go, and Rust. Install any pack with harness-lint install <id>."
+---
+
+Rule packs are versioned, shareable collections of [GritQL](https://docs.grit.io/language/overview) lint rules that you install into your project with a single command. Each pack targets a specific language or layer of your stack and ships rules that flag real code quality problems — not style preferences. You can browse the full catalog, inspect a pack's rules before you commit to it, and pin a specific version for reproducible CI runs.
+
+## Browse Packs by Language
+
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="js" href="/packs/typescript">
+    **TypeScript Application Conventions** and **TypeScript React** — four core
+    TypeScript rules plus eight React component rules covering hooks, refs,
+    props, and rendering patterns.
+  </Card>
+  <Card title="Python" icon="python" href="/packs/python">
+    **Python**, **PEP 8**, **Typing**, and **Async** — four packs covering
+    application conventions, style, type annotation hygiene, and async/await
+    correctness.
+  </Card>
+  <Card title="Go" icon="code" href="/packs/go">
+    **Go Service Conventions**, **Go Concurrency Hygiene**, and **Effective Go
+    Inspired** — three packs for service code hygiene, goroutine lifecycle, and
+    idiomatic control flow.
+  </Card>
+  <Card title="Rust" icon="code" href="/packs/rust">
+    **Rust Application Conventions** — rules for debug macros, panic paths,
+    scaffolding macros, and error propagation in Rust application code.
+  </Card>
+</CardGroup>
+
+## Quick Reference
+
+| Pack ID | Description | Language |
+|---|---|---|
+| `typescript` | TypeScript Application Conventions | TypeScript, JavaScript |
+| `typescript-react` | React Component Conventions | TypeScript, JavaScript |
+| `python` | Python Application Conventions | Python |
+| `python-pep8` | PEP 8 Style Rules | Python |
+| `python-typing` | Python Type Annotation Rules | Python |
+| `python-async` | Python Async/Await Rules | Python |
+| `go` | Go Service Conventions | Go |
+| `go-concurrency` | Go Concurrency Hygiene | Go |
+| `go-effective-go` | Effective Go Patterns | Go |
+| `rust` | Rust Application Conventions | Rust |
+
+## Install Commands
+
+Use the following commands to discover and install packs:
+
+```sh
+harness-lint list --available   # browse all packs
+harness-lint search "typescript"  # search by keyword
+harness-lint inspect <pack-id>    # see rules before installing
+harness-lint install <pack-id>    # install a pack
+```
+
+You can install as many packs as your project needs. Run `harness-lint inspect <pack-id>` first to review every rule a pack contains — including its severity level and example violations — before you add it to your workflow.

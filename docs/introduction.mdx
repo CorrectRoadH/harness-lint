@@ -1,0 +1,62 @@
+---
+title: "harness-lint: Lint Driven Development for AI Coding Agents"
+sidebarTitle: "Introduction"
+description: "Discover how harness-lint uses GritQL-backed Markdown rules to enforce coding standards that AI agents reliably follow every time."
+---
+
+## The problem: agents forget
+
+You spend time correcting an AI coding agent's output. You add the instruction to `AGENTS.md`. You add it to `CLAUDE.md`. The next session, the agent does the same thing again.
+
+Natural-language instructions — no matter how clearly written — live outside the agent's feedback loop. The agent reads them at the start of a session, but nothing in the environment reminds it of them while it generates code. As context grows or sessions restart, those instructions fade.
+
+The result: you repeat yourself. The agent repeats its mistakes. Your codebase drifts.
+
+## The solution: Lint Driven Development
+
+**Lint Driven Development (LDD)** treats recurring AI feedback the same way you treat a recurring bug — fix it once, then make it impossible to reintroduce.
+
+When an agent does something you don't want, you:
+
+1. Express the constraint as a GritQL pattern — a fast, structural code match.
+2. Wrap it in a harness-lint rule (a Markdown file the agent can read and understand).
+3. Run `harness-lint check` in your workflow.
+
+Now the agent can't mark its task complete while the check is failing. Instead of relying on memory, it has to fix its code to pass lint. The constraint moves from your head into the build.
+
+## How harness-lint works
+
+harness-lint is a CLI tool written in Rust. At its core it does three things:
+
+**Rules are Markdown files with embedded GritQL.** A rule file contains a frontmatter block (rule ID, title, language, severity level), a plain-English description, and a fenced `grit` code block containing the pattern to match. Bad and Good examples follow, making rules self-documenting for both humans and agents.
+
+**The `check` command runs GritQL via the `grit` CLI.** When you run `harness-lint check`, harness-lint compiles all active rules into GritQL patterns and passes them to the `grit` binary for structural matching. Results come back as diagnostics — rule ID, file path, line number, and severity level (`warn` or `error`). Error-level violations make the command exit with a non-zero code, failing the check.
+
+**`harness.toml` controls everything.** Your config file declares which local rule directories to load, which rule packs are installed, which rules are overridden or disabled, and what file paths to ignore. The `check` command reads this config on every run, so your entire team and every agent in your repo works from the same rule set.
+
+## What makes harness-lint rules different
+
+Traditional lint rules are written for compilers and tools, in formats that are opaque to non-experts. harness-lint rules are designed to be read by the people and agents working in your codebase:
+
+- **Human-readable.** Each rule is a Markdown document. The description explains *why* the pattern is wrong, not just *that* it is. Any developer can open a rule file, understand it, and suggest improvements.
+- **AI-aware.** The rule format is intentionally structured so that AI agents can read the rule, understand the intent, and know exactly what change will make the check pass. When an agent sees a lint failure, it sees the rule ID, the offending line, and — if it reads the rule file — the Good example to follow.
+- **Designed for vibe coding workflows.** harness-lint integrates into AI-assisted development loops: `--changed` checks only modified files, `--staged` works as a pre-commit hook, and `rule create` scaffolds a new rule directly from your feedback string.
+
+## Rule packs
+
+You don't have to write every rule yourself. harness-lint has a catalog of curated **rule packs** — collections of GritQL rules for popular languages and frameworks. Install a pack with a single command:
+
+```sh
+harness-lint install typescript
+```
+
+Packs are pinned in `harness.lock` so your CI always runs the same rule versions your teammates tested locally. Use `harness-lint outdated` to check for updates and `harness-lint update` to pull them.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="quickstart">
+    Install harness-lint and run your first check in under five minutes.
+  </Card>
+  <Card title="Lint Driven Development" icon="lightbulb" href="concepts/lint-driven-development">
+    Go deeper on the LDD workflow and when to create a rule vs. keep guidance in docs.
+  </Card>
+</CardGroup>

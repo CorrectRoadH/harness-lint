@@ -1,0 +1,81 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "harness-lint",
+  "theme": "luma",
+  "colors": {
+    "primary": "#2563EB",
+    "light": "#DBEAFE",
+    "dark": "#1E3A8A"
+  },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/CorrectRoadH/harness-lint"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/lint-driven-development",
+              "concepts/rules",
+              "concepts/rule-packs",
+              "concepts/configuration"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/writing-rules",
+              "guides/managing-packs",
+              "guides/ci-integration",
+              "guides/ai-agent-setup"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/cli",
+              "reference/harness-toml",
+              "reference/rule-format",
+              "reference/gritql-patterns",
+              "reference/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Rule Packs",
+        "groups": [
+          {
+            "group": "Available Packs",
+            "pages": [
+              "packs/overview",
+              "packs/typescript",
+              "packs/python",
+              "packs/go",
+              "packs/rust"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

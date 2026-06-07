@@ -1,0 +1,71 @@
+---
+title: "Lint Driven Development: Persistent Rules for AI Agents"
+sidebarTitle: "LDD"
+description: "Learn how Lint Driven Development turns one-off AI feedback into permanent, machine-enforceable rules that keep your codebase consistent."
+---
+
+## The problem: AI agents forget
+
+Modern AI coding agents — Codex, Claude, Cursor, and others — are powerful at generating code, but they have a fundamental memory problem. When you tell an agent to stop doing something ("don't use `console.log` in production code", "always tie goroutines to a context"), it fixes the current instance and promptly forgets the constraint. The next file it touches makes the same mistake. You correct it again. The cycle repeats indefinitely.
+
+Writing instructions into `AGENTS.md` helps, but agents do not reliably read or apply natural-language guidance. A paragraph of prose is advisory; an agent can and does ignore it. Review checklists suffer the same fate — they slow you down without guaranteeing correctness.
+
+The root cause is simple: verbal and written instructions rely on the agent's memory. Rules enforced by a machine do not.
+
+## The LDD workflow
+
+**Lint Driven Development** breaks the cycle by converting one-off feedback into a GritQL lint rule the moment you identify a problem. From that point on, `harness-lint check` enforces the constraint automatically. The agent must fix the code to make lint pass — it cannot "forget" a rule any more than it can forget a failing test.
+
+<Steps>
+  <Step title="Agent produces code that violates a standard">
+    Your AI agent generates code that breaks a team convention — for example, it calls `console.log` in a TypeScript file instead of using the structured logger.
+  </Step>
+  <Step title="You run `harness-lint rule create` to capture the constraint">
+    Instead of only correcting the current instance, you turn the feedback into a permanent GritQL rule:
+
+    ```sh
+    harness-lint rule create "Avoid committed console.log" \
+      --language typescript \
+      --grit '`console.log($value)`'
+    ```
+
+    harness-lint writes the rule file to your local `rules/` directory and registers it in `harness.toml`.
+  </Step>
+  <Step title="Run `harness-lint check` — it reports the violation">
+    Run the linter against the current codebase. It finds every file that still violates the new rule and reports each occurrence with the file path, line number, and rule ID.
+
+    ```sh
+    harness-lint check --all --rule local.no-console-log
+    ```
+  </Step>
+  <Step title="Agent fixes the code to pass lint">
+    You (or the agent) fix the flagged code. The agent does not need to remember the rule — it just needs to make `harness-lint check` exit cleanly. Lint output is a precise, unambiguous signal that forces the correct behavior.
+  </Step>
+  <Step title="The rule stays active for all future changes">
+    The rule file lives in version control alongside your code. Every future PR, every future agent session, every `harness-lint check --changed` run enforces the same constraint automatically — no reminders, no re-explaining.
+  </Step>
+</Steps>
+
+## Why LDD works better than docs or comments
+
+| Approach | Memory-dependent? | Machine-enforced? | Survives agent sessions? |
+|---|---|---|---|
+| AGENTS.md / review notes | ✅ Yes | ❌ No | ❌ No |
+| Code comments | ✅ Yes | ❌ No | ❌ No |
+| ESLint / existing linters | ❌ No | ✅ Yes | ✅ Yes |
+| **harness-lint rule** | ❌ No | ✅ Yes | ✅ Yes |
+
+harness-lint rules are Markdown files with embedded GritQL patterns. They are:
+
+- **Human-readable** — the rule file explains *why* a pattern is banned, not just *what* is banned. When the agent runs `harness-lint rule explain local.no-console-log`, it reads the full rationale and examples.
+- **Machine-enforced** — GritQL matches AST-level code patterns, not text. The agent cannot slip past the rule with a cosmetic change.
+- **Version-controlled** — rules travel with the repository. New contributors and new agent sessions inherit all constraints automatically.
+- **Composable** — you can install shared rule packs from the catalog for common patterns and write local rules for project-specific constraints.
+
+## The guiding principle
+
+Not every piece of feedback belongs in a harness-lint rule. Before you run `rule create`, ask: *can this constraint be expressed as a reliable GritQL pattern?*
+
+If yes — create the rule. If no — keep the guidance in `AGENTS.md`, review notes, or project documentation instead. Forcing imprecise feedback into a GritQL pattern produces false positives that erode trust in the linter and make agents more likely to disable or circumvent it.
+
+A rule that runs clean and catches real violations is worth far more than a rule that generates noise.

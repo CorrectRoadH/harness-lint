@@ -1,0 +1,139 @@
+---
+title: "TypeScript and React Packs for harness-lint Linting"
+sidebarTitle: "TypeScript"
+description: "The typescript and typescript-react packs provide GritQL rules for TypeScript/JavaScript code quality and React component best practices."
+---
+
+harness-lint ships two packs for TypeScript codebases. The `typescript` pack covers general TypeScript and JavaScript hygiene. The `typescript-react` pack adds rules for React component patterns — it is designed to work alongside the `typescript` pack, not replace it.
+
+## typescript
+
+**TypeScript Application Conventions** — GritQL rules for TypeScript and JavaScript application code.
+
+```sh
+harness-lint install typescript
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `typescript.no-console-log` | Avoid committed console.log | Use repository logging or telemetry instead of committed `console.log` calls |
+| `typescript.no-debugger` | Avoid committed debugger statements | Remove `debugger` statements before committing application code |
+| `typescript.no-explicit-any` | Avoid explicit any | Prefer `unknown`, generics, discriminated unions, or domain types over `any` |
+| `typescript.no-var` | Avoid var declarations | Use `const` by default and `let` when reassignment is required |
+
+### Rule examples
+
+#### no-console-log
+
+Use your repository's structured logger instead of `console.log` so log output is consistent, filterable, and never accidentally committed.
+
+<CodeGroup>
+```ts Bad
+console.log(user)
+```
+
+```ts Good
+logger.info({ userId: user.id }, "loaded user")
+```
+</CodeGroup>
+
+#### no-explicit-any
+
+`any` disables type checking for the annotated value and everything that flows through it. Prefer a concrete domain type, `unknown`, or a generic so the compiler can still help you.
+
+<CodeGroup>
+```ts Bad
+function serialize(value: any) {
+  return JSON.stringify(value)
+}
+```
+
+```ts Good
+function serialize(value: UserEvent) {
+  return JSON.stringify(value)
+}
+```
+</CodeGroup>
+
+#### no-var
+
+`var` has function scope and hoisting behavior that surprises most readers. Use `const` for values that never change and `let` only when you need to reassign.
+
+<CodeGroup>
+```ts Bad
+var total = 0
+```
+
+```ts Good
+let total = 0
+```
+</CodeGroup>
+
+---
+
+## typescript-react
+
+**TypeScript React** — Rules for React codebases using TypeScript and predictable component lifecycles.
+
+```sh
+harness-lint install typescript-react
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `typescript-react.no-async-use-effect` | Avoid async useEffect callbacks | Keep the effect callback synchronous and handle cancellation inside it |
+| `typescript-react.no-children-prop` | Avoid passing children as a prop | Nest children between JSX tags so component ownership stays visible |
+| `typescript-react.no-clone-element` | Review cloneElement usage | Prefer explicit props, render props, or context over cloning elements |
+| `typescript-react.no-dangerous-html` | Review dangerous HTML rendering | Avoid direct HTML injection unless the content has a trusted sanitizer and ownership boundary |
+| `typescript-react.no-default-props` | Avoid defaultProps on function components | Use default parameter values so TypeScript sees the defaulting behavior |
+| `typescript-react.no-find-dom-node` | Avoid findDOMNode | Use explicit refs instead of querying a component instance for its DOM node |
+| `typescript-react.no-index-key` | Avoid array index keys | Use stable domain ids for React keys so reordering does not confuse component state |
+| `typescript-react.no-string-ref` | Avoid string refs | Use callback refs or `useRef` so ref ownership is explicit |
+
+### Rule examples
+
+#### no-async-use-effect
+
+Passing an `async` function directly to `useEffect` causes the effect to return a `Promise` instead of a cleanup function. React silently ignores the returned promise, which means you can't cancel the async work on cleanup.
+
+<CodeGroup>
+```tsx Bad
+useEffect(async () => {
+  await loadUser()
+}, [])
+```
+
+```tsx Good
+useEffect(() => {
+  void loadUser()
+}, [])
+```
+</CodeGroup>
+
+#### no-index-key
+
+Using the array index as a `key` means React cannot distinguish between an item being removed and an item being reordered. This leads to stale state and visual artifacts. Use a stable, unique ID from your domain data instead.
+
+<CodeGroup>
+```tsx Bad
+items.map((item, index) => <Row key={index} item={item} />)
+```
+
+```tsx Good
+items.map((item) => <Row key={item.id} item={item} />)
+```
+</CodeGroup>
+
+#### no-dangerous-html
+
+`dangerouslySetInnerHTML` injects raw HTML directly into the DOM. Without a sanitizer, this opens an XSS attack surface. Prefer a component that renders safe markup from structured data.
+
+<CodeGroup>
+```tsx Bad
+<article dangerouslySetInnerHTML={{ __html: body }} />
+```
+
+```tsx Good
+<Markdown content={body} />
+```
+</CodeGroup>

@@ -1,0 +1,264 @@
+---
+title: "Write and Verify Custom harness-lint Rules for Your Project"
+sidebarTitle: "Writing Rules"
+description: "Create project-specific GritQL lint rules using harness-lint rule create, then verify them and run them against your codebase automatically."
+---
+
+Custom rules let you encode team conventions and project-specific feedback as machine-enforceable lint checks. When a pattern keeps appearing in code review or AI-generated code, convert it into a rule so harness-lint catches it automatically.
+
+## When to create a local rule vs. using a pack
+
+Create a local rule when:
+
+- The feedback is **project-specific** — it applies to your codebase's conventions, not a general language practice.
+- You can express the bad pattern as a **reliable GritQL match** — the shape appears consistently in source code and doesn't require understanding intent or cross-file context.
+
+Use an existing pack (or install one with `harness-lint install`) when the pattern is language-wide and a community rule already covers it.
+
+If the feedback requires understanding intent, cross-file context, or can't be expressed as a reliable GritQL pattern, **do not create a harness-lint rule**. Keep that guidance in `AGENTS.md`, review checklists, or project documentation instead. A weak or overly broad rule creates false positives that erode trust in the linter.
+
+## Create a rule with the CLI
+
+Run `harness-lint rule create` and supply the human-readable feedback, the target language, and the GritQL pattern that matches the bad code shape:
+
+```bash
+harness-lint rule create "Avoid print debugging" --language python --grit '`print($value)`'
+```
+
+The `--grit` argument must be **executable GritQL** — a concrete pattern using metavariables like `$value` for parts that vary. If you cannot write a reliable pattern yet, keep the feedback in documentation until you can.
+
+## What gets generated
+
+`rule create` writes a new Markdown file to the first local rule directory configured in `harness.toml` (the default is `rules/`). For the example above, it creates:
+
+```
+rules/avoid-print-debugging.md
+```
+
+The generated file contains frontmatter and a GritQL fenced block:
+
+````markdown
+---
+id: local.avoid-print-debugging
+title: Avoid print debugging
+language: python
+level: warn
+tags: [local, python]
+---
+
+# Avoid print debugging
+
+```grit
+language python
+`print($value)`
+```
+
+## Bad
+
+```python
+# TODO: add a Bad example
+```
+
+## Good
+
+```python
+# TODO: add a Good example
+```
+````
+
+## Edit the generated file
+
+Open the generated file and fill in:
+
+1. **Title** — a concise, imperative description of the rule, e.g. `Avoid print debugging`.
+2. **Description** — one or two sentences explaining *why* the pattern is discouraged and what to use instead.
+3. **Bad example** — the smallest violating code snippet. Keep it minimal so the pattern is obvious.
+4. **Good example** — the recommended replacement pattern for your project.
+
+Example of a completed rule file:
+
+````markdown
+---
+id: local.no-print-debug
+title: Avoid print debugging
+language: python
+level: warn
+tags: [local, python]
+---
+
+# Avoid print debugging
+
+Use structured logging instead of committed `print` calls.
+
+```grit
+language python
+`print($value)`
+```
+
+## Bad
+
+```python
+print(user)
+```
+
+## Good
+
+```python
+logger.info("user=%s", user)
+```
+````
+
+## Verify the rule
+
+Run `harness-lint rule verify` to confirm the Bad examples actually trigger the GritQL pattern. This command runs each Bad example through the rule and fails if any example does not produce a diagnostic:
+
+```bash
+harness-lint rule verify local.no-print-debug
+```
+
+If verification fails, adjust the GritQL pattern in the rule file and re-run until it passes. A rule that doesn't fire on its own Bad examples is not usable.
+
+## Run the rule
+
+Once verified, run the rule against your full codebase to see where the pattern appears:
+
+```bash
+harness-lint check --all --rule local.no-print-debug
+```
+
+Confirm the output matches the files you expected. If the rule reports unexpected files — or misses files you know contain the pattern — adjust the GritQL and re-verify before committing the rule.
+
+## Limit a rule to certain file paths
+
+Use the `$filename` metavariable inside the GritQL block to restrict a rule to files matching a path pattern. Do **not** rely on passing paths to `harness-lint check` to simulate scope — the `check` command does not accept positional paths.
+
+<Warning>
+Passing paths to `harness-lint check` does **not** limit which files a rule scans. The `check` command only accepts `--changed`, `--staged`, or `--all` to select the file set. If a rule should only apply to certain paths, encode that scope directly in GritQL using `$filename`.
+</Warning>
+
+For example, to restrict a rule to TypeScript source files but exclude test files:
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+## GritQL language names
+
+Use the following language identifiers inside `grit` blocks:
+
+| Language | GritQL identifier |
+|---|---|
+| TypeScript / JavaScript | `language js` (or `language js(typescript)` when the TypeScript parser matters) |
+| Python | `language python` |
+| Go | `language go` |
+| Rust | `language rust` |
+| Ruby | `language ruby` |
+| Java | `language java` |
+| CSS | `language css` |
+| YAML | `language yaml` |
+| JSON | `language json` |
+| HCL | `language hcl` |
+| SQL | `language sql` |
+| PHP | `language php` |
+| Markdown | `language markdown` |
+
+Note: even when the rule frontmatter says `language: typescript`, the GritQL block must use `language js`.
+
+## Rule levels
+
+Keep `level: warn` by default. Use `level: error` only when all three of these are true:
+
+- The GritQL pattern is precise and does not produce false positives.
+- The description clearly explains why the pattern is forbidden.
+- The Bad and Good examples are concrete and unambiguous.
+
+`error`-level rules cause `harness-lint check` to exit with a non-zero code, which fails CI. Promote a rule to `error` only when you are confident it is reliable.
+
+## When NOT to create a rule
+
+Do not create a harness-lint rule when:
+
+- The feedback depends on **understanding intent** (e.g. "don't over-engineer this module").
+- The pattern requires **cross-file context** (e.g. "this function must only be called from the auth layer").
+- You cannot write GritQL that reliably matches the bad code without significant false positives.
+
+In these cases, write the constraint in `AGENTS.md` or a design document where humans and AI agents can read it as guidance.
+
+---
+
+## Worked example: forbid `context.TODO()` in Go
+
+Suppose your team's policy is to never commit `context.TODO()` — it signals an unfinished context wiring and should be replaced with a real context before merging.
+
+### Step 1 — Create the rule
+
+```bash
+harness-lint rule create "Do not use context.TODO" --language go --grit '`context.TODO()`'
+```
+
+This creates `rules/do-not-use-context-todo.md`.
+
+### Step 2 — Edit the rule file
+
+Open `rules/do-not-use-context-todo.md` and fill in the description and examples:
+
+````markdown
+---
+id: local.no-context-todo
+title: Do not use context.TODO
+language: go
+level: warn
+tags: [local, go]
+---
+
+# Do not use context.TODO
+
+`context.TODO()` is a placeholder for an unfinished context wiring. Replace it
+with a real context — typically the `ctx` parameter passed to the enclosing
+function — before merging.
+
+```grit
+language go
+`context.TODO()`
+```
+
+## Bad
+
+```go
+func HandleRequest(w http.ResponseWriter, r *http.Request) {
+    result, err := db.Query(context.TODO(), query)
+}
+```
+
+## Good
+
+```go
+func HandleRequest(w http.ResponseWriter, r *http.Request) {
+    result, err := db.Query(r.Context(), query)
+}
+```
+````
+
+### Step 3 — Verify the rule
+
+```bash
+harness-lint rule verify local.no-context-todo
+```
+
+Expected output:
+
+```
+Verified 1 rule(s), 1 Bad example(s).
+```
+
+### Step 4 — Run the rule against the codebase
+
+```bash
+harness-lint check --all --rule local.no-context-todo
+```
+
+Review the output and confirm it reports the files you expected. If it reports too many unrelated files, narrow the GritQL — for example, add a `$filename` condition to restrict it to non-generated paths.

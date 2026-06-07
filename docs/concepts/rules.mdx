@@ -1,0 +1,183 @@
+---
+title: "harness-lint Rules: Structure, Patterns, and Severity"
+sidebarTitle: "Rules"
+description: "Rules are Markdown files with a YAML frontmatter header, a human-readable rationale, and an embedded GritQL pattern that defines what code to flag."
+---
+
+## What is a rule?
+
+A harness-lint rule is a Markdown file stored in your `rules/` directory (or whichever directories you list in `harness.toml` under `[rules] local`). Each rule file contains:
+
+1. A **YAML frontmatter header** that identifies the rule, sets its severity, and attaches metadata.
+2. A **human-readable description** explaining *why* the pattern is a problem.
+3. **Exactly one executable GritQL fenced code block** that defines what code to flag.
+4. **Bad** and **Good** example sections that show the smallest violating snippet and the recommended replacement.
+
+## A complete rule example
+
+The following rule is taken directly from the harness-lint TypeScript pack. Use it as a template when writing your own:
+
+````markdown
+---
+id: typescript.no-console-log
+title: Avoid committed console.log
+language: typescript
+level: warn
+tags: [typescript, javascript, logging]
+---
+
+# Avoid committed console.log
+
+Use repository logging, telemetry, or explicit UI state instead of committed `console.log` calls.
+
+```grit
+language js
+`console.log($value)` where {
+  or {
+    $filename <: r".*\.ts",
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.js",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
+```
+
+## Bad
+
+```ts
+console.log(user)
+```
+
+## Good
+
+```ts
+logger.info({ userId: user.id }, "loaded user")
+```
+````
+
+And here is a local Python rule that follows the same structure:
+
+````markdown
+---
+id: local.no-print-debug
+title: Avoid print debugging
+language: python
+level: warn
+skill: tdd
+tags: [local, python]
+---
+
+# Avoid print debugging
+
+Use logging instead of committed print calls.
+
+```grit
+language python
+`print($value)`
+```
+
+## Bad
+
+```python
+print(user)
+```
+
+## Good
+
+```python
+logger.info("user=%s", user)
+```
+````
+
+## Rule frontmatter fields
+
+| Field | Required | Description |
+|---|---|---|
+| `id` | ✅ | Unique rule identifier in `<pack>.slug` format, e.g. `local.no-print-debug`. Use lowercase kebab-case for English; short phrases are allowed for other languages. |
+| `title` | ✅ | Short human-readable name shown in lint output and `rule list`. |
+| `language` | ✅ | Target language (e.g. `python`, `typescript`, `go`). Used to route files to the right GritQL engine. |
+| `level` | ✅ | Severity: `warn` or `error`. |
+| `skill` | ❌ | Optional tag linking the rule to a broader engineering practice (e.g. `tdd`, `observability`). |
+| `tags` | ❌ | Free-form list of labels for filtering with `harness-lint check --tag`. |
+
+The `id` format is `<pack>.slug`. For local rules, use `local` as the pack prefix: `local.no-print-debug`. For rules published in a pack, the pack name is the prefix: `typescript.no-console-log`.
+
+## Rule levels
+
+- **`warn`** — harness-lint reports the violation but exits with code `0`. Use `warn` by default while you are refining a new rule.
+- **`error`** — harness-lint reports the violation *and* exits with a non-zero code, which fails CI checks and blocks the agent from completing its task until the code is fixed. Promote a rule to `error` only when the GritQL pattern, description, and examples are all clear and reliable.
+
+You can override a rule's level in `harness.toml` without editing the rule file itself — see [Configuration](/concepts/configuration).
+
+## The GritQL block
+
+Every rule must contain exactly one executable GritQL fenced code block (` ```grit `). The block must start with a `language` declaration followed by at least one concrete pattern.
+
+**Metavariables** let you match code that varies across call sites:
+
+- `$value` — matches any single expression (argument, literal, identifier).
+- `$name` — matches any identifier or binding name.
+- `$body` — matches any block or multi-statement body.
+
+For example, the pattern `` `print($value)` `` matches `print(user)`, `print(f"id={id}")`, and `print(result)` — anything passed to `print`.
+
+For TypeScript and JavaScript rules, write `language js` inside the GritQL block even when the rule frontmatter says `language: typescript`. Use `language js(typescript)` when the TypeScript-specific parser variant matters.
+
+## File-scoped rules
+
+If a rule should only apply to certain paths — for example, only TypeScript source files and not test files — express that constraint inside GritQL using `$filename`:
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+Do not try to limit rule scope by passing file paths to `harness-lint check`. Encode the scope in GritQL so it is always enforced consistently, regardless of how the check is invoked.
+
+## Bad and Good examples
+
+- **Bad** — shows the smallest possible code snippet that triggers the rule. Keep it minimal; one or two lines is ideal.
+- **Good** — shows the recommended replacement that the rule is pushing towards. Align it with the project's actual conventions.
+
+The language of Bad and Good example fences must match the rule's `language` field.
+
+<Note>
+  Every rule must contain exactly one executable GritQL block. Rules with an empty GritQL block, a block that contains only comments (e.g. `// TODO`), a block with only whitespace, or rules with multiple GritQL blocks are rejected at load time and will cause `harness-lint check` and `harness-lint doctor` to fail.
+</Note>
+
+## Creating, verifying, and inspecting rules
+
+**Create a rule** from feedback and a GritQL pattern:
+
+```sh
+harness-lint rule create "Avoid print debugging" \
+  --language python \
+  --grit '`print($value)`'
+```
+
+harness-lint writes the rule file to the first directory listed under `[rules] local` in `harness.toml` and prints the path.
+
+**Verify a rule** by confirming that its Bad examples actually trigger the GritQL pattern:
+
+```sh
+harness-lint rule verify local.no-print-debug
+```
+
+Run this after creating or editing a rule. If the Bad example does not trigger, the GritQL pattern needs adjustment.
+
+**See all active rules** loaded from local directories and installed packs:
+
+```sh
+harness-lint rule list
+```
+
+**Read a rule's full description and examples** (useful when lint reports a violation and you want context):
+
+```sh
+harness-lint rule explain local.no-print-debug
+```

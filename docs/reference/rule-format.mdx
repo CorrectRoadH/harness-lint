@@ -1,0 +1,202 @@
+---
+title: "harness-lint Rule File Format: Frontmatter and GritQL"
+sidebarTitle: "Rule Format"
+description: "Reference for the Markdown rule file format: YAML frontmatter fields, GritQL fenced code block, and Bad and Good example sections."
+---
+
+Every harness-lint rule is a single Markdown file. The file combines YAML frontmatter for metadata, a GritQL fenced code block that defines the pattern, and optional `## Bad` / `## Good` sections that document and validate the rule.
+
+Rule files live in the directories listed under `[rules] local` in `harness.toml` (default: `rules/`). You can create them by hand or with `harness-lint rule create`.
+
+---
+
+## YAML Frontmatter
+
+The frontmatter block sits between `---` delimiters at the very top of the file.
+
+<ParamField query="id" type="string" required>
+  A unique rule identifier in the format `<pack>.<slug>`. The pack segment groups related rules and appears in `harness-lint check` output, `[overrides]`, and `[disabled]` entries.
+
+  - Local rules use the `local` pack: `local.no-print-debug`
+  - Pack rules use the pack name: `typescript.no-console-log`
+
+  The slug portion uses lowercase letters, digits, and hyphens only.
+
+  ```yaml
+  id: local.no-print-debug
+  ```
+</ParamField>
+
+<ParamField query="title" type="string" required>
+  A short, human-readable description of what the rule enforces. Shown by `harness-lint rule list` and `harness-lint rule explain`.
+
+  ```yaml
+  title: Avoid print debugging
+  ```
+</ParamField>
+
+<ParamField query="language" type="string">
+  The language the rule targets. When present, harness-lint only evaluates the rule against files whose extension matches the language. When omitted, the GritQL block's own `language` directive still controls which files the pattern parses, but harness-lint does not pre-filter by extension.
+
+  Use the same language names accepted by the Grit CLI: `js` (TypeScript and JavaScript), `python`, `go`, `rust`, `ruby`, `java`, `css`, `yaml`, `json`, `markdown`, `hcl`, `sql`, `php`.
+
+  ```yaml
+  language: python
+  ```
+</ParamField>
+
+<ParamField query="level" type="string" required>
+  The default severity of a match. Accepted values: `warn` and `error`.
+
+  - `warn` — reports the diagnostic but does not cause `harness-lint check` to exit non-zero.
+  - `error` — reports the diagnostic **and** causes `harness-lint check` to fail.
+
+  You can override a rule's level per-project in `harness.toml` under `[overrides]`.
+
+  ```yaml
+  level: warn
+  ```
+</ParamField>
+
+<ParamField query="skill" type="string">
+  The name of a Codex skill to trigger when this rule reports a violation. Used by AI agent integrations to automatically invoke the appropriate skill for remediation. Optional.
+
+  ```yaml
+  skill: tdd
+  ```
+</ParamField>
+
+<ParamField query="tags" type="array of strings">
+  An array of free-form string tags. Tags let you filter rules at check time with `harness-lint check --tag <tag>`. Use tags to group rules by theme (e.g. `security`, `logging`, `concurrency`), language, or team.
+
+  ```yaml
+  tags: [local, python, logging]
+  ```
+</ParamField>
+
+---
+
+## GritQL Fenced Code Block
+
+The rule file must contain **exactly one** executable GritQL fenced code block, marked with the `grit` language identifier.
+
+````markdown
+```grit
+language python
+`print($value)`
+```
+````
+
+**Requirements:**
+
+- The block must start with a `language <name>` directive on its own line. This directive tells the Grit CLI which parser to use.
+- The block must contain at least one real pattern expression. Empty blocks, blocks containing only comments, and blocks containing only `TODO` lines are rejected by `harness-lint doctor` and `harness-lint rule verify`.
+- There must be exactly one `grit` block per rule file. Multiple blocks are an error.
+
+**TypeScript / JavaScript rules:** Write `language js` inside the GritQL block even when the frontmatter says `language: typescript`. The `js` language name covers both TypeScript and JavaScript source files. Use `language js(typescript)` only when you specifically need the TypeScript parser variant (for example, when matching syntax that is invalid in plain JavaScript).
+
+**File-scoped rules:** If the pattern should only apply to certain file paths, encode that scope inside the GritQL block using the `$filename` metavariable rather than relying on separate path config. See the [GritQL Patterns](/reference/gritql-patterns) reference for examples.
+
+---
+
+## \#\# Bad Section
+
+The `## Bad` section contains a fenced code block showing code that **should** trigger the rule. harness-lint uses this section during `harness-lint rule verify` to confirm that the GritQL pattern actually matches the example.
+
+````markdown
+## Bad
+
+```python
+print(user_id)
+```
+````
+
+**Requirements for `rule verify`:**
+
+- The Bad section must exist before you can run `harness-lint rule verify`.
+- The code must contain at least one non-empty, non-TODO line.
+- The GritQL pattern must produce at least one match against the example. If it does not, `verify` fails and tells you to adjust the pattern or the example.
+
+The fenced code block in `## Bad` should use the same language identifier as the `language` frontmatter field.
+
+---
+
+## \#\# Good Section
+
+The `## Good` section contains a fenced code block showing the **recommended alternative** to the pattern flagged in `## Bad`. harness-lint does not automatically verify Good examples, but they appear in `harness-lint rule explain` output and are read by AI agents and developers who want to understand how to fix the violation.
+
+````markdown
+## Good
+
+```python
+logger.info("loaded user %s", user_id)
+```
+````
+
+Write the Good example as a realistic, complete replacement — not just the deletion of the bad code. The replacement should demonstrate the preferred pattern clearly.
+
+---
+
+## Complete Annotated Rule File
+
+````markdown
+---
+id: local.no-print-debug
+title: Avoid print debugging
+language: python
+level: warn
+skill: tdd
+tags: [local, python, logging]
+---
+
+# Avoid print debugging
+
+Use repository logging or structured diagnostics instead of committed
+`print` calls. `print` is useful for quick exploration but should not
+be committed to shared branches.
+
+```grit
+language python
+`print($value)`
+```
+
+## Bad
+
+```python
+print(user_id)
+```
+
+## Good
+
+```python
+logger.info("loaded user %s", user_id)
+```
+````
+
+---
+
+## Rule Naming Conventions
+
+| Convention | Example |
+|---|---|
+| Pack prefix for local rules | `local.` |
+| Pack prefix for installed packs | `typescript.`, `python.`, `go-concurrency.` |
+| Slug uses lowercase and hyphens | `no-print-debug`, `no-console-log` |
+| Title uses sentence case | `Avoid print debugging` |
+| Level defaults to `warn`; escalate in `[overrides]` | — |
+
+---
+
+## Validation Commands
+
+After writing or editing a rule file, run these two commands to confirm it is correct:
+
+```sh
+# Confirm the GritQL parses and Bad examples trigger matches
+harness-lint rule verify local.no-print-debug
+
+# Run the rule against the full project and review results
+harness-lint check --all --rule local.no-print-debug
+```
+
+If `verify` passes but `check --all` reports no matches, the GritQL pattern may be too narrow or the `$filename` scope may be excluding the files you expected. Adjust the pattern and re-run.

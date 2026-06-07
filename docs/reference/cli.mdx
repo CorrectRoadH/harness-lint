@@ -1,0 +1,332 @@
+---
+title: "harness-lint CLI: Complete Command and Flag Reference"
+sidebarTitle: "CLI Reference"
+description: "Complete reference for every harness-lint command: check, rule, install, update, restore, search, inspect, list, remove, outdated, doctor, and init."
+---
+
+harness-lint is a GritQL-based lint tool for enforcing coding rules in AI-assisted workflows. This page documents every command and flag available on the `harness-lint` binary.
+
+## Global Flags
+
+These flags apply to the root `harness-lint` binary and are available on every subcommand.
+
+<ParamField query="--config <PATH>" type="path">
+  Path to a `harness.toml` file. Overrides automatic discovery, which walks up the directory tree looking for `harness.toml` or `.git`.
+</ParamField>
+
+<ParamField query="--cwd <PATH>" type="path">
+  Working directory to use as the starting point for project root discovery. Defaults to the shell's current directory.
+</ParamField>
+
+<ParamField query="--json" type="boolean">
+  Emit all output as JSON instead of human-readable text. Useful for CI integrations and editor tooling.
+</ParamField>
+
+<ParamField query="-v / --verbose" type="boolean">
+  Show additional diagnostic output, including the number of active rules, cache hit/miss counts, and GritQL batch progress.
+</ParamField>
+
+---
+
+## harness-lint init
+
+Creates a `harness.toml` configuration file and scaffolds the local rules directory in the current project root.
+
+```sh
+harness-lint init
+harness-lint init --force
+```
+
+<ParamField query="--force" type="boolean">
+  Overwrite an existing `harness.toml` and rules directory. Without this flag, `init` stops if either already exists.
+</ParamField>
+
+After initialization, the command prints AI agent instructions you can copy into your `AGENTS.md`.
+
+---
+
+## harness-lint check
+
+Runs all active rules against the selected set of project files. Exits with a non-zero code if any rule at `error` level matches.
+
+```sh
+harness-lint check --changed
+harness-lint check --staged
+harness-lint check --all
+harness-lint check --changed --rule typescript.no-console-log
+harness-lint check --all --tag security
+```
+
+<ParamField query="--all" type="boolean">
+  Scan every file in the project, subject to `[ignore]` paths from `harness.toml`. Required when the project has more than 1,000 files to prevent accidental full scans.
+</ParamField>
+
+<ParamField query="--changed" type="boolean">
+  Scan only files that differ from the `changed_base` git ref configured in `harness.toml` (default `origin/main`). Use this for pre-push checks.
+</ParamField>
+
+<ParamField query="--staged" type="boolean">
+  Scan only files staged for the next git commit. Use this for pre-commit hooks.
+</ParamField>
+
+<ParamField query="--base <REF>" type="string">
+  Override the git ref used by `--changed`. Accepts any ref that `git diff` understands, such as a branch name, tag, or commit SHA.
+</ParamField>
+
+<ParamField query="--rule <ID>" type="string">
+  Limit the check to a single rule ID. Can be repeated to include multiple rules. Example: `--rule typescript.no-console-log --rule python.no-print-debug`.
+</ParamField>
+
+<ParamField query="--tag <TAG>" type="string">
+  Limit the check to rules whose `tags` array includes the given value. Can be repeated. Example: `--tag security --tag logging`.
+</ParamField>
+
+<Tip>
+  `harness-lint check` does not accept positional file paths. Use `--changed`, `--staged`, or `--all` to select the file set, and `--rule` or `--tag` to select rules.
+</Tip>
+
+When the project has fewer than 1,000 files and you run `harness-lint check` with none of the three scope flags, harness-lint performs an implicit full scan. With more than 1,000 files it refuses and asks you to pass `--changed` or `--all` explicitly.
+
+---
+
+## harness-lint rule
+
+The `rule` subcommand group manages local rules. All subcommands load the project config and discover rules from the configured local directories and installed packs.
+
+### harness-lint rule list
+
+Lists every rule that harness-lint currently loads, including rules from local directories and installed packs.
+
+```sh
+harness-lint rule list
+harness-lint rule list --json
+```
+
+Each entry shows the rule ID, level, language, and tags.
+
+---
+
+### harness-lint rule explain \<rule-id\>
+
+Prints a full description of a single rule: its title, level, language, tags, description body, GritQL pattern, and Bad/Good examples.
+
+```sh
+harness-lint rule explain typescript.no-console-log
+harness-lint rule explain local.no-print
+```
+
+---
+
+### harness-lint rule create \<feedback\>
+
+Scaffolds a new local rule file in the first configured local rules directory.
+
+```sh
+harness-lint rule create "Avoid print debugging" \
+  --language python \
+  --grit '`print($value)`'
+```
+
+<ParamField query="feedback" type="string" required>
+  A short description of what the rule enforces. This becomes the rule's `title` in the generated file. Enclose in quotes if it contains spaces.
+</ParamField>
+
+<ParamField query="--language <lang>" type="string" required>
+  The language name for the rule. Use Grit CLI names: `js`, `python`, `go`, `rust`, `ruby`, `java`, `css`, `yaml`, `json`, `markdown`, `hcl`, `sql`, `php`. For TypeScript and JavaScript, use `js`.
+</ParamField>
+
+<ParamField query="--grit <pattern>" type="string" required>
+  A valid GritQL pattern. The pattern is embedded in the generated rule file's fenced code block. The generated block automatically prepends the `language <lang>` directive.
+</ParamField>
+
+After creating a rule, verify it with `harness-lint rule verify` and then test it against real files:
+
+```sh
+harness-lint rule verify local.no-print
+harness-lint check --all --rule local.no-print
+```
+
+---
+
+### harness-lint rule verify \[\<rule-id\>\]
+
+Runs each rule's `## Bad` examples through the rule's GritQL pattern and confirms that every Bad example triggers a match. Fails if any Bad example does not trigger.
+
+```sh
+# Verify all rules
+harness-lint rule verify
+
+# Verify a single rule
+harness-lint rule verify local.no-print
+```
+
+<ParamField query="rule-id" type="string">
+  Optional rule ID. When omitted, every loaded rule with Bad examples is verified.
+</ParamField>
+
+Verification fails if:
+- A rule has no `## Bad` section.
+- A Bad example is empty or contains only `TODO` lines.
+- The GritQL pattern does not match any line in the Bad example.
+
+---
+
+### harness-lint rule suggest \<feedback\>
+
+Searches the remote pack catalog for rules that match the feedback text. Suggests pack installation commands when existing rules cover the feedback, and shows a `rule create` command when nothing matches.
+
+```sh
+harness-lint rule suggest "avoid committing debug output"
+harness-lint rule suggest "no goroutine leaks"
+```
+
+<ParamField query="feedback" type="string" required>
+  A plain-language description of the coding constraint you want to enforce.
+</ParamField>
+
+---
+
+## harness-lint install \<id\> \[\<spec\>\]
+
+Adds a rule pack to `harness.toml` and installs it locally.
+
+```sh
+harness-lint install typescript
+harness-lint install typescript "github:CorrectRoadH/harness-lint@main#packs/typescript"
+```
+
+<ParamField query="id" type="string" required>
+  The pack identifier to install. Must match an entry in the catalog or match the ID you want to assign to a local or git-sourced pack.
+</ParamField>
+
+<ParamField query="spec" type="string">
+  An explicit pack source specification. When omitted, harness-lint fetches the recommended spec from the catalog. Format: `github:<owner>/<repo>@<ref>#<subpath>` for git packs, or `local:<path>` for a local pack.
+</ParamField>
+
+After installation, `harness.toml` gains a new entry in `[packs]` and `harness.lock` is updated. Commit both files to version control.
+
+---
+
+## harness-lint update
+
+Re-fetches every pack listed in `harness.toml` and rewrites `harness.lock` with the latest checksums and versions.
+
+```sh
+harness-lint update
+```
+
+Use this command to pull in new rule versions from remote packs. Commit the updated `harness.lock` after running it.
+
+---
+
+## harness-lint restore
+
+Rebuilds the local pack cache from the exact versions recorded in `harness.lock`. Does not fetch new versions.
+
+```sh
+harness-lint restore
+```
+
+Use this in CI or after a fresh clone to install packs without changing the lock file. Fails if a pack is listed in `harness.toml` but missing from `harness.lock` — run `harness-lint update` in that case.
+
+---
+
+## harness-lint outdated
+
+Compares installed pack versions against what is available and lists any packs with updates.
+
+```sh
+harness-lint outdated
+```
+
+Prints a table of pack IDs with installed and available checksums. Prints `All packs are up to date.` when nothing needs updating.
+
+---
+
+## harness-lint remove \<id\>
+
+Removes a pack from `harness.toml`, deletes it from `harness.lock`, and removes its cached files.
+
+```sh
+harness-lint remove typescript
+```
+
+<ParamField query="id" type="string" required>
+  The pack ID to remove, exactly as it appears in `harness.toml`.
+</ParamField>
+
+---
+
+## harness-lint list
+
+Lists installed packs or, with `--available`, lists all packs in the catalog.
+
+```sh
+# List installed packs
+harness-lint list
+
+# List all packs available in the catalog
+harness-lint list --available
+```
+
+<ParamField query="--available" type="boolean">
+  Query the remote catalog and print every pack that can be installed. Without this flag, lists only the packs already configured in `harness.toml`.
+</ParamField>
+
+---
+
+## harness-lint search \<query...\>
+
+Searches the pack catalog using plain-language feedback and returns ranked results.
+
+```sh
+harness-lint search "python typing"
+harness-lint search "no goroutine leaks"
+harness-lint search "avoid console log typescript"
+```
+
+<ParamField query="query" type="string" required>
+  One or more words describing the coding constraint. Multiple words are joined into a single search phrase. When no query words are provided, all available packs are listed.
+</ParamField>
+
+Each result shows the pack ID, rule title, match score, and a recommendation to install.
+
+---
+
+## harness-lint inspect \<id\>
+
+Shows detailed information about a single pack from the catalog: title, description, supported languages, included rules, and the install spec.
+
+```sh
+harness-lint inspect typescript
+harness-lint inspect go-concurrency
+```
+
+<ParamField query="id" type="string" required>
+  The pack ID to inspect. Must exist in the catalog.
+</ParamField>
+
+---
+
+## harness-lint doctor
+
+Diagnoses the project configuration, local rules, GritQL validity, `grit` CLI availability, and git integration. Prints a finding for each check with status `ok`, `warn`, or `error`.
+
+```sh
+harness-lint doctor
+harness-lint doctor --json
+```
+
+Checks performed:
+
+| Check | What it verifies |
+|---|---|
+| `project-root` | `harness.toml` or `.git` is found in an ancestor directory |
+| `config` | `harness.toml` parses without errors |
+| `exceptions` | Every `[[exceptions]]` entry references a known rule ID |
+| `local-rules` | Local rule directories exist and all rules have executable GritQL |
+| `rules` | All configured packs load and their rules parse |
+| `grit` | The `grit` CLI is installed and returns a version |
+| `git` | The project is inside a git worktree |
+
+`harness-lint doctor` exits with a non-zero code if any check has `error` status. Run it first whenever you encounter an unexpected problem.

@@ -1,0 +1,92 @@
+---
+title: "Rust Rule Pack: Application Conventions for harness-lint"
+sidebarTitle: "Rust"
+description: "The rust rule pack provides GritQL rules for Rust code quality, covering debug macros, panic handling, and error propagation patterns."
+---
+
+The `rust` pack — **Rust Application Conventions** — targets Rust application code hygiene: removing committed debug scaffolding, eliminating panic paths from normal flow, and encouraging proper error propagation with `?` and domain error types.
+
+## rust
+
+**Rust Application Conventions** — Rules for Rust application code hygiene: explicit errors, no committed scaffolding, and fewer panic paths.
+
+```sh
+harness-lint install rust
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `rust.no-dbg-macro` | Avoid committed dbg macros | Use structured logging, assertions, or explicit test expectations instead of committed `dbg!` calls |
+| `rust.no-panic-flow` | Avoid panic in normal application flow | Return errors or handle invalid states explicitly so callers can decide how failures surface |
+| `rust.no-todo-unimplemented` | Avoid committed todo and unimplemented macros | Replace scaffolding macros with real behavior, explicit errors, or a failing test |
+| `rust.no-unwrap-expect` | Review unwrap and expect calls | Prefer `?`, explicit matches, or domain errors over panicking on `Option` and `Result` values |
+
+### Rule examples
+
+#### no-unwrap-expect
+
+`.unwrap()` and `.expect()` panic if the value is `Err` or `None`. In application flow this produces an unhelpful crash with no error context for the caller. Use `?` to propagate the error up the call stack, or match explicitly to handle the failure in place.
+
+<CodeGroup>
+```rust Bad
+let token = request.headers().get("token").unwrap();
+```
+
+```rust Good
+let token = request
+    .headers()
+    .get("token")
+    .ok_or_else(|| anyhow::anyhow!("missing token"))?;
+```
+</CodeGroup>
+
+#### no-dbg-macro
+
+`dbg!` prints to stderr and returns its argument, making it easy to slip into committed code. It produces unstructured output with no log level or context. Use your tracing or logging framework so diagnostics are consistent and filterable.
+
+<CodeGroup>
+```rust Bad
+let user = dbg!(load_user(id)?);
+```
+
+```rust Good
+let user = load_user(id)?;
+tracing::debug!(user_id = %user.id, "loaded user");
+```
+</CodeGroup>
+
+#### no-panic-flow
+
+`panic!` unwinds the thread (or aborts the process, depending on your panic strategy) with no opportunity for the caller to handle the failure gracefully. In library and application code, return a `Result` so callers can decide how to surface the error.
+
+<CodeGroup>
+```rust Bad
+fn load_config(path: &Path) -> Config {
+    panic!("missing config: {}", path.display())
+}
+```
+
+```rust Good
+fn load_config(path: &Path) -> anyhow::Result<Config> {
+    anyhow::bail!("missing config: {}", path.display())
+}
+```
+</CodeGroup>
+
+#### no-todo-unimplemented
+
+`todo!()` and `unimplemented!()` panic at runtime. They are useful during initial development but should never reach a committed, reviewable state. Replace them with a real implementation, a typed error, or a `#[cfg(test)]` failing assertion that documents the missing branch.
+
+<CodeGroup>
+```rust Bad
+fn render() -> Html {
+    todo!("wire renderer")
+}
+```
+
+```rust Good
+fn render() -> anyhow::Result<Html> {
+    anyhow::bail!("renderer is not configured")
+}
+```
+</CodeGroup>

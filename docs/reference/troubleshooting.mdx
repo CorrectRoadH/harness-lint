@@ -1,0 +1,327 @@
+---
+title: "Troubleshooting Common harness-lint Errors and Issues"
+sidebarTitle: "Troubleshooting"
+description: "Fix common harness-lint errors: missing grit, config not found, rules with no GritQL, broken packs, and false-positive diagnostics."
+---
+
+This page covers the most common errors and unexpected behaviors you may encounter when using harness-lint, along with step-by-step fixes for each.
+
+<Tip>
+  Run `harness-lint doctor` as your first step for any issue. It checks every prerequisite — project root, config file, local rules, installed packs, the `grit` CLI, and git integration — and tells you exactly which check failed and why.
+</Tip>
+
+---
+
+<Accordion title="`grit` not found">
+
+**Symptom:** `harness-lint check` or `harness-lint doctor` prints an error like:
+
+```
+[error] grit: grit is required for `check` but was not found: No such file or directory
+```
+
+**Cause:** The `grit` CLI is not installed or is not on your `PATH`. harness-lint delegates all GritQL pattern execution to `grit check`.
+
+**Fix:** Install `grit` using Homebrew:
+
+```sh
+brew install getgrit/tap/grit
+```
+
+After installation, confirm harness-lint can find it:
+
+```sh
+harness-lint doctor
+```
+
+You should see `[ok] grit: grit is installed: <version>` in the output. If you installed `grit` through another method, make sure the binary is on your shell's `PATH`.
+
+</Accordion>
+
+---
+
+<Accordion title="`harness.toml` not found">
+
+**Symptom:** Any harness-lint command prints:
+
+```
+could not find project root from <path>; run `harness-lint init` first
+```
+
+or
+
+```
+missing harness.toml; run `harness-lint init` in <path>
+```
+
+**Cause:** harness-lint walks up the directory tree looking for `harness.toml` or `.git`. If it reaches the filesystem root without finding either, it gives up.
+
+**Fix (new project):** Run `harness-lint init` in your repository root to create `harness.toml` and the default `rules/` directory:
+
+```sh
+cd /path/to/your/repo
+harness-lint init
+```
+
+**Fix (wrong directory):** If you are running harness-lint from a subdirectory of your project, use `--cwd` to point to the repository root:
+
+```sh
+harness-lint --cwd /path/to/your/repo check --changed
+```
+
+**Fix (explicit config path):** You can also point directly to the config file:
+
+```sh
+harness-lint --config /path/to/harness.toml check --changed
+```
+
+</Accordion>
+
+---
+
+<Accordion title="Rule has no executable GritQL">
+
+**Symptom:** `harness-lint doctor` or `harness-lint rule verify` prints:
+
+```
+validated N local rule(s), but only M include executable GritQL
+```
+
+or
+
+```
+has a ```grit block but no executable GritQL
+```
+
+**Cause:** Every rule file must contain exactly one GritQL fenced code block with a real pattern. harness-lint rejects blocks that are empty, contain only comments, or contain only `TODO` lines.
+
+**Fix:** Open the rule file and add a valid pattern to the `grit` block. The block must start with a `language <name>` directive followed by at least one pattern expression:
+
+````markdown
+```grit
+language python
+`print($value)`
+```
+````
+
+If you cannot yet express the constraint as a GritQL pattern, do not create a harness-lint rule for it. Keep the guidance in your `AGENTS.md`, review notes, or project documentation instead.
+
+After adding the pattern, verify it works:
+
+```sh
+harness-lint rule verify local.your-rule-id
+```
+
+</Accordion>
+
+---
+
+<Accordion title="Pack not installed">
+
+**Symptom:** `harness-lint check` or `harness-lint doctor` prints:
+
+```
+pack `typescript` is not installed; run `harness-lint update`
+```
+
+or
+
+```
+pack `typescript` is missing from harness.lock; run `harness-lint update` first
+```
+
+**Cause:** The pack is listed in `harness.toml` under `[packs]` but has not been fetched locally. This happens after a fresh clone, when a teammate added a pack without running `update`, or when `.harness/packs/` was accidentally deleted.
+
+**Fix (after a fresh clone or deleted cache):** Restore packs from the existing lock file:
+
+```sh
+harness-lint restore
+```
+
+**Fix (lock file missing or out of date):** Fetch and lock the latest pack versions:
+
+```sh
+harness-lint update
+```
+
+Then commit the updated `harness.lock` so your teammates and CI jobs do not hit the same error.
+
+</Accordion>
+
+---
+
+<Accordion title="False positive: rule triggers but shouldn't">
+
+**Symptom:** `harness-lint check` reports a violation in a file where the rule should not apply — for example, a generated file, a test helper, or an intentional exception.
+
+**Option 1 — Use `[[exceptions]]` for a known, documented exception:**
+
+Add an entry to `harness.toml` that hides the rule for the specific paths. Always include a `reason` so reviewers and AI agents understand why the suppression is intentional:
+
+```toml
+[[exceptions]]
+rule   = "typescript.no-console-log"
+paths  = ["src/generated/**"]
+reason = "Generated SDK code emits debug output during local mocks."
+```
+
+Other rules still check those files normally — only the specified rule is hidden.
+
+**Option 2 — Narrow the GritQL with `$filename` conditions:**
+
+If you own the rule, encode the file scope inside the GritQL block. This is more precise than `[[exceptions]]` because it is self-documenting and does not require config changes:
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+**Option 3 — Use `[ignore]` for paths that should never be scanned:**
+
+If no rule should ever scan a directory (e.g. `dist/`, `coverage/`), add it to `[ignore]`:
+
+```toml
+[ignore]
+paths = ["dist/**", "coverage/**"]
+```
+
+</Accordion>
+
+---
+
+<Accordion title="`check` refuses to scan: too many files">
+
+**Symptom:** Running `harness-lint check` without a scope flag prints:
+
+```
+refusing implicit full scan of N files; use `harness-lint check --changed` or run `harness-lint check --all` to force it
+```
+
+**Cause:** When you run `harness-lint check` without `--changed`, `--staged`, or `--all`, harness-lint performs an implicit full scan. To protect against accidentally scanning large projects, it refuses when the file count exceeds 1,000.
+
+**Fix (recommended for most workflows):** Scan only files that changed since your base branch. This is the fastest option for pre-push checks:
+
+```sh
+harness-lint check --changed
+```
+
+**Fix (CI full scan):** If you genuinely want to scan every file — for example in a nightly CI job — pass `--all` explicitly:
+
+```sh
+harness-lint check --all
+```
+
+**Fix (pre-commit):** Scan only staged files:
+
+```sh
+harness-lint check --staged
+```
+
+</Accordion>
+
+---
+
+<Accordion title="`rule verify` fails: Bad example doesn't trigger">
+
+**Symptom:** `harness-lint rule verify` prints:
+
+```
+Bad example 1 for rule `local.your-rule` did not trigger; adjust the GritQL, Bad example, or `$filename` scope
+```
+
+**Cause:** The GritQL pattern did not produce any matches against the `## Bad` example code. This usually means one of three things:
+
+1. The GritQL pattern is too specific and does not match the shape of the Bad example.
+2. The `$filename` condition in the pattern excludes the synthetic filename used during verification (which is `src/bad-example.<ext>`).
+3. The Bad example code is syntactically invalid for the rule's language.
+
+**Fix — check the pattern:**
+
+Open the rule file and compare the GritQL pattern to the Bad example. Run `harness-lint rule explain <rule-id>` to see both side by side. Simplify the pattern or expand the Bad example to match.
+
+**Fix — check `$filename` scope:**
+
+`harness-lint rule verify` writes the Bad example to a temporary file at path `src/bad-example.<ext>`. If your pattern uses `$filename` conditions, confirm they would match a path like `src/bad-example.ts`:
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts"   ✅ matches src/bad-example.ts
+}
+```
+
+A condition like `$filename <: r".*apps/.*\.ts"` would exclude the verification file. Either adjust the condition or broaden it temporarily while developing the rule.
+
+**Fix — check the Bad example language:**
+
+Make sure the fenced code block in `## Bad` uses the correct language identifier and that the code is syntactically valid for that language.
+
+</Accordion>
+
+---
+
+<Accordion title="Lock file out of sync">
+
+**Symptom:** `harness-lint restore` prints:
+
+```
+pack `typescript` differs between harness.toml and harness.lock; run `harness-lint update` to refresh the lock
+```
+
+or `harness-lint check` prints:
+
+```
+pack `typescript` is not installed; run `harness-lint update`
+```
+
+**Cause:** `harness.toml` and `harness.lock` disagree about a pack's source or spec. This can happen when someone edits `harness.toml` by hand to change a pack spec without running `harness-lint update`, or when a pack spec is added but the lock file is not committed.
+
+**Fix:** Run `harness-lint update` to re-resolve all packs and rewrite the lock file:
+
+```sh
+harness-lint update
+```
+
+Then commit **both** `harness.toml` and `harness.lock` so every team member and CI job uses consistent pack versions:
+
+```sh
+git add harness.toml harness.lock
+git commit -m "chore: update harness-lint packs"
+```
+
+</Accordion>
+
+---
+
+<Accordion title="`[[suppressions]]` deprecation warning">
+
+**Symptom:** Any harness-lint command prints:
+
+```
+warning: `[[suppressions]]` is deprecated; rename it to `[[exceptions]]` in harness.toml
+```
+
+**Cause:** Your `harness.toml` uses the old `[[suppressions]]` table name. harness-lint still reads it correctly, but the key has been renamed to `[[exceptions]]` and the old name is deprecated.
+
+**Fix:** Open `harness.toml` and rename every `[[suppressions]]` occurrence to `[[exceptions]]`:
+
+```toml
+# Before
+[[suppressions]]
+rule   = "typescript.no-console-log"
+paths  = ["src/generated/**"]
+reason = "Generated SDK code."
+
+# After
+[[exceptions]]
+rule   = "typescript.no-console-log"
+paths  = ["src/generated/**"]
+reason = "Generated SDK code."
+```
+
+The `rule`, `paths`, and `reason` fields are identical — only the table header name changes. Commit the updated `harness.toml` to silence the warning for your whole team.
+
+</Accordion>

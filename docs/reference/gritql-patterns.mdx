@@ -1,0 +1,244 @@
+---
+title: "Writing GritQL Patterns for harness-lint Lint Rules"
+sidebarTitle: "GritQL Patterns"
+description: "Learn the GritQL syntax used in harness-lint rules: language declarations, metavariables, where clauses, and filename conditions with examples."
+---
+
+Every harness-lint rule enforces its constraint through a GritQL pattern. GritQL is the pattern-matching language provided by the `grit` CLI. Understanding the basics of GritQL lets you write precise rules that catch exactly what you intend — no more and no less.
+
+<Note>
+  Validate every pattern you write with `harness-lint rule verify` and `harness-lint doctor`. Those commands confirm that the Grit CLI can parse and execute your pattern before you rely on it in CI.
+</Note>
+
+---
+
+## 1. What GritQL Is
+
+GritQL is a structural code search language. Where a regular expression operates on raw text, GritQL operates on an **abstract syntax tree (AST)** — it matches code by structure, not by character sequence. This means a pattern like `` `print($value)` `` matches any call to `print` with any single argument, regardless of whitespace, line breaks, or how the argument is formatted.
+
+GritQL is provided by the `grit` CLI (install with `brew install getgrit/tap/grit`). harness-lint orchestrates `grit check` internally; you never invoke `grit` directly when using harness-lint.
+
+---
+
+## 2. Basic Pattern Syntax
+
+**Backtick patterns** match code literally (modulo AST structure). Wrap the code you want to detect in backticks:
+
+```grit
+language python
+`print($value)`
+```
+
+This matches any call expression where the function is `print` and there is exactly one argument.
+
+**Metavariables** start with `$` and match any expression in that position. They act as named wildcards:
+
+| Metavariable | Typical use |
+|---|---|
+| `$value` | Capture a single argument |
+| `$name` | Capture an identifier |
+| `$body` | Capture a function body or block |
+| `$args` | Capture an argument list |
+| `$_` | Discard — match anything without binding |
+
+Metavariables in the same pattern that share a name must match the same code. For example, `` `$a == $a` `` matches comparisons where both sides are identical.
+
+**`or` patterns** match any of several alternatives:
+
+```grit
+language python
+or {
+  `eval($code)`,
+  `exec($code)`
+}
+```
+
+This matches calls to either `eval` or `exec`.
+
+---
+
+## 3. Language Declarations
+
+Every GritQL block in a rule file must begin with a `language <name>` directive on its own line:
+
+```grit
+language go
+`go $call`
+```
+
+The directive tells the Grit CLI which parser to use. Without it, `grit check` cannot parse the source files.
+
+---
+
+## 4. Supported Language Names
+
+Use these names in the `language` directive inside GritQL blocks and in the `language` frontmatter field:
+
+| Language name | Covers |
+|---|---|
+| `js` | TypeScript and JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`) |
+| `python` | Python (`.py`) |
+| `go` | Go (`.go`) |
+| `rust` | Rust (`.rs`) |
+| `ruby` | Ruby (`.rb`) |
+| `java` | Java (`.java`) |
+| `css` | CSS (`.css`) |
+| `yaml` | YAML (`.yml`, `.yaml`) |
+| `json` | JSON (`.json`) |
+| `markdown` | Markdown (`.md`, `.mdx`) |
+| `hcl` | HCL / Terraform (`.tf`, `.hcl`) |
+| `sql` | SQL (`.sql`) |
+| `php` | PHP (`.php`) |
+
+---
+
+## 5. TypeScript-Specific Notes
+
+For TypeScript and JavaScript rules, always write `language js` in the GritQL block — even when the rule frontmatter declares `language: typescript`:
+
+```grit
+language js
+`console.log($value)`
+```
+
+The `js` language name covers both TypeScript and JavaScript files. Use `language js(typescript)` only when you specifically need the TypeScript parser variant, for example when matching syntax that is not valid JavaScript:
+
+```grit
+language js(typescript)
+`$name as $type`
+```
+
+---
+
+## 6. `where` Clauses
+
+Add a `where` clause to attach conditions to a pattern. Conditions are comma-separated predicates evaluated after the base pattern matches:
+
+```grit
+language go
+`time.After($duration)` where {
+  $duration <: r".*timeout.*"
+}
+```
+
+`where` clauses are most commonly used for `$filename` conditions (see below), but you can also use them to match the content of a metavariable with a regex (`<: r"pattern"`) or to require that a sub-pattern matches (`<: some_pattern`).
+
+---
+
+## 7. `$filename` Conditions
+
+`$filename` is a built-in metavariable that holds the path of the file currently being scanned, relative to the project root. Use it inside a `where` clause to limit a rule to specific files.
+
+**Include pattern** — the rule fires only when the filename matches:
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts"
+}
+```
+
+**Exclude pattern** — the rule fires only when the filename does **not** match:
+
+```grit
+language js
+`console.log($value)` where {
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+**Combining include and exclude** — the rule fires only in `src/` TypeScript files that are not test files:
+
+```grit
+language js
+`console.log($value)` where {
+  $filename <: r".*src/.*\.ts",
+  !$filename <: r".*\.test\.ts"
+}
+```
+
+The regex syntax is standard Rust regex (`r"pattern"`). The `.*` prefix is needed because the path is relative to the project root and may include directory segments.
+
+<Tip>
+  Encode file scope directly in GritQL with `$filename` when you own the rule. Use `[[exceptions]]` in `harness.toml` only when a rule comes from an external pack and you cannot modify it.
+</Tip>
+
+---
+
+## 8. Practical Examples
+
+### Example 1 — Python: flag `print` calls
+
+**Rule:** `python.no-print-debug`
+
+```grit
+language python
+`print($value)`
+```
+
+Matches any call to `print(...)` in Python source files. No `where` clause is needed because the `language python` directive already restricts execution to Python files.
+
+---
+
+### Example 2 — Go: flag untracked goroutines
+
+**Rule:** `go-concurrency.no-untracked-goroutine`
+
+```grit
+language go
+`go $call`
+```
+
+Matches every goroutine launch (`go someFunc(...)`) in Go source files. The `$call` metavariable captures the function invocation so the diagnostic can show it in the output.
+
+---
+
+### Example 3 — TypeScript: flag `console.log` in source files only
+
+**Rule:** `typescript.no-console-log`
+
+```grit
+language js
+`console.log($value)` where {
+  or {
+    $filename <: r".*\.ts",
+    $filename <: r".*\.tsx",
+    $filename <: r".*\.js",
+    $filename <: r".*\.jsx",
+    $filename <: r".*\.mjs",
+    $filename <: r".*\.cjs"
+  }
+}
+```
+
+The explicit filename extensions guard against the pattern accidentally running on non-JS/TS files when the Grit parser encounters them. The `or` block accepts any of the common TypeScript/JavaScript extensions.
+
+---
+
+### Example 4 — Python: flag `eval` or `exec`
+
+**Rule:** `python.no-eval-exec`
+
+```grit
+language python
+or {
+  `eval($code)`,
+  `exec($code)`
+}
+```
+
+The top-level `or` matches either `eval(...)` or `exec(...)`. Both branches use the `$code` metavariable to capture the argument for display in the diagnostic.
+
+---
+
+## Pattern Authoring Checklist
+
+Before relying on a new pattern in CI:
+
+1. Write a `## Bad` example in the rule file that the pattern should match.
+2. Run `harness-lint rule verify <rule-id>` — it confirms the Bad example triggers.
+3. Run `harness-lint check --all --rule <rule-id>` — review all matches in the project.
+4. If there are false positives, narrow the pattern with `$filename` conditions or a more specific backtick expression.
+5. Run `harness-lint doctor` to confirm the Grit CLI accepts the compiled pattern.
+
+If a coding constraint cannot be expressed as a reliable GritQL pattern, do not create a harness-lint rule for it. Keep that guidance in agent instructions, review checklists, or project documentation instead.

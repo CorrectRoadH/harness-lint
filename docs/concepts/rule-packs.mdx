@@ -1,0 +1,134 @@
+---
+title: "Rule Packs: Installing Shareable GritQL Rule Collections"
+sidebarTitle: "Rule Packs"
+description: "Rule packs are versioned, shareable collections of GritQL lint rules you can install from the catalog or reference from a Git repository."
+---
+
+## What is a rule pack?
+
+A rule pack is a versioned, shareable collection of GritQL lint rules. On disk, a pack is a directory containing:
+
+- A `harness-pack.toml` manifest that declares the pack's ID, title, description, and supported languages.
+- A `rules/` subdirectory with one Markdown rule file per rule.
+
+You install packs from the catalog or directly from a Git repository. Once installed, harness-lint loads the pack's rules alongside your local rules on every `check` run.
+
+## Local rules vs. pack rules
+
+| | Local rules | Pack rules |
+|---|---|---|
+| **Location** | Your project's `rules/` directory (or directories listed under `[rules] local`) | `.harness/packs/<pack-id>/` (managed by harness-lint) |
+| **Scope** | Project-specific — live in your repo, owned by your team | Shared across projects — versioned and distributed |
+| **Versioning** | Tracked by your own git history | Locked in `harness.lock` with an exact checksum |
+| **Best for** | One-off constraints, domain-specific patterns, work in progress | Well-established language conventions, framework rules |
+
+Use local rules for constraints that are specific to your codebase. Use packs when you want to share rules across multiple repositories or adopt community-maintained rule sets.
+
+<Tip>
+  Run `harness-lint search <keyword>` to find packs relevant to your language or framework before writing a local rule. A pack rule is already tested, documented, and maintained — there is no need to recreate it locally.
+
+  ```sh
+  harness-lint search "python typing"
+  harness-lint search "go concurrency"
+  harness-lint search "react hooks"
+  ```
+</Tip>
+
+## Installing packs
+
+**Install a pack from the catalog** by name:
+
+```sh
+harness-lint install typescript
+harness-lint install python
+harness-lint install python-pep8
+```
+
+harness-lint looks up the pack in the catalog, fetches it from the registered Git source, and adds the entry to `harness.toml` and `harness.lock`.
+
+**Install a pack directly from a Git source** by providing both the ID and the source spec:
+
+```sh
+harness-lint install go-concurrency \
+  github:CorrectRoadH/harness-lint@main#packs/go-concurrency
+```
+
+The spec format is `github:<owner>/<repo>@<branch-or-tag>#<subdirectory>`. This lets you reference packs hosted in any repository, including private forks or monorepos.
+
+After installation, harness-lint records the entry in `harness.toml`:
+
+```toml
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+go-concurrency = "github:CorrectRoadH/harness-lint@main#packs/go-concurrency"
+```
+
+## Listing and browsing packs
+
+**List packs you have installed:**
+
+```sh
+harness-lint list
+```
+
+Output includes the pack ID, source spec, and installed version (from `harness.lock`).
+
+**Browse all packs available in the catalog:**
+
+```sh
+harness-lint list --available
+```
+
+**Search the catalog by keyword:**
+
+```sh
+harness-lint search "python typing"
+```
+
+Search returns matching packs ranked by relevance, with a short explanation of why each pack matches and the exact `install` command to use.
+
+## Inspecting a pack before installing
+
+Before you install a pack, you can read its description and see the full rule list:
+
+```sh
+harness-lint inspect go-concurrency
+```
+
+Output shows the pack title, description, supported languages, each rule's ID and rationale, the source spec, and the install command. Use this to confirm a pack is a good fit before adding it to your project.
+
+## Updating and maintaining packs
+
+**Update all installed packs** to their latest versions and rewrite `harness.lock`:
+
+```sh
+harness-lint update
+```
+
+**Check whether any pack has an update available** without applying it:
+
+```sh
+harness-lint outdated
+```
+
+**Remove a pack** you no longer need:
+
+```sh
+harness-lint remove typescript
+```
+
+This removes the pack from `harness.toml`, `harness.lock`, and the local cache directory under `.harness/packs/`.
+
+## The lock file and reproducible installs
+
+Every time you install or update a pack, harness-lint writes an exact checksum to `harness.lock`. The lock file guarantees that every machine and CI job that runs `harness-lint restore` gets the identical pack content — no drift, no surprise rule changes.
+
+**Rebuild all packs from the lock file** (ideal for CI):
+
+```sh
+harness-lint restore
+```
+
+`restore` reads `harness.lock`, verifies checksums, and re-fetches any packs that are missing from the local cache. It fails if `harness.lock` is out of sync with `harness.toml` — run `harness-lint update` to reconcile them first.
+
+Commit both `harness.toml` and `harness.lock` to version control so that your entire team and your CI pipeline use exactly the same rules.

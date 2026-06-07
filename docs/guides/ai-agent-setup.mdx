@@ -1,0 +1,113 @@
+---
+title: "Set Up harness-lint for AI Coding Agents and LDD Workflows"
+sidebarTitle: "AI Agent Setup"
+description: "Configure harness-lint so AI agents like Codex and Claude automatically enforce and fix lint rules during every coding session they run."
+---
+
+AI coding agents — Codex, Claude, Cursor, and others — follow instructions in `AGENTS.md` and `CLAUDE.md` but have no built-in awareness of harness-lint's rule format, CLI commands, or the Lint Driven Development (LDD) workflow. This guide walks you through wiring harness-lint into your agent environment so the agent creates rules correctly, runs checks automatically, and fixes violations instead of ignoring or deleting them.
+
+## The goal
+
+When harness-lint is properly configured for AI agents, every coding session benefits from automatic enforcement:
+
+- The agent runs `harness-lint check --changed` after each code change.
+- When a rule fires, the agent reads the rule with `harness-lint rule explain` and fixes the code to comply.
+- When the agent introduces a class of code the team has flagged, it converts the feedback into a harness-lint rule before fixing the current instance.
+
+You get the LDD flywheel: feedback → rule → enforcement → clean code, with no human needed to re-explain the same constraint.
+
+## Install the Codex skill
+
+The Codex skill teaches the agent harness-lint's rule format, CLI commands, and the full LDD workflow. Install it once per development environment:
+
+```bash
+npx skills add CorrectRoadH/harness-lint
+```
+
+<Note>
+The Codex skill is optional, but it significantly improves rule authoring quality. Without it, agents can still follow the instructions in `AGENTS.md`, but they are less likely to produce well-formed GritQL patterns on the first attempt.
+</Note>
+
+After installation, the agent's skill set includes:
+
+- The structure of a valid rule file (frontmatter, GritQL block, Bad/Good examples).
+- When to use `language js` for TypeScript/JavaScript rules.
+- How to use `$filename` for path-scoped rules.
+- The complete eight-step LDD workflow for creating and verifying rules.
+
+## Add the AGENTS.md snippet
+
+Run `harness-lint init` in your project root to initialize `harness.toml` and print the block to paste into your `AGENTS.md` or `CLAUDE.md`:
+
+```bash
+harness-lint init
+```
+
+Copy the printed block — it begins with `<!--HARNESS LINT START-->` and ends with `<!--HARNESS LINT END-->` — and paste it into your project's `AGENTS.md` or `CLAUDE.md`.
+
+The snippet instructs the agent to follow the LDD workflow:
+
+1. Check `harness-lint rule list` before creating any new rule to avoid duplicates.
+2. Decide whether the feedback can be expressed as reliable GritQL before creating a rule.
+3. Run `harness-lint rule create` to scaffold the rule file.
+4. Fill in the description and Bad / Good examples.
+5. Run `harness-lint doctor` to verify the environment is healthy.
+6. Run `harness-lint rule verify <rule-id>` to confirm Bad examples trigger.
+7. Run `harness-lint check --all --rule <rule-id>` to validate scope.
+8. Run `harness-lint check --changed` to confirm the rule loads and works in context.
+
+It also tells the agent to follow best practices: one GritQL block per rule, readable kebab-case IDs, minimal Bad examples, and `level: error` only when the rule is unambiguously clear.
+
+## Use the INIT.md prompt to onboard a new repo
+
+To bootstrap harness-lint on a repository that doesn't have it yet, paste the following prompt directly into your AI agent's chat:
+
+```
+READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/INIT.md and install harness lint for this code repo
+```
+
+The agent fetches `INIT.md`, which contains a structured onboarding prompt that instructs it to:
+
+- Install harness-lint and `grit` if they are not present.
+- Run `harness-lint init` to create `harness.toml` and the local rules directory.
+- Detect the languages used in the repository.
+- Search the pack catalog for relevant packs and suggest which ones to install.
+- Scan existing code comments, `AGENTS.md`, and review notes for constraints that can be expressed as local rules, then create those rules.
+
+After the agent completes the INIT.md workflow, you have a working harness-lint setup with a populated `harness.toml`, a `rules/` directory, and a `harness.lock` ready to commit.
+
+## The agent LDD workflow
+
+Once harness-lint is running in your agent environment, the agent follows this workflow whenever it introduces code that triggers a rule:
+
+1. **Read the rule.** Run `harness-lint rule explain <rule-id>` to display the full rule — description, GritQL pattern, and Bad / Good examples.
+
+   ```bash
+   harness-lint rule explain local.no-context-todo
+   ```
+
+2. **Fix the code, not the rule.** When the rule is correct, update the code until the check passes. Do not delete or weaken the rule to make lint pass.
+
+3. **Handle false positives carefully.** If the rule fires on code that genuinely should be allowed, narrow the GritQL pattern, improve the description, or refine the Bad / Good examples. Use `[[exceptions]]` in `harness.toml` only for confirmed path-specific exceptions that apply to code the agent doesn't own.
+
+## Create rules via the agent
+
+When a user tells the agent what not to do, the agent should:
+
+1. Run `harness-lint rule suggest "<feedback>"` to search for existing rules that already cover the concern:
+
+   ```bash
+   harness-lint rule suggest "avoid using context.TODO in Go"
+   ```
+
+   If a matching pack rule exists, the command prints the install command. Install the pack rather than duplicating the rule locally.
+
+2. If no matching rule exists and the feedback can be expressed as GritQL, run `harness-lint rule create`:
+
+   ```bash
+   harness-lint rule create "Do not use context.TODO" --language go --grit '`context.TODO()`'
+   ```
+
+3. Edit the generated file, verify it with `harness-lint rule verify`, and run `harness-lint check --all --rule <rule-id>` to confirm scope before committing.
+
+The agent should never create a rule for feedback that requires understanding intent or cross-file context. If the pattern can't be expressed as reliable GritQL, it belongs in `AGENTS.md` as plain guidance — not as a harness-lint rule.

@@ -1,0 +1,205 @@
+---
+title: "Go Rule Packs for harness-lint: Three Packs Explained"
+sidebarTitle: "Go"
+description: "Three Go packs for harness-lint covering service code hygiene, goroutine and context lifecycle management, and Effective Go coding patterns."
+---
+
+harness-lint ships three Go packs. The `go` pack covers service-layer hygiene. The `go-concurrency` pack focuses on goroutine and context lifecycle. The `go-effective-go` pack enforces patterns from the official [Effective Go](https://go.dev/doc/effective_go) guide. You can install any combination.
+
+## go
+
+**Go Service Conventions** — GritQL rules for Go service code hygiene.
+
+```sh
+harness-lint install go
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `go.no-context-todo` | Avoid context.TODO in application flow | Accept or derive an explicit context so cancellation and deadlines stay visible |
+| `go.no-fmt-print-debug` | Avoid fmt print debugging | Use the repository logger instead of committed `fmt.Print` calls in service code |
+| `go.no-panic-flow` | Avoid panic in normal service flow | Return or handle errors in application code; keep `panic` for unrecoverable init failures |
+| `go.no-process-exit-flow` | Avoid process exits in normal service flow | Return errors to the application boundary instead of calling `log.Fatal` or `os.Exit` |
+
+### Rule examples
+
+#### no-context-todo
+
+`context.TODO()` is a placeholder that carries no deadline, cancellation signal, or values. In service code this means downstream calls can never be cancelled — which can turn a slow dependency into a goroutine leak.
+
+<CodeGroup>
+```go Bad
+ctx := context.TODO()
+```
+
+```go Good
+ctx, cancel := context.WithTimeout(parentCtx, timeout)
+defer cancel()
+```
+</CodeGroup>
+
+#### no-fmt-print-debug
+
+`fmt.Println` and friends write to stdout with no log level, no structured fields, and no way to suppress output in production. Use your repository's logger so output is consistent and configurable.
+
+<CodeGroup>
+```go Bad
+fmt.Println(userID)
+```
+
+```go Good
+logger.Info("loaded user", "user_id", userID)
+```
+</CodeGroup>
+
+---
+
+## go-concurrency
+
+**Go Concurrency Hygiene** — Rules for goroutine lifecycle, request context flow, and cancellable service code.
+
+```sh
+harness-lint install go-concurrency
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `go-concurrency.no-untracked-goroutine` | Review untracked goroutines | Tie goroutines to a context, errgroup, worker pool, or explicit lifecycle owner |
+| `go-concurrency.no-background-context-flow` | Avoid context.Background in request flow | Use the caller's context so cancellation, deadlines, and tracing flow through the call chain |
+| `go-concurrency.no-time-after-loop` | Review time.After allocations | Use reusable timers in hot loops to avoid timer allocations and delayed cleanup piling up |
+
+### Rule examples
+
+#### no-untracked-goroutine
+
+A bare `go someFunc()` creates a goroutine with no owner, no cancellation, and no error handling. If the goroutine blocks or panics, there is no way to detect or recover from it. Attach goroutines to an `errgroup`, worker pool, or context so their lifecycle is always tracked.
+
+<CodeGroup>
+```go Bad
+go sendEmail(user)
+```
+
+```go Good
+group.Go(func() error {
+    return sendEmail(ctx, user)
+})
+```
+</CodeGroup>
+
+#### no-background-context-flow
+
+`context.Background()` carries no deadline, cancellation signal, or trace span. Using it inside a request handler severs the connection to the incoming request's context, which means downstream calls can outlive the request and traces will lose their parent span.
+
+<CodeGroup>
+```go Bad
+ctx := context.Background()
+```
+
+```go Good
+ctx := req.Context()
+```
+</CodeGroup>
+
+#### no-time-after-loop
+
+`time.After` allocates a new timer channel on every call. When used in a tight loop, each timer channel leaks until its duration elapses, consuming memory proportional to the loop iteration count. Use `time.NewTimer` with an explicit `Stop()` call instead.
+
+<CodeGroup>
+```go Bad
+func Wait(timeout time.Duration) error {
+    select {
+    case <-time.After(timeout):
+        return ErrTimeout
+    }
+}
+```
+
+```go Good
+func Wait(timeout time.Duration) error {
+    timer := time.NewTimer(timeout)
+    defer timer.Stop()
+
+    select {
+    case <-timer.C:
+        return ErrTimeout
+    }
+}
+```
+</CodeGroup>
+
+---
+
+## go-effective-go
+
+**Effective Go Inspired** — Rules inspired by Effective Go covering allocation, control flow, explicit errors, simple APIs, and readable package behavior.
+
+```sh
+harness-lint install go-effective-go
+```
+
+| Rule ID | Title | Description |
+|---|---|---|
+| `go-effective-go.no-else-after-return` | Omit else after return | Let the successful path continue down the page after guard clauses that return |
+| `go-effective-go.no-blank-placeholder-assignment` | Remove blank identifier placeholders | Use the value or remove the placeholder — `_ = value` marks unfinished code |
+| `go-effective-go.no-empty-interface-api` | Avoid empty interface API boundaries | Prefer concrete types, type parameters, or narrow interfaces over `interface{}` |
+| `go-effective-go.no-ignored-error-blank` | Do not discard call errors with blank identifiers | Check errors returned by calls instead of silencing them with `_` |
+| `go-effective-go.no-init-flow` | Review init functions | Prefer explicit constructors and dependency setup over hidden package initialization |
+| `go-effective-go.no-nil-nil-return` | Avoid nil nil returns | Returning `(nil, nil)` leaves callers without data or an explanation |
+| `go-effective-go.no-panic-flow` | Avoid panic in library flow | Return errors for recoverable failures instead of exposing panics to callers |
+| `go-effective-go.no-new-channel-allocation` | Review new channel allocation | Ensure channel capacity and ownership are intentional |
+| `go-effective-go.no-new-map-allocation` | Review new map allocation | Prefer `make` with a capacity hint for maps where size is known |
+| `go-effective-go.no-new-slice-allocation` | Review new slice allocation | Prefer `make` with a length and capacity hint for slices where size is known |
+| `go-effective-go.no-pointer-array-parameter` | Review pointer array parameters | Prefer slice parameters over pointer-to-array for clearer ownership |
+| `go-effective-go.no-recursive-stringer-format` | Avoid recursive Stringer format | Calling `%s` or `%v` on a type inside its own `String()` method causes infinite recursion |
+| `go-effective-go.no-redundant-delete-guard` | Remove redundant delete guards | Deleting a missing map key is a no-op; the existence check is unnecessary |
+| `go-effective-go.no-single-result-type-assertion` | Avoid single-result type assertions | Use the comma-ok form to avoid a panic on failed type assertions |
+
+### Rule examples
+
+#### no-else-after-return
+
+When a guard clause returns early, the `else` block is structurally redundant. Removing it keeps the happy path at the left margin and reduces nesting.
+
+<CodeGroup>
+```go Bad
+func Name(user *User) string {
+    if user == nil {
+        return "anonymous"
+    } else {
+        return user.Name
+    }
+}
+```
+
+```go Good
+func Name(user *User) string {
+    if user == nil {
+        return "anonymous"
+    }
+    return user.Name
+}
+```
+</CodeGroup>
+
+#### no-ignored-error-blank
+
+Silencing an error with `_` hides the reason a call failed and makes debugging significantly harder. Always check the error, even if your handling is just a log statement and an early return.
+
+<CodeGroup>
+```go Bad
+func IsDir(path string) bool {
+    info, _ := os.Stat(path)
+    return info.IsDir()
+}
+```
+
+```go Good
+func IsDir(path string) (bool, error) {
+    info, err := os.Stat(path)
+    if err != nil {
+        return false, err
+    }
+    return info.IsDir(), nil
+}
+```
+</CodeGroup>

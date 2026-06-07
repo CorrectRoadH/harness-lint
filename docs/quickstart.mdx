@@ -1,0 +1,115 @@
+---
+title: "Get Started with harness-lint in Under Five Minutes"
+sidebarTitle: "Quickstart"
+description: "Install harness-lint and its GritQL engine, initialize your project, add a rule pack, and run your first lint check in under five minutes."
+---
+
+This guide walks you through installing harness-lint, setting up your project, and running your first GritQL lint check. By the end you will have a working configuration and a rule pack enforcing coding standards in your repo.
+
+<Steps>
+  <Step title="Install dependencies">
+    harness-lint requires the `grit` CLI for its GritQL engine. Install both tools via Homebrew:
+
+    <CodeGroup>
+      ```sh Install grit
+      brew install getgrit/tap/grit
+      ```
+
+      ```sh Install harness-lint
+      brew install CorrectRoadH/tap/harness-lint
+      ```
+    </CodeGroup>
+
+    Verify both tools are available:
+
+    ```sh
+    grit --version
+    harness-lint --version
+    ```
+  </Step>
+
+  <Step title="Initialize your repo">
+    Run `harness-lint init` from your project root. It creates `harness.toml` (the project config file) and a `rules/` directory (where your local rules live). It also prints instructions that AI agents can follow to create and run rules on your behalf.
+
+    ```sh
+    harness-lint init
+    ```
+
+    After initializing, run `harness-lint doctor` to confirm that your config, rules, `grit` binary, and git integration are all working:
+
+    ```sh
+    harness-lint doctor
+    ```
+
+    <Note>
+      Commit `harness.toml`, `rules/`, and `harness.lock` to your repository so that every developer and CI job runs the same rules. Add `.harness/` to your `.gitignore` — it contains generated working files and lock state that should not be versioned.
+    </Note>
+  </Step>
+
+  <Step title="Install a rule pack">
+    Rule packs are curated collections of GritQL rules for a specific language or framework. Install the pack that matches your project's primary language:
+
+    ```sh
+    # TypeScript / JavaScript
+    harness-lint install typescript
+
+    # Python
+    harness-lint install python
+
+    # Go
+    harness-lint install go
+    ```
+
+    harness-lint fetches the pack, pins the version in `harness.lock`, and adds the pack reference to `harness.toml`. List all available packs with:
+
+    ```sh
+    harness-lint list --available
+    ```
+
+    <Tip>
+      Install the companion Codex AI skill to teach your agent how to create rules, run checks, and fix lint failures automatically:
+
+      ```sh
+      npx skills add CorrectRoadH/harness-lint
+      ```
+    </Tip>
+  </Step>
+
+  <Step title="Run your first check">
+    Check only the files you've changed since `origin/main` — this is the fastest mode and the one to use in most day-to-day workflows:
+
+    ```sh
+    harness-lint check --changed
+    ```
+
+    To scan your entire project at once, use `--all`:
+
+    ```sh
+    harness-lint check --all
+    ```
+
+    You can also narrow a check to a single rule using `--rule`, or to a specific base branch using `--base`:
+
+    ```sh
+    harness-lint check --changed --rule typescript.no-console-log
+    harness-lint check --changed --base origin/develop
+    ```
+  </Step>
+
+  <Step title="Review the results">
+    harness-lint prints one diagnostic per violation, in the format:
+
+    ```
+    src/api/client.ts:42:5  warn  typescript.no-console-log  Avoid console.log in production code
+    src/utils/helpers.ts:17:3  error  typescript.no-explicit-any  Avoid explicit `any` type annotations
+    ```
+
+    Each line shows:
+    - **File path** and **line:column** where the violation was found
+    - **Severity** — `warn` reports the problem; `error` makes `harness-lint check` exit with a non-zero code, failing CI
+    - **Rule ID** — use this to look up the rule with `harness-lint rule explain <rule-id>`
+    - **Message** — a short description from the rule's title
+
+    Fix the flagged lines in your editor, then re-run `harness-lint check --changed` to confirm the check passes.
+  </Step>
+</Steps>

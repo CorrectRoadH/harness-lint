@@ -1,0 +1,74 @@
+---
+title: "harness-lint: Lint Driven Development for AI Codebases"
+sidebarTitle: "Home"
+description: "harness-lint enforces your coding standards in AI-assisted projects by turning feedback into GritQL lint rules that agents can't ignore."
+---
+
+AI coding agents are powerful — but they forget. You correct the same mistake, update your `AGENTS.md`, and the next session the agent does it again. harness-lint solves this with **Lint Driven Development (LDD)**: every time you tell an AI what not to do, you capture that feedback as a lint rule. From then on, a fast, strict GritQL check enforces your standard automatically. The agent can't ignore a failing lint check the way it can ignore a comment in a markdown file.
+
+<CardGroup cols={2}>
+  <Card title="Introduction" icon="book-open" href="introduction">
+    Learn what harness-lint is and how Lint Driven Development works.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="quickstart">
+    Run your first lint check in minutes.
+  </Card>
+  <Card title="Writing Rules" icon="pen-to-square" href="guides/writing-rules">
+    Create custom rules tailored to your project.
+  </Card>
+  <Card title="Rule Packs" icon="box-open" href="packs/overview">
+    Browse pre-built rule packs for popular languages.
+  </Card>
+</CardGroup>
+
+## Get up and running
+
+<Steps>
+  <Step title="Install harness-lint">
+    Install the GritQL engine and harness-lint itself via Homebrew:
+
+    ```sh
+    brew install getgrit/tap/grit
+    brew install CorrectRoadH/tap/harness-lint
+    ```
+  </Step>
+  <Step title="Initialize your repo">
+    Run `harness-lint init` in your project root to create `harness.toml` and the `rules/` directory:
+
+    ```sh
+    harness-lint init
+    ```
+  </Step>
+  <Step title="Install a rule pack or create a local rule">
+    Install a curated pack for your language, or scaffold your own rule from feedback:
+
+    ```sh
+    # Install a pack
+    harness-lint install typescript
+
+    # Or create a local rule
+    harness-lint rule create "Avoid print debugging" --language python --grit '`print($value)`'
+    ```
+  </Step>
+  <Step title="Run your first check">
+    Check only the files changed since `origin/main` — fast, targeted, and CI-friendly:
+
+    ```sh
+    harness-lint check --changed
+    ```
+  </Step>
+</Steps>
+
+## Why harness-lint
+
+<CardGroup cols={3}>
+  <Card title="Lint Driven Development" icon="rotate">
+    Turn recurring AI feedback into permanent lint rules. Once a mistake becomes a rule, no agent can repeat it without failing the check.
+  </Card>
+  <Card title="Human-readable rules" icon="file-lines">
+    Rules are plain Markdown files with embedded GritQL. You can read, review, and edit them in any editor — no opaque config formats.
+  </Card>
+  <Card title="Git-aware checks" icon="code-branch">
+    Use `--changed` to check only files modified since your base branch, or `--staged` for pre-commit hooks. Checks stay fast even in large repos.
+  </Card>
+</CardGroup>

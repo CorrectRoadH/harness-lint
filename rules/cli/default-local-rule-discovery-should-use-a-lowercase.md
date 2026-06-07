@@ -4,7 +4,7 @@ title: "Default Local Rule Discovery Should Use A Lowercase"
 language: rust
 level: warn
 skill:
-tags: [local, ai-feedback]
+tags: [local, cli, ai-feedback]
 ---
 
 # Default Local Rule Discovery Should Use A Lowercase
@@ -13,7 +13,7 @@ Default local rule discovery should use a lowercase rules directory, and harness
 
 ```grit
 language rust
-`"Rules"`
+`pub const USER_RULE_DIR: &str = "Rules";`
 ```
 
 ## Bad

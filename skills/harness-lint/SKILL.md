@@ -1,13 +1,13 @@
 ---
 name: harness-lint
-description: Use when installing, configuring, authoring, debugging, or fixing `harness-lint` rules in a code repository. Covers command setup, converting recurring feedback into local rules, writing rule Markdown/GritQL, inspecting a specific rule after lint failures, and fixing code without weakening rules.
+description: Use when installing, configuring, migrating, authoring, debugging, or fixing `harness-lint` rules in a code repository. Covers command setup, config upgrades, converting recurring feedback into local rules, writing rule Markdown/GritQL, inspecting a specific rule after lint failures, and fixing code without weakening rules.
 metadata:
   short-description: Install and author harness-lint rules
 ---
 
 # harness-lint
 
-Use this skill whenever a repository is being connected to `harness-lint`, a user asks for a new project rule, or a `harness-lint` check fails.
+Use this skill whenever a repository is being connected to `harness-lint`, a harness-lint config needs migration, a user asks for a new project rule, or a `harness-lint` check fails.
 
 ## Setup
 
@@ -34,6 +34,14 @@ harness-lint init
 ```
 
 Commit `harness.toml` and `rules/`. Do not commit `.harness/`; it is generated cache/output.
+
+## Config Migration
+
+When upgrading an existing repository or reviewing stale harness-lint config, read [references/migration.md](references/migration.md) before editing `harness.toml`, `harness.lock`, local rule directories, or exception/ignore settings.
+
+## Reference Map
+
+- [references/migration.md](references/migration.md): config key migrations, local rule directory/package conventions, pack updates, and migration verification.
 
 ## Core Loop
 

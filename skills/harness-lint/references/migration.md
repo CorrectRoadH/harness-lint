@@ -15,6 +15,8 @@ harness-lint rule list
 
 `rule list` always prints Markdown grouped by pack. Do not pass `--json` to `rule list`; JSON output is not supported for that command.
 
+If installed packs exist but `.harness/` is missing or stale, run `harness-lint restore`. If restore reports that `harness.toml` and `harness.lock` differ, run `harness-lint update` only after confirming the pack change is intentional.
+
 ## Config Key Migrations
 
 - Remove stale `[obsidian]` blocks. Current harness-lint no longer owns Obsidian checks, so those keys are dead config.
@@ -37,6 +39,7 @@ reason = "Generated router adapters intentionally discard unused generated param
 - `[rules].local` may list one or more local rule roots. `harness-lint rule create` writes to the first configured local rule root.
 - A Markdown rule directly inside a configured local rule root belongs to the default local group.
 - A folder inside a configured local rule root is treated as a local pack. The folder name is the pack name in `harness-lint rule list`.
+- Local rule folders under `[rules].local` do not need `harness-pack.toml`. Explicit installed local packs such as `harness-lint install demo local:./packs/demo` do need a manifest-backed pack root.
 - Keep local rule filenames stable and readable. Use the file/folder name to communicate the package or rule ownership rather than hiding that in prose.
 
 ## Rule List Output
@@ -56,6 +59,7 @@ Use installed pack maintenance commands instead of editing `harness.lock` by han
 
 ```sh
 harness-lint outdated
+harness-lint restore
 harness-lint update
 harness-lint doctor
 harness-lint check --all
@@ -74,6 +78,7 @@ Do not hide broad production directories with `ignore.paths` just to quiet a new
 
 - Commit `harness.toml`, `harness.lock`, and local rule files.
 - Do not commit `.harness/`; it is generated cache and restored from config/lock state.
+- Use `harness-lint restore` to rebuild `.harness/` from `harness.lock` on a fresh checkout or after cache deletion.
 
 ## Migration Verification
 
@@ -88,5 +93,6 @@ harness-lint check --changed
 For pack or config migrations with wider impact, also run:
 
 ```sh
+harness-lint restore
 harness-lint check --all
 ```

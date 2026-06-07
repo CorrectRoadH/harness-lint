@@ -45,10 +45,10 @@ If a rule should only apply to certain files and you own the rule, encode the sc
 }
 ```
 
-If an external or already-shared rule is valid in general but has a confirmed path-specific exception, use `[[suppressions]]` in `harness.toml` instead of adding a broad `ignore.paths` entry:
+If an external or already-shared rule is valid in general but has a confirmed path-specific exception, use `[[exceptions]]` in `harness.toml` instead of adding a broad `ignore.paths` entry:
 
 ```toml
-[[suppressions]]
+[[exceptions]]
 rule = "go-effective-go.no-blank-placeholder-assignment"
 paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
 reason = "Generated router adapters intentionally discard unused generated parameters."

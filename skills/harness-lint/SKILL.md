@@ -1,8 +1,8 @@
 ---
 name: harness-lint
-description: Use when installing, configuring, migrating, authoring, debugging, or fixing `harness-lint` rules in a code repository. Covers command setup, config upgrades, converting recurring feedback into local rules, writing rule Markdown/GritQL, inspecting a specific rule after lint failures, and fixing code without weakening rules.
+description: Use when installing, configuring, migrating, authoring, debugging, or fixing `harness-lint` rules in a code repository. Covers command setup, shared/local rule packs, config upgrades, converting recurring feedback into local rules, writing rule Markdown/GritQL, inspecting a specific rule after lint failures, and fixing code without weakening rules.
 metadata:
-  short-description: Install and author harness-lint rules
+  short-description: Install, migrate, and author harness-lint rules
 ---
 
 # harness-lint
@@ -33,15 +33,20 @@ Initialize the repo:
 harness-lint init
 ```
 
-Commit `harness.toml` and `rules/`. Do not commit `.harness/`; it is generated cache/output.
+Commit `harness.toml`, `harness.lock` when present, and `rules/`. Do not commit `.harness/`; it is generated cache/output.
 
 ## Config Migration
 
 When upgrading an existing repository or reviewing stale harness-lint config, read [references/migration.md](references/migration.md) before editing `harness.toml`, `harness.lock`, local rule directories, or exception/ignore settings.
 
+## Pack Workflow
+
+When installing, recommending, updating, restoring, or troubleshooting shared rule packs, read [references/packs.md](references/packs.md). For repository setup, detect the languages/frameworks, search and inspect available packs, summarize relevant candidates, and ask before installing recommended packs unless the user already named exact packs to install. Use CLI pack commands instead of editing `harness.lock` by hand.
+
 ## Reference Map
 
 - [references/migration.md](references/migration.md): config key migrations, local rule directory/package conventions, pack updates, and migration verification.
+- [references/packs.md](references/packs.md): pack discovery, install specs, local pack semantics, update/restore/remove commands, and common pack failure messages.
 
 ## Core Loop
 
@@ -49,30 +54,33 @@ When user feedback or review comments describe a recurring issue, capture the pr
 
 1. Read existing project guidance such as `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, README files, and review docs.
 2. Detect project languages and frameworks from files such as `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, and source extensions.
-3. Run `harness-lint rule list` to inspect existing lint rules and decide whether to update one.
-4. Before creating a new rule, decide whether the feedback can be expressed as a reliable GritQL pattern. If it cannot, do not create a harness-lint rule; keep the constraint in agent instructions, review notes, or project documentation instead.
-5. If a new rule is needed, create the local rule file with the CLI:
+3. Run `harness-lint rule list` to inspect existing lint rules and decide whether to update one. `rule list` is Markdown-only; do not pass `--json` to that command.
+4. For a new recurring feedback item, consider `harness-lint rule suggest "<feedback>"` before creating a local rule so an existing shared pack can be reused when appropriate.
+5. Before creating a new rule, decide whether the feedback can be expressed as a reliable GritQL pattern. If it cannot, do not create a harness-lint rule; keep the constraint in agent instructions, review notes, or project documentation instead.
+6. If a new rule is needed, create the local rule file with the CLI:
 
 ```sh
 harness-lint rule create "<constraint>" --language <language> --grit <gritql>
 ```
 
-6. Edit the created file under the configured local rule directory, usually `rules/`.
-7. Run `harness-lint doctor`.
-8. Verify the Bad examples, then run the new rule by itself and confirm it reports the expected repository file(s). Do not pass paths to `check` to simulate rule scope; if the rule should only apply to certain files, encode that directly in GritQL with `$filename`. Adjust the GritQL if the rule is too broad, too narrow, or produces no diagnostic:
+7. Edit the created file under the configured local rule directory, usually `rules/`.
+8. Run `harness-lint doctor`.
+9. Verify the Bad examples, then run the new rule by itself and confirm it reports the expected repository file(s). Do not pass paths to `check` to simulate rule scope; if the rule should only apply to certain files, encode that directly in GritQL with `$filename`. Adjust the GritQL if the rule is too broad, too narrow, or produces no diagnostic:
 
 ```sh
 harness-lint rule verify <rule-id>
 harness-lint check --all --rule <rule-id>
 ```
 
-9. Run the lint:
+10. Run the lint:
 
 ```sh
 harness-lint check --changed
 ```
 
 Do not delete, disable, or weaken rules just to make a task pass unless the user explicitly asks.
+
+When doing an end-to-end repository setup, ask before finishing whether the user wants `harness-lint check --changed` wired into an existing git hook. If they agree, inspect the current hook setup first and reuse it; do not introduce a hook manager just for harness-lint.
 
 ## Rule Files
 
@@ -113,7 +121,7 @@ logger.info("user=%s", user)
 Authoring rules:
 
 - Keep one rule focused on one durable preference.
-- Rule ids and filenames should be readable and stable. Any language is allowed, but avoid punctuation and decorative symbols. Use `-` instead of spaces. For English ids, prefer lowercase kebab-case such as `local.no-print-debug`. For Chinese ids, prefer short plain phrases such as `local.禁止使用UI` or `local.禁止-使用-UI`.
+- Rule ids, filenames, and local pack folder names should be readable, stable, and tied to real project ownership. Do not invent future/product buckets unless the repository already uses that vocabulary. Any language is allowed, but avoid punctuation and decorative symbols. Use `-` instead of spaces. For English ids, prefer lowercase kebab-case such as `local.no-print-debug`. For Chinese ids, prefer short plain phrases such as `local.禁止使用UI` or `local.禁止-使用-UI`.
 - Keep `id` and the filename aligned when practical, so `id: local.no-print-debug` lives in `no-print-debug.md`.
 - Use `level: warn` for advisory checks.
 - Use `level: error` only when the title, explanation, Bad/Good examples, and GritQL are clear enough to fail builds.
@@ -207,8 +215,17 @@ harness-lint check --changed
 harness-lint check --staged
 harness-lint check --all
 harness-lint check --changed --rule <rule-id>
+harness-lint list --available
+harness-lint search <query>
+harness-lint inspect <pack-id>
+harness-lint install <pack-id>
+harness-lint outdated
+harness-lint update
+harness-lint restore
+harness-lint remove <pack-id>
 harness-lint rule verify <rule-id>
 harness-lint rule list
+harness-lint rule suggest "<feedback>"
 harness-lint rule explain <rule-id>
 harness-lint rule create "<constraint>" --language <language> --grit <gritql>
 ```

@@ -123,7 +123,7 @@ The fenced code block in `## Bad` should use the same language identifier as the
 
 ## \#\# Good Section
 
-The `## Good` section contains a fenced code block showing the **recommended alternative** to the pattern flagged in `## Bad`. harness-lint does not automatically verify Good examples, but they appear in `harness-lint rule explain` output and are read by AI agents and developers who want to understand how to fix the violation.
+The `## Good` section contains a fenced code block showing the **recommended alternative** to the pattern flagged in `## Bad`. harness-lint uses Good examples during `harness-lint rule verify` to confirm that the rule does not flag the recommended pattern.
 
 ````markdown
 ## Good
@@ -134,6 +134,8 @@ logger.info("loaded user %s", user_id)
 ````
 
 Write the Good example as a realistic, complete replacement — not just the deletion of the bad code. The replacement should demonstrate the preferred pattern clearly.
+
+If a Good example triggers the rule, `rule verify` fails so you can narrow the GritQL pattern or replace the example before the rule reaches CI.
 
 ---
 

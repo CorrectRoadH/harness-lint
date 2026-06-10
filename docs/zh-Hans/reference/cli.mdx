@@ -150,7 +150,7 @@ harness-lint check --all --rule local.no-print
 
 ### harness-lint rule verify \[\<rule-id\>\]
 
-把每条规则的 `## Bad` 示例传给规则的 GritQL 模式，并确认每个 Bad 示例都会触发匹配。如果任一 Bad 示例没有触发，则失败。
+把每条规则的示例传给规则的 GritQL 模式。每个 `## Bad` 示例都必须触发匹配，每个 `## Good` 示例都必须保持干净、不触发诊断。
 
 ```sh
 # Verify all rules
@@ -168,6 +168,7 @@ harness-lint rule verify local.no-print
 - 规则没有 `## Bad` section。
 - Bad 示例为空或只包含 `TODO` 行。
 - GritQL 模式没有匹配 Bad 示例中的任何行。
+- Good 示例为空、只包含 `TODO` 行，或触发了诊断。
 
 ---
 

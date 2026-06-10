@@ -123,7 +123,7 @@ print(user_id)
 
 ## \#\# Good Section
 
-`## Good` section 包含一个 fenced code block，展示 `## Bad` 中被标记模式的**推荐替代写法**。harness-lint 不会自动验证 Good 示例，但它会出现在 `harness-lint rule explain` 输出中，也会被想理解如何修复违规的 AI 代理和开发者阅读。
+`## Good` section 包含一个 fenced code block，展示 `## Bad` 中被标记模式的**推荐替代写法**。harness-lint 会在 `harness-lint rule verify` 中使用 Good 示例，确认规则不会误报推荐写法。
 
 ````markdown
 ## Good
@@ -134,6 +134,8 @@ logger.info("loaded user %s", user_id)
 ````
 
 把 Good 示例写成现实、完整的替代方案，而不是简单删除坏代码。替代写法应该清楚展示推荐模式。
+
+如果 Good 示例触发了规则，`rule verify` 会失败，这样你可以在规则进入 CI 前收窄 GritQL 模式或替换示例。
 
 ---
 

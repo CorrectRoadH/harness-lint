@@ -150,7 +150,7 @@ harness-lint check --all --rule local.no-print
 
 ### harness-lint rule verify \[\<rule-id\>\]
 
-Runs each rule's `## Bad` examples through the rule's GritQL pattern and confirms that every Bad example triggers a match. Fails if any Bad example does not trigger.
+Runs each rule's examples through the rule's GritQL pattern. Every `## Bad` example must trigger a match, and every `## Good` example must stay clean.
 
 ```sh
 # Verify all rules
@@ -168,6 +168,7 @@ Verification fails if:
 - A rule has no `## Bad` section.
 - A Bad example is empty or contains only `TODO` lines.
 - The GritQL pattern does not match any line in the Bad example.
+- A Good example is empty, TODO-only, or triggers a diagnostic.
 
 ---
 

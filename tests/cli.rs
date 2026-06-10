@@ -436,7 +436,69 @@ logger.info("user=%s", user);
         String::from_utf8_lossy(&verify.stderr)
     );
     assert!(
-        String::from_utf8_lossy(&verify.stdout).contains("Verified 1 rule(s), 1 Bad example(s).")
+        String::from_utf8_lossy(&verify.stdout)
+            .contains("Verified 1 rule(s), 1 Bad example(s), 1 Good example(s).")
+    );
+}
+
+#[test]
+fn cli_rule_verify_rejects_good_examples_that_trigger() {
+    if !grit_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let init = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+
+    fs::write(
+        tempdir.path().join("rules/no-console.md"),
+        r#"---
+id: local.no-console
+title: Avoid console logging
+language: typescript
+level: warn
+tags: [local, typescript]
+---
+
+# Avoid console logging
+
+Use structured logging.
+
+```grit
+language js
+`console.log($value)`
+```
+
+## Bad
+
+```typescript
+console.log(user);
+```
+
+## Good
+
+```typescript
+console.log("still bad");
+```
+"#,
+    )
+    .unwrap();
+
+    let verify = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["rule", "verify", "local.no-console"])
+        .output()
+        .unwrap();
+    assert_failure_contains(
+        &verify,
+        "Good example 1 for rule `local.no-console` triggered",
     );
 }
 

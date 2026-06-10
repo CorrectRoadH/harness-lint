@@ -1317,22 +1317,24 @@ fn run_rule(
                 }
                 bail!("no rules found");
             }
-            let verified_examples = verify_rule_bad_examples(&selected_rules)?;
+            let verification = verify_rule_examples(&selected_rules)?;
             match format {
                 ReportFormat::Json => {
                     println!(
                         "{}",
                         serde_json::json!({
                             "rules": selected_rules.len(),
-                            "bad_examples": verified_examples
+                            "bad_examples": verification.bad_examples,
+                            "good_examples": verification.good_examples
                         })
                     );
                 }
                 ReportFormat::Human => {
                     println!(
-                        "Verified {} rule(s), {} Bad example(s).",
+                        "Verified {} rule(s), {} Bad example(s), {} Good example(s).",
                         selected_rules.len(),
-                        verified_examples
+                        verification.bad_examples,
+                        verification.good_examples
                     );
                 }
             }
@@ -1377,13 +1379,24 @@ fn run_rule(
     Ok(())
 }
 
-fn verify_rule_bad_examples(rules: &[RuleDefinition]) -> Result<usize> {
-    let mut verified_examples = 0;
+#[derive(Debug, Default)]
+struct RuleVerificationSummary {
+    bad_examples: usize,
+    good_examples: usize,
+}
+
+fn verify_rule_examples(rules: &[RuleDefinition]) -> Result<RuleVerificationSummary> {
+    let mut summary = RuleVerificationSummary::default();
     for rule in rules {
         let bad_examples: Vec<_> = rule
             .examples
             .iter()
             .filter(|example| example.kind == RuleExampleKind::Bad)
+            .collect();
+        let good_examples: Vec<_> = rule
+            .examples
+            .iter()
+            .filter(|example| example.kind == RuleExampleKind::Good)
             .collect();
         if bad_examples.is_empty() {
             bail!(
@@ -1391,46 +1404,104 @@ fn verify_rule_bad_examples(rules: &[RuleDefinition]) -> Result<usize> {
                 rule.id
             );
         }
+        let scratch = crate::scratch::ScratchDir::new("harness-lint-rule-verify")?;
+        let compiled = compiler::compile_rule_set(scratch.path(), vec![rule.clone()])?;
         for (index, example) in bad_examples.iter().enumerate() {
-            if !has_concrete_example(&example.code) {
-                bail!(
-                    "Bad example {} for rule `{}` is empty or TODO-only",
-                    index + 1,
-                    rule.id
-                );
-            }
-            let scratch = crate::scratch::ScratchDir::new("harness-lint-rule-verify")?;
-            let language = example
-                .language
-                .as_deref()
-                .or(rule.language.as_deref())
-                .unwrap_or("text");
-            let relative_path = PathBuf::from("src")
-                .join(format!("bad-example.{}", grit::sample_extension(language)));
-            let source_path = scratch.path().join(&relative_path);
-            if let Some(parent) = source_path.parent() {
-                fs::create_dir_all(parent)
-                    .with_context(|| format!("failed to create {}", parent.display()))?;
-            }
-            fs::write(&source_path, &example.code)
-                .with_context(|| format!("failed to write {}", source_path.display()))?;
-            let compiled = compiler::compile_rule_set(scratch.path(), vec![rule.clone()])?;
-            let diagnostics = normalize_diagnostics(
-                scratch.path(),
+            verify_rule_example(
+                rule,
                 &compiled,
-                grit::run_grit(scratch.path(), &compiled, &[relative_path])?,
-            );
-            if diagnostics.is_empty() {
-                bail!(
-                    "Bad example {} for rule `{}` did not trigger; adjust the GritQL, Bad example, or `$filename` scope",
-                    index + 1,
-                    rule.id
-                );
-            }
-            verified_examples += 1;
+                scratch.path(),
+                RuleExampleKind::Bad,
+                index,
+                example,
+            )?;
+            summary.bad_examples += 1;
+        }
+        for (index, example) in good_examples.iter().enumerate() {
+            verify_rule_example(
+                rule,
+                &compiled,
+                scratch.path(),
+                RuleExampleKind::Good,
+                index,
+                example,
+            )?;
+            summary.good_examples += 1;
         }
     }
-    Ok(verified_examples)
+    Ok(summary)
+}
+
+fn verify_rule_example(
+    rule: &RuleDefinition,
+    compiled: &crate::model::CompiledRules,
+    scratch_root: &Path,
+    kind: RuleExampleKind,
+    index: usize,
+    example: &crate::model::RuleExample,
+) -> Result<()> {
+    if !has_concrete_example(&example.code) {
+        bail!(
+            "{} example {} for rule `{}` is empty or TODO-only",
+            example_kind_label(kind),
+            index + 1,
+            rule.id
+        );
+    }
+    let language = example
+        .language
+        .as_deref()
+        .or(rule.language.as_deref())
+        .unwrap_or("text");
+    let relative_path = example_verify_path(kind, index, language);
+    let source_path = scratch_root.join(&relative_path);
+    if let Some(parent) = source_path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    fs::write(&source_path, &example.code)
+        .with_context(|| format!("failed to write {}", source_path.display()))?;
+    let diagnostics = normalize_diagnostics(
+        scratch_root,
+        compiled,
+        grit::run_grit(scratch_root, compiled, &[relative_path])?,
+    );
+    match kind {
+        RuleExampleKind::Bad if diagnostics.is_empty() => {
+            bail!(
+                "Bad example {} for rule `{}` did not trigger; adjust the GritQL, Bad example, or `$filename` scope",
+                index + 1,
+                rule.id
+            );
+        }
+        RuleExampleKind::Good if !diagnostics.is_empty() => {
+            bail!(
+                "Good example {} for rule `{}` triggered {} diagnostic(s); narrow the GritQL or replace the Good example",
+                index + 1,
+                rule.id,
+                diagnostics.len()
+            );
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn example_verify_path(kind: RuleExampleKind, index: usize, language: &str) -> PathBuf {
+    let stem = match (kind, index) {
+        (RuleExampleKind::Bad, 0) => "bad-example".to_string(),
+        (RuleExampleKind::Bad, _) => format!("bad-example-{}", index + 1),
+        (RuleExampleKind::Good, 0) => "good-example".to_string(),
+        (RuleExampleKind::Good, _) => format!("good-example-{}", index + 1),
+    };
+    PathBuf::from("src").join(format!("{}.{}", stem, grit::sample_extension(language)))
+}
+
+fn example_kind_label(kind: RuleExampleKind) -> &'static str {
+    match kind {
+        RuleExampleKind::Bad => "Bad",
+        RuleExampleKind::Good => "Good",
+    }
 }
 
 fn has_concrete_example(code: &str) -> bool {

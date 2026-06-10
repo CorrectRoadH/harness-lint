@@ -705,6 +705,7 @@ fn run_cached_check(
     config_fingerprint: &str,
     verbose: bool,
 ) -> Result<Vec<crate::model::Diagnostic>> {
+    let normalizer = DiagnosticNormalizer::new(root, compiled);
     let mut diagnostics = Vec::new();
     let mut misses = Vec::new();
     let mut miss_keys = BTreeMap::new();
@@ -713,7 +714,7 @@ fn run_cached_check(
         let file_hash = cache::file_hash(root, path)?;
         let key = cache::file_cache_key(path, &file_hash, rule_fingerprint, config_fingerprint);
         if let Some(cached) = cache::load_file(root, &key)? {
-            diagnostics.extend(normalize_diagnostics(root, compiled, cached));
+            diagnostics.extend(normalizer.normalize(cached));
         } else {
             misses.push(path.clone());
             miss_keys.insert(path.clone(), key);
@@ -738,11 +739,7 @@ fn run_cached_check(
             );
         }
         let batch_paths = batch.to_vec();
-        let fresh = normalize_diagnostics(
-            root,
-            compiled,
-            grit::run_grit(root, compiled, &batch_paths)?,
-        );
+        let fresh = normalizer.normalize(grit::run_grit(root, compiled, &batch_paths)?);
         let mut by_path = cache::group_by_path(root, fresh);
         for path in batch {
             let path_diagnostics = by_path.remove(path).unwrap_or_default();
@@ -768,15 +765,47 @@ fn run_uncached_check(
     compiled: &crate::model::CompiledRules,
     paths: &[PathBuf],
 ) -> Result<Vec<crate::model::Diagnostic>> {
+    let normalizer = DiagnosticNormalizer::new(root, compiled);
     let mut diagnostics = Vec::new();
     for batch in paths.chunks(GRIT_BATCH_SIZE) {
-        diagnostics.extend(normalize_diagnostics(
-            root,
-            compiled,
-            grit::run_grit(root, compiled, batch)?,
-        ));
+        diagnostics.extend(normalizer.normalize(grit::run_grit(root, compiled, batch)?));
     }
     Ok(diagnostics)
+}
+
+struct DiagnosticNormalizer<'a> {
+    root: &'a Path,
+    rule_ids_by_grit_name: BTreeMap<String, String>,
+}
+
+impl<'a> DiagnosticNormalizer<'a> {
+    fn new(root: &'a Path, compiled: &crate::model::CompiledRules) -> Self {
+        let rule_ids_by_grit_name = compiled
+            .grit_rules
+            .iter()
+            .map(|rule| (compiler::safe_pattern_filename(&rule.id), rule.id.clone()))
+            .collect();
+        Self {
+            root,
+            rule_ids_by_grit_name,
+        }
+    }
+
+    fn normalize(
+        &self,
+        diagnostics: Vec<crate::model::Diagnostic>,
+    ) -> Vec<crate::model::Diagnostic> {
+        diagnostics
+            .into_iter()
+            .map(|mut diagnostic| {
+                diagnostic.path = cache::normalize_path(self.root, &diagnostic.path);
+                if let Some(rule_id) = self.rule_ids_by_grit_name.get(&diagnostic.rule_id) {
+                    diagnostic.rule_id = rule_id.clone();
+                }
+                diagnostic
+            })
+            .collect()
+    }
 }
 
 fn normalize_diagnostics(
@@ -784,21 +813,7 @@ fn normalize_diagnostics(
     compiled: &crate::model::CompiledRules,
     diagnostics: Vec<crate::model::Diagnostic>,
 ) -> Vec<crate::model::Diagnostic> {
-    let rule_ids_by_grit_name: BTreeMap<String, String> = compiled
-        .grit_rules
-        .iter()
-        .map(|rule| (compiler::safe_pattern_filename(&rule.id), rule.id.clone()))
-        .collect();
-    diagnostics
-        .into_iter()
-        .map(|mut diagnostic| {
-            diagnostic.path = cache::normalize_path(root, &diagnostic.path);
-            if let Some(rule_id) = rule_ids_by_grit_name.get(&diagnostic.rule_id) {
-                diagnostic.rule_id = rule_id.clone();
-            }
-            diagnostic
-        })
-        .collect()
+    DiagnosticNormalizer::new(root, compiled).normalize(diagnostics)
 }
 
 #[cfg(test)]

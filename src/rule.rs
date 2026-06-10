@@ -57,8 +57,9 @@ pub fn parse_rule(
         .with_context(|| format!("failed to parse frontmatter in {}", source_path.display()))?;
 
     let description = extract_description(markdown);
-    let grit_block_count = fenced_codes(markdown, Some("grit")).len();
-    let body = extract_body(markdown, &source_path)?;
+    let grit_blocks = grit_fenced_codes(markdown);
+    let grit_block_count = grit_blocks.len();
+    let body = extract_body(grit_blocks, &source_path)?;
     let examples = extract_examples(markdown);
 
     let rule = RuleDefinition {
@@ -102,8 +103,8 @@ fn extract_description(markdown: &str) -> String {
     description.join(" ")
 }
 
-fn extract_body(markdown: &str, source_path: &Path) -> Result<RuleBody> {
-    if let Some((_, code)) = fenced_codes(markdown, Some("grit")).into_iter().next() {
+fn extract_body(grit_blocks: Vec<String>, source_path: &Path) -> Result<RuleBody> {
+    if let Some(code) = grit_blocks.into_iter().next() {
         if has_executable_grit(&code) {
             return Ok(RuleBody::Grit(code));
         }
@@ -165,7 +166,7 @@ fn extract_examples(markdown: &str) -> Vec<RuleExample> {
     examples
 }
 
-fn fenced_codes(markdown: &str, language: Option<&str>) -> Vec<(Option<String>, String)> {
+fn grit_fenced_codes(markdown: &str) -> Vec<String> {
     let mut matches = Vec::new();
     let lines: Vec<_> = markdown.lines().collect();
     let mut index = 0;
@@ -173,18 +174,14 @@ fn fenced_codes(markdown: &str, language: Option<&str>) -> Vec<(Option<String>, 
         let trimmed = lines[index].trim();
         if trimmed.starts_with("```") {
             let fence_language = trimmed.trim_start_matches("```").trim();
-            let is_match = language
-                .map(|expected| fence_language.eq_ignore_ascii_case(expected))
-                .unwrap_or(true);
             let mut code = Vec::new();
             index += 1;
             while index < lines.len() && !lines[index].trim_start().starts_with("```") {
                 code.push(lines[index]);
                 index += 1;
             }
-            if is_match {
-                let language = (!fence_language.is_empty()).then(|| fence_language.to_string());
-                matches.push((language, code.join("\n")));
+            if fence_language.eq_ignore_ascii_case("grit") {
+                matches.push(code.join("\n"));
             }
         }
         index += 1;

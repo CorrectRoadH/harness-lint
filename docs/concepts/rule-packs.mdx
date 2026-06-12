@@ -13,6 +13,15 @@ A rule pack is a versioned, shareable collection of GritQL lint rules. On disk, 
 
 You install packs from the catalog or directly from a Git repository. Once installed, harness-lint loads the pack's rules alongside your local rules on every `check` run.
 
+Pack authors can keep noisy or experimental rules in the pack directory without enabling them by default:
+
+```toml
+[rules]
+disabled = ["go-effective-go.no-empty-interface-api"]
+```
+
+Disabled pack rules are skipped when the pack loads, so projects get a conservative default rule set without adding their own `[disabled]` entries.
+
 ## Local rules vs. pack rules
 
 | | Local rules | Pack rules |

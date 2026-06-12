@@ -9,3 +9,20 @@ license = "MIT"
 harness = ">=0.1.0"
 grit = ">=0.1.0"
 languages = ["go"]
+
+[rules]
+disabled = [
+  # Duplicates go.no-panic-flow's current pattern, so enabling both packs would
+  # produce duplicate diagnostics for the same panic call.
+  "go-effective-go.no-panic-flow",
+  # Too broad for a default shared pack: many Go APIs intentionally use
+  # interface{} for JSON, formatting, database, and third-party SDK contracts.
+  "go-effective-go.no-empty-interface-api",
+  # Too broad for existing projects: best-effort cleanup and compatibility code
+  # often discard errors intentionally, and the pattern cannot reliably tell
+  # that apart from a bug.
+  "go-effective-go.no-ignored-error-blank",
+  # Too intent-dependent for a default shared pack: `_ = value` can mean
+  # best-effort work, dependency-injection placeholders, or unfinished code.
+  "go-effective-go.no-blank-placeholder-assignment",
+]

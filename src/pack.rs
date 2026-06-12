@@ -23,7 +23,7 @@ struct PackManifest {
     #[serde(default)]
     compat: CompatSection,
     #[serde(default)]
-    rules: toml::Table,
+    rules: RulesSection,
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,6 +51,14 @@ struct CompatSection {
 #[derive(Debug, Deserialize)]
 struct ManifestRule {
     path: PathBuf,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RulesSection {
+    #[serde(default)]
+    disabled: Vec<String>,
+    #[serde(flatten)]
+    entries: toml::Table,
 }
 
 pub fn parse_pack_spec(id: &str, spec: &str) -> PackSpec {
@@ -332,16 +340,21 @@ pub fn load_rule_pack(resolved: &ResolvedPack) -> Result<RulePack> {
     let _metadata = (manifest.pack.description, manifest.pack.license);
 
     let mut rules = Vec::new();
-    if manifest.rules.is_empty() {
+    if manifest.rules.entries.is_empty() {
         rules = discover_rules(&resolved.local_path.join("rules"), Some(&manifest.pack.id))?;
     } else {
-        for (rule_id, value) in manifest.rules {
+        for (rule_id, value) in manifest.rules.entries {
             let rule: ManifestRule = value
                 .try_into()
                 .map_err(|error| anyhow!("invalid rule entry {rule_id}: {error}"))?;
             let path = resolved.local_path.join(rule.path);
             rules.push(parse_rule_file(&path, Some(&manifest.pack.id))?);
         }
+    }
+
+    let disabled: BTreeSet<_> = manifest.rules.disabled.into_iter().collect();
+    if !disabled.is_empty() {
+        rules.retain(|rule| !disabled.contains(&rule.id));
     }
 
     ensure_unique_rule_ids(&rules)?;

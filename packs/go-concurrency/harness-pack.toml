@@ -9,3 +9,12 @@ license = "MIT"
 harness = ">=0.1.0"
 grit = ">=0.1.0"
 languages = ["go"]
+
+[rules]
+disabled = [
+  # Go 1.23 lets the GC recover unreferenced timers, so the old time.After
+  # leak premise no longer holds for modern modules. The current pattern also
+  # matches every time.After call, not only hot loops, making it too noisy as a
+  # default pack rule.
+  "go-concurrency.no-time-after-loop",
+]

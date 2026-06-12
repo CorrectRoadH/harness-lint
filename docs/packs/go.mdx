@@ -66,7 +66,6 @@ harness-lint install go-concurrency
 |---|---|---|
 | `go-concurrency.no-untracked-goroutine` | Review untracked goroutines | Tie goroutines to a context, errgroup, worker pool, or explicit lifecycle owner |
 | `go-concurrency.no-background-context-flow` | Avoid context.Background in request flow | Use the caller's context so cancellation, deadlines, and tracing flow through the call chain |
-| `go-concurrency.no-time-after-loop` | Review time.After allocations | Use reusable timers in hot loops to avoid timer allocations and delayed cleanup piling up |
 
 ### Rule examples
 
@@ -100,33 +99,6 @@ ctx := req.Context()
 ```
 </CodeGroup>
 
-#### no-time-after-loop
-
-`time.After` allocates a new timer channel on every call. When used in a tight loop, each timer channel leaks until its duration elapses, consuming memory proportional to the loop iteration count. Use `time.NewTimer` with an explicit `Stop()` call instead.
-
-<CodeGroup>
-```go Bad
-func Wait(timeout time.Duration) error {
-    select {
-    case <-time.After(timeout):
-        return ErrTimeout
-    }
-}
-```
-
-```go Good
-func Wait(timeout time.Duration) error {
-    timer := time.NewTimer(timeout)
-    defer timer.Stop()
-
-    select {
-    case <-timer.C:
-        return ErrTimeout
-    }
-}
-```
-</CodeGroup>
-
 ---
 
 ## go-effective-go
@@ -140,12 +112,8 @@ harness-lint install go-effective-go
 | Rule ID | Title | Description |
 |---|---|---|
 | `go-effective-go.no-else-after-return` | Omit else after return | Let the successful path continue down the page after guard clauses that return |
-| `go-effective-go.no-blank-placeholder-assignment` | Remove blank identifier placeholders | Use the value or remove the placeholder — `_ = value` marks unfinished code |
-| `go-effective-go.no-empty-interface-api` | Avoid empty interface API boundaries | Prefer concrete types, type parameters, or narrow interfaces over `interface{}` |
-| `go-effective-go.no-ignored-error-blank` | Do not discard call errors with blank identifiers | Check errors returned by calls instead of silencing them with `_` |
 | `go-effective-go.no-init-flow` | Review init functions | Prefer explicit constructors and dependency setup over hidden package initialization |
 | `go-effective-go.no-nil-nil-return` | Avoid nil nil returns | Returning `(nil, nil)` leaves callers without data or an explanation |
-| `go-effective-go.no-panic-flow` | Avoid panic in library flow | Return errors for recoverable failures instead of exposing panics to callers |
 | `go-effective-go.no-new-channel-allocation` | Review new channel allocation | Ensure channel capacity and ownership are intentional |
 | `go-effective-go.no-new-map-allocation` | Review new map allocation | Prefer `make` with a capacity hint for maps where size is known |
 | `go-effective-go.no-new-slice-allocation` | Review new slice allocation | Prefer `make` with a length and capacity hint for slices where size is known |
@@ -177,29 +145,6 @@ func Name(user *User) string {
         return "anonymous"
     }
     return user.Name
-}
-```
-</CodeGroup>
-
-#### no-ignored-error-blank
-
-Silencing an error with `_` hides the reason a call failed and makes debugging significantly harder. Always check the error, even if your handling is just a log statement and an early return.
-
-<CodeGroup>
-```go Bad
-func IsDir(path string) bool {
-    info, _ := os.Stat(path)
-    return info.IsDir()
-}
-```
-
-```go Good
-func IsDir(path string) (bool, error) {
-    info, err := os.Stat(path)
-    if err != nil {
-        return false, err
-    }
-    return info.IsDir(), nil
 }
 ```
 </CodeGroup>

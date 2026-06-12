@@ -66,7 +66,6 @@ harness-lint install go-concurrency
 |---|---|---|
 | `go-concurrency.no-untracked-goroutine` | Review untracked goroutines | 把 goroutine 绑定到 context、errgroup、worker pool 或显式生命周期所有者 |
 | `go-concurrency.no-background-context-flow` | Avoid context.Background in request flow | 使用调用方 context，让取消、deadline 和 tracing 沿调用链传播 |
-| `go-concurrency.no-time-after-loop` | Review time.After allocations | 在热循环中使用可复用 timer，避免 timer 分配和延迟清理堆积 |
 
 ### 规则示例
 
@@ -100,33 +99,6 @@ ctx := req.Context()
 ```
 </CodeGroup>
 
-#### no-time-after-loop
-
-`time.After` 每次调用都会分配新的 timer channel。在紧密循环中，每个 timer channel 都会泄漏到 duration 到期才清理，内存消耗会随循环次数增长。请使用 `time.NewTimer` 并显式调用 `Stop()`。
-
-<CodeGroup>
-```go Bad
-func Wait(timeout time.Duration) error {
-    select {
-    case <-time.After(timeout):
-        return ErrTimeout
-    }
-}
-```
-
-```go Good
-func Wait(timeout time.Duration) error {
-    timer := time.NewTimer(timeout)
-    defer timer.Stop()
-
-    select {
-    case <-timer.C:
-        return ErrTimeout
-    }
-}
-```
-</CodeGroup>
-
 ---
 
 ## go-effective-go
@@ -140,12 +112,8 @@ harness-lint install go-effective-go
 | Rule ID | 标题 | 说明 |
 |---|---|---|
 | `go-effective-go.no-else-after-return` | Omit else after return | guard clause return 后，让成功路径继续向下，而不是放在 else 中 |
-| `go-effective-go.no-blank-placeholder-assignment` | Remove blank identifier placeholders | 使用该值或删除占位；`_ = value` 表示未完成代码 |
-| `go-effective-go.no-empty-interface-api` | Avoid empty interface API boundaries | 优先使用具体类型、类型参数或窄接口，而不是 `interface{}` |
-| `go-effective-go.no-ignored-error-blank` | Do not discard call errors with blank identifiers | 检查调用返回的 error，而不是用 `_` 静默 |
 | `go-effective-go.no-init-flow` | Review init functions | 优先使用显式构造器和依赖设置，而不是隐藏包初始化 |
 | `go-effective-go.no-nil-nil-return` | Avoid nil nil returns | 返回 `(nil, nil)` 会让调用者既没有数据也没有解释 |
-| `go-effective-go.no-panic-flow` | Avoid panic in library flow | 对可恢复失败返回 error，而不是把 panic 暴露给调用者 |
 | `go-effective-go.no-new-channel-allocation` | Review new channel allocation | 确认 channel 容量和所有权是有意设计的 |
 | `go-effective-go.no-new-map-allocation` | Review new map allocation | 对已知大小的 map，优先使用带容量提示的 `make` |
 | `go-effective-go.no-new-slice-allocation` | Review new slice allocation | 对已知大小的 slice，优先使用带长度和容量提示的 `make` |
@@ -177,29 +145,6 @@ func Name(user *User) string {
         return "anonymous"
     }
     return user.Name
-}
-```
-</CodeGroup>
-
-#### no-ignored-error-blank
-
-用 `_` 静默错误会隐藏调用失败原因，让调试显著更难。始终检查 error，即使处理只是记录日志并提前返回。
-
-<CodeGroup>
-```go Bad
-func IsDir(path string) bool {
-    info, _ := os.Stat(path)
-    return info.IsDir()
-}
-```
-
-```go Good
-func IsDir(path string) (bool, error) {
-    info, err := os.Stat(path)
-    if err != nil {
-        return false, err
-    }
-    return info.IsDir(), nil
 }
 ```
 </CodeGroup>

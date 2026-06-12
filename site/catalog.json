@@ -226,36 +226,12 @@
     "keywords": ["go", "golang", "effective go", "effective-go", "api", "errors", "allocation", "interfaces", "blank identifier"],
     "rules": [
       {
-        "rule_id": "go-effective-go.no-blank-placeholder-assignment",
-        "title": "Remove blank identifier placeholders",
-        "pack_id": "go-effective-go",
-        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
-        "score": 15,
-        "reason": "Flag `_ = value` placeholders that silence unused-variable errors and usually mark unfinished code."
-      },
-      {
         "rule_id": "go-effective-go.no-else-after-return",
         "title": "Omit else after return",
         "pack_id": "go-effective-go",
         "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
         "score": 15,
         "reason": "Flag unnecessary else blocks after returning guard clauses so the successful path reads down the page."
-      },
-      {
-        "rule_id": "go-effective-go.no-empty-interface-api",
-        "title": "Avoid empty interface API boundaries",
-        "pack_id": "go-effective-go",
-        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
-        "score": 20,
-        "reason": "Flag broad interface{} contracts so APIs stay narrow and typed."
-      },
-      {
-        "rule_id": "go-effective-go.no-ignored-error-blank",
-        "title": "Do not discard call errors with blank identifiers",
-        "pack_id": "go-effective-go",
-        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
-        "score": 20,
-        "reason": "Flag call results that discard the second return with `_`, a common ignored-error shape."
       },
       {
         "rule_id": "go-effective-go.no-init-flow",
@@ -296,14 +272,6 @@
         "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
         "score": 15,
         "reason": "Flag value-plus-error returns that provide neither data nor an explanation."
-      },
-      {
-        "rule_id": "go-effective-go.no-panic-flow",
-        "title": "Avoid panic in library flow",
-        "pack_id": "go-effective-go",
-        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
-        "score": 20,
-        "reason": "Flag panic calls so library-style code returns explicit errors for recoverable failures."
       },
       {
         "rule_id": "go-effective-go.no-pointer-array-parameter",
@@ -362,14 +330,6 @@
         "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-concurrency",
         "score": 15,
         "reason": "Flag goroutine launches that should be tied to a lifecycle owner."
-      },
-      {
-        "rule_id": "go-concurrency.no-time-after-loop",
-        "title": "Review time.After allocations",
-        "pack_id": "go-concurrency",
-        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-concurrency",
-        "score": 15,
-        "reason": "Flag time.After use where reusable timers may be safer in hot paths."
       }
     ]
   },

@@ -331,3 +331,15 @@ harness-lint doctor --json
 | `git` | 项目位于 git worktree 中 |
 
 如果任一检查状态为 `error`，`harness-lint doctor` 会以非零状态退出。遇到意外问题时，先运行它。
+
+---
+
+## harness-lint whatsnew
+
+打印近期特性要点，每条都带明确的“何时采用 / 何时别用”指引，并链接到 [`WHATS-NEW.md`](https://github.com/CorrectRoadH/harness-lint/blob/main/WHATS-NEW.md)。
+
+```sh
+harness-lint whatsnew
+```
+
+它只讲**非破坏性**新特性的采用，让 AI 代理仅在当前项目适配某个特性时才提示，而不是无脑 nag。弃用和迁移是另一回事，记录在 `MIGRATE.md` 中。

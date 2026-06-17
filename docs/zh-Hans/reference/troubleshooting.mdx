@@ -304,6 +304,36 @@ default_rules = false
 
 ---
 
+<Accordion title="`harness.runs-on-filename-disjoint`：runs_on 与 $filename 不相交">
+
+**症状：** `harness-lint check` 或 `harness-lint doctor` 报告（doctor 里归在 `runs-on-scope` 下）：
+
+```
+harness.runs-on-filename-disjoint: rule `local.proto-no-id-getter` runs_on file set never overlaps its `$filename` regex; the rule matches nothing
+```
+
+一条规则同时用了 `runs_on`（file-set 作用域）和正向 GritQL `$filename` 正则，却什么都匹配不到——静默扫 0 个文件。
+
+**原因：** `runs_on` 在扫描阶段选文件；GritQL 的 `$filename` 谓词再在 grit 内部过滤被选中的文件。如果 `runs_on` 区域和 `$filename` 作用域**不相交**，被选中的文件全被 `$filename` 拒掉 → 0 命中。
+
+**修复：** 删掉 `$filename` 里多余的区域判断——`runs_on` 已经把范围限定到 file set，`$filename` 只该保留 `runs_on` 表达不了的东西，比如区域内的子收窄或 `!` 排除：
+
+```grit
+language go
+`$x.GetId()` where {
+  $runs_on,                          # runs_on 已选好 file set
+  !$filename <: r".*_mock\.pb\.go"   # 仅保留 runs_on 无法表达的排除
+}
+```
+
+或者把 `$filename` 正则和 file set 的 `paths` 对齐，让两者相交。
+
+**保守触发：** 仅在通过字面路径前缀可证两者不相交时才触发。`runs_on` 含 `default`、无正向 `$filename`、或仅有 `!` 排除时都不触发。这是 `warn`（默认），可经 `[overrides]` 按 id 调级。
+
+</Accordion>
+
+---
+
 <Accordion title="`check` 拒绝扫描：文件太多">
 
 **症状：** 不带范围 flag 运行 `harness-lint check` 时打印：

@@ -50,7 +50,7 @@ If an external or already-shared rule is valid in general but has a confirmed pa
 ```toml
 [[exceptions]]
 rule = "go-effective-go.no-blank-placeholder-assignment"
-paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
+paths = ["apps/api/internal/router/*_router.gen.go"]
 reason = "Generated router adapters intentionally discard unused generated parameters."
 ```
 

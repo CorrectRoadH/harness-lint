@@ -331,3 +331,15 @@ Checks performed:
 | `git` | The project is inside a git worktree |
 
 `harness-lint doctor` exits with a non-zero code if any check has `error` status. Run it first whenever you encounter an unexpected problem.
+
+---
+
+## harness-lint whatsnew
+
+Prints recent feature highlights, each paired with explicit "adopt when / do not adopt" guidance, and links to [`WHATS-NEW.md`](https://github.com/CorrectRoadH/harness-lint/blob/main/WHATS-NEW.md).
+
+```sh
+harness-lint whatsnew
+```
+
+This command covers **non-breaking** feature adoption so an agent can surface a capability only where it fits, rather than as a nag. Deprecations and migrations are tracked separately in `MIGRATE.md`.

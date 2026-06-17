@@ -22,12 +22,12 @@ old name but warns. The shape is identical — only the table name changed.
 # Before
 [[suppressions]]
 rule = "go-effective-go.no-blank-placeholder-assignment"
-paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
+paths = ["apps/api/internal/router/*_router.gen.go"]
 
 # After
 [[exceptions]]
 rule = "go-effective-go.no-blank-placeholder-assignment"
-paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
+paths = ["apps/api/internal/router/*_router.gen.go"]
 ```
 
 Rename every `[[suppressions]]` block to `[[exceptions]]`. No other change.

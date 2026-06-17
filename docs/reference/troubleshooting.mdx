@@ -415,6 +415,37 @@ This diagnostic is a **warning** by default. Escalate it to an error per project
 
 ---
 
+<Accordion title="`harness.runs-on-filename-disjoint`: a runs_on rule's `$filename` matches nothing">
+
+**Symptom:** `harness-lint check` or `harness-lint doctor` reports, anchored at `harness.toml` (doctor groups it under `runs-on-scope`):
+
+```
+harness.runs-on-filename-disjoint: rule `local.proto-no-id-getter` uses runs_on "generated" and a $filename regex that cannot overlap it; the rule scans no files
+```
+
+**Cause:** A rule uses `runs_on` (a file-set scope) **and** a positive `$filename` regex in its GritQL. `runs_on` selects the files at the scan stage; the `$filename` predicate then filters them again inside grit. When the `runs_on` region and the `$filename` scope are **disjoint** — their literal path prefixes cannot overlap — every selected file is rejected by `$filename`, so the rule silently matches zero files.
+
+**Fix:** Drop the now-redundant region check from `$filename`. `runs_on` already restricts the file set, so a positive `$filename` regex that re-states the same region is dead weight. Keep `$filename` only for genuine sub-narrowing or `!`-exclusions (which `runs_on` cannot express):
+
+```grit
+language go
+// runs_on already limits this to the generated region, so drop the
+// redundant `$filename <: r".*backend/gen/.*"` and keep only exclusions.
+`func ($r $T) GetId() $_` where {
+  !$filename <: r".*_test\.go"
+}
+```
+
+Alternatively, align the `$filename` regex with the file set's actual paths so the two scopes overlap.
+
+This check is **conservative**: it only fires when disjointness is provable from literal path prefixes. It never fires when `runs_on` includes `default`, when there is no positive `$filename`, or for `!`-only exclusions.
+
+This diagnostic is a **warning** by default. Escalate it to an error per project with `[overrides]` keyed by `harness.runs-on-filename-disjoint`.
+
+</Accordion>
+
+---
+
 <Accordion title="`[[suppressions]]` deprecation warning">
 
 **Symptom:** Any harness-lint command prints:

@@ -45,6 +45,87 @@ harness-lint update
 harness-lint remove python
 ```
 
+## 설정 데모
+
+`harness.toml`은 어떤 파일을 검사할지, 로컬 규칙을 어디에 둘지, 어떤 규칙 팩을 설치할지, 어떤 규칙 결과를 다르게 다룰지를 제어합니다.
+
+```toml
+# 생성된 설정에 표시되는 선택적 프로젝트 이름.
+[project]
+name = "my-service"
+
+# 기본 lint 동작.
+[lint]
+# warn은 문제를 보고하고, error는 검사를 실패시킵니다.
+default_level = "warn"
+# `harness-lint check --changed`에서 사용합니다.
+changed_base = "origin/main"
+# 실행 간에 파일 단위 결과를 재사용합니다.
+cache = true
+
+# 프로젝트 소유의 로컬 규칙 파일.
+[rules]
+local = ["rules"]
+
+# 설치하고 복원할 공유 규칙 팩.
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+
+# 규칙 파일을 편집하지 않고 한 규칙의 레벨을 변경합니다.
+[overrides]
+"typescript.no-console-log" = "error"
+
+# 특정 규칙을 끕니다.
+[disabled]
+rules = ["typescript.no-explicit-any"]
+
+# 모든 규칙에서 이 경로를 건너뜁니다. 아무것도 스캔하지 않습니다.
+[ignore]
+paths = ["dist/**", "coverage/**"]
+
+# 대부분의 규칙이 건너뛰어야 하지만 일부 규칙이 필요로 하는 이름 있는 파일 영역.
+# default_rules = false는 이를 default 영역에서 제거하므로 일반 규칙은
+# 스캔하지 않습니다. provides는 공유 팩 규칙이 당신의 레이아웃을
+# 하드코딩하지 않고 대상으로 삼을 수 있는 이식 가능한 개념 이름을 나열합니다.
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go", "packages/proto/gen/**"]
+default_rules = false
+provides = ["generated"]
+
+# 일치하는 경로에 대해서만 한 규칙을 숨깁니다. 다른 규칙은 그 파일을 계속 검사합니다.
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+```
+
+규칙은 frontmatter의 `runs_on`으로 영역에 옵트인합니다. `runs_on`이 없으면 규칙은 **default** 영역(`default_rules = false` 세트가 요구하지 않는, 보이는 모든 것)을 스캔합니다.
+
+```markdown
+---
+id: local.proto-no-id-getter
+title: Proto messages must generate GetId
+language: go
+runs_on: ["generated"]   # generated 영역만. 일반 소스는 절대 스캔하지 않음
+---
+```
+
+### 설정이 어떻게 합성되는가
+
+harness-lint는 세 가지 독립된 질문에 이 순서로 답합니다. 이들을 분리해 두는 것이 위의 손잡이들을 예측 가능하게 쌓을 수 있게 하는 이유입니다.
+
+1. **규칙이 켜져 있는가?** 팩의 기본 비활성 목록과 `[disabled]`는 규칙을 완전히 끕니다. `[overrides]`는 심각도만 바꿉니다. 꺼진 규칙은 나머지를 건너뜁니다.
+2. **규칙이 어떤 파일을 스캔하는가?** 리포지토리에서 시작해 우선순위 순서로 적용합니다.
+   - 구조적 제외 — `.git`, `node_modules`, `target`, `.harness`, 규칙 디렉터리, 그리고 `.gitignore`된 파일은 절대 스캔 대상이 되지 않으며 무엇도 이를 덮어쓰지 못합니다.
+   - `[ignore].paths` — 모든 규칙에서 제거됩니다. 무엇도 다시 옵트인할 수 없습니다.
+   - **file sets** — 남은 파일이 분할됩니다. `default_rules = false` 세트는 `default` 영역에서 제거되고, 규칙은 `runs_on`에서 그 세트(또는 그것이 `provides`하는 개념)를 명시했을 때만 도달합니다. `runs_on`이 없는 규칙은 `default`를 스캔합니다.
+   - 규칙의 언어와 GritQL `$filename` 술어가 남은 것을 더 좁힙니다.
+3. **결과가 보고되는가?** `[[exceptions]]`는 일치하는 경로에서 스캔된 규칙의 진단을 숨깁니다.
+
+`runs_on`은 배타적 범위이지 뒷문이 아닙니다. 규칙이 기본적으로 닫힌 파일 세트에 도달하는 것은 그것을 요청했기 때문이며, 오직 그 규칙만입니다. 세트의 *위치*(`paths`)는 `harness.toml`에서 프로젝트 소유이지만, 규칙의 *대상*은 이식 가능한 이름(`generated`)입니다. 그래서 공유 팩 규칙은 생성된 코드가 어디 있는지 몰라도 `runs_on: ["generated"]`를 출시할 수 있고, 당신은 하나의 `provides`로 둘을 연결합니다. 파일 세트는 자유롭게 이름을 바꿔도 됩니다. 그 `provides`가 개념을 계속 나열하는 한 모든 팩 규칙은 계속 동작합니다. 일반 소스와 영역 둘 다 필요한가요? 둘 다 나열합니다: `runs_on: ["default", "generated"]`.
+
+harness-lint는 자체 설정 무결성도 검사합니다. 더 이상 존재하지 않는 `[[exceptions]]` / `[ignore]` / `[file_sets.*]` 경로, `[ignore]`와 겹치거나 경로가 없는 파일 세트, 알 수 없는 규칙을 명시하는 `[disabled]` / `[overrides]` 항목, 그리고 `runs_on`이 무엇도 제공하지 않는 파일 세트나 개념을 명시하는 모든 규칙 — 이 모두가 보고됩니다(기본은 warn, 파일 세트 / 실행 대상 구조적 오류는 error. id별로 `[overrides]`로 조정합니다).
+
 ## 로컬 규칙
 
 프로젝트별 커스텀 규칙은 기본적으로 `rules/*.md`에 둡니다. 다른 위치를 사용하려면 `harness.toml`에서 설정할 수 있습니다.

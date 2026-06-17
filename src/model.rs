@@ -99,6 +99,10 @@ pub struct RulePack {
     pub name: String,
     pub version: String,
     pub rules: Vec<RuleDefinition>,
+    /// Rule ids the pack disables by default. These are not in `rules` (they
+    /// are filtered out at load time) but the pack still defines them, so
+    /// config that references them is not stale.
+    pub default_disabled: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,6 +113,9 @@ pub struct RuleDefinition {
     pub level: Severity,
     pub skill: Option<String>,
     pub tags: Vec<String>,
+    /// File sets / concepts this rule scans. Empty means the implicit
+    /// `default` region (every visible file not in a default-closed set).
+    pub runs_on: Vec<String>,
     pub description: String,
     pub body: RuleBody,
     pub examples: Vec<RuleExample>,

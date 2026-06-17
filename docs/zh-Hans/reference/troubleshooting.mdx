@@ -179,7 +179,20 @@ language js
 }
 ```
 
-**方案 3：对永远不应扫描的路径使用 `[ignore]`：**
+**方案 3：用 `runs_on` + default-closed `[file_sets.*]` 把规则限定到/排除出某区域：**
+
+如果误报全部来自一块成块的区域（典型是生成代码），把这块区域做成 default-closed file set，普通规则就再也看不到它。在 `harness.toml` 中：
+
+```toml
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
+```
+
+之后普通规则（无 `runs_on`）不再扫这块区域；只有在 frontmatter 里写 `runs_on: ["generated"]` 的专门规则才会进入。需要专门规则检查生成代码时用这个方案，而不是 `[ignore]`——`[ignore]` 不可破，无法被任何规则重新订阅。
+
+**方案 4：对永远不应扫描的路径使用 `[ignore]`：**
 
 如果没有任何规则应该扫描某个目录，例如 `dist/` 或 `coverage/`，把它加入 `[ignore]`：
 
@@ -187,6 +200,105 @@ language js
 [ignore]
 paths = ["dist/**", "coverage/**"]
 ```
+
+</Accordion>
+
+---
+
+<Accordion title="`harness.unknown-run-target`：规则 runs_on 的目标无人提供">
+
+**症状：** `harness-lint doctor` 报告（锚定在 `harness.toml`）：
+
+```
+harness.unknown-run-target: rule `local.proto-no-id-getter` runs_on `generated`, but no file set provides it
+```
+
+**原因：** 某条规则的 `runs_on` 点名了一个 file set 名或概念，但没有任何 `[file_sets.*]` 提供它。常见于安装了出 `runs_on: ["<概念>"]` 的共享 pack，却没在项目里加匹配的 `[file_sets.*] provides = ["<概念>"]`。
+
+**修复：** 在 `harness.toml` 里加一个带匹配 `provides` 的 file set，把概念连到项目的实际路径。pack 通常会在自己的 `INSTALL.md` 里声明所需概念：
+
+```toml
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
+```
+
+这是 `error`（默认）。可经 `[overrides]` 调级。
+
+</Accordion>
+
+---
+
+<Accordion title="`harness.empty-file-set`：file set 没有 paths">
+
+**症状：** `harness-lint doctor` 报告：
+
+```
+harness.empty-file-set: file set `generated` has no paths
+```
+
+**原因：** 某个 `[file_sets.<名字>]` 的 `paths` 缺失或为空。空集合不认领任何文件，没有意义。
+
+**修复：** 给该集合至少加一个 repo 相对 glob：
+
+```toml
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+```
+
+这是 `error`（默认）。
+
+</Accordion>
+
+---
+
+<Accordion title="`harness.file-set-ignore-overlap`：file set 路径又被 [ignore] 覆盖">
+
+**症状：** `harness-lint doctor` 报告：
+
+```
+harness.file-set-ignore-overlap: file set `generated` paths overlap `[ignore]`; those files are never reachable
+```
+
+**原因：** 某个 file set 的 `paths` 与 `[ignore].paths` 重叠。`[ignore]` 不可破——被它移除的文件无法被任何规则重新订阅，所以这块区域永远不可达，订阅它的规则什么也扫不到。
+
+**修复：** 在两者中二选一。如果这块区域需要被专门规则检查，从 `[ignore]` 里移除对应路径，只保留 default-closed file set：
+
+```toml
+# 移除 [ignore] 中的 "backend/gen/**"，只留 file set
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
+```
+
+如果确实没有任何规则该扫这块区域，删掉 file set，保留 `[ignore]`。这是 `error`（默认）。
+
+</Accordion>
+
+---
+
+<Accordion title="`harness.stale-file-set-path`：file set 路径不存在">
+
+**症状：** `harness-lint doctor` 报告：
+
+```
+harness.stale-file-set-path: file set `generated` path `backend/gen/**/*.pb.go` matches nothing
+```
+
+**原因：** 某个 file set 的 `paths` 条目的字面量前缀在磁盘上已不存在——通常是目录被重命名或删除后没更新配置。陈旧条目悄悄不再匹配，订阅该区域的规则不再扫到预期文件。
+
+**修复：** 更新该路径指向当前位置，或删掉过时条目：
+
+```toml
+[file_sets.generated]
+paths = ["backend/proto/gen/**/*.pb.go"]
+default_rules = false
+```
+
+这是 `warn`（默认），可经 `[overrides]` 升级为 `error`。首组件本身就是 glob 的模式（如 `**/*.pb.go`）不检查，因为没有可锚定的字面量前缀。
 
 </Accordion>
 

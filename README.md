@@ -81,9 +81,18 @@ typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
 [disabled]
 rules = ["typescript.no-explicit-any"]
 
-# Skip these paths for every rule.
+# Skip these paths for every rule. Nothing scans them.
 [ignore]
 paths = ["dist/**", "coverage/**"]
+
+# A named file region most rules should skip, but a few rules need.
+# default_rules = false removes it from the default region, so ordinary
+# rules don't scan it; provides lists portable concept names a shared pack
+# rule can target without hardcoding your layout.
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go", "packages/proto/gen/**"]
+default_rules = false
+provides = ["generated"]
 
 # Hide one rule only for matching paths; other rules still check those files.
 [[exceptions]]
@@ -91,6 +100,35 @@ rule = "typescript.no-console-log"
 paths = ["src/generated/**"]
 reason = "Generated SDK code is checked in and emits debug output during local mocks."
 ```
+
+A rule opts into a region with `runs_on` in its frontmatter. With no `runs_on`, a rule scans the **default** region (everything visible that no `default_rules = false` set claims):
+
+```markdown
+---
+id: local.proto-no-id-getter
+title: Proto messages must generate GetId
+language: go
+runs_on: ["generated"]   # only the generated region; never ordinary source
+---
+```
+
+### How configuration composes
+
+harness-lint answers three independent questions, in order. Keeping them separate is what lets the knobs above stack predictably.
+
+1. **Is the rule on?** A pack's default-disabled list and `[disabled]` turn a rule off entirely; `[overrides]` only changes its severity. An off rule skips the rest.
+2. **Which files does the rule scan?** Start from the repo, then apply, in precedence order:
+   - structural exclusions — `.git`, `node_modules`, `target`, `.harness`, your rule directories, and `.gitignore`d files are never scannable and nothing overrides this;
+   - `[ignore].paths` — removed from every rule; nothing can opt back in;
+   - **file sets** — the remaining files are partitioned. A `default_rules = false` set is removed from the `default` region; a rule reaches it only by naming the set (or a concept it `provides`) in `runs_on`. A rule with no `runs_on` scans `default`;
+   - the rule's language and any GritQL `$filename` predicate then narrow what remains.
+3. **Are the results reported?** `[[exceptions]]` hides a scanned rule's diagnostics on matching paths.
+
+`runs_on` is exclusive scope, not a back door: a rule reaches a default-closed file set only because it asked, and only ever that rule. The set's *location* (`paths`) is project-owned in `harness.toml`; the rule's *target* is a portable name (`generated`), so a shared pack rule can ship `runs_on: ["generated"]` without knowing where your generated code lives — you connect the two with one `provides`. Rename the file set freely; as long as its `provides` still lists the concept, every pack rule keeps working. Need both ordinary source and a region? List both: `runs_on: ["default", "generated"]`.
+
+harness-lint also checks its own config integrity: `[[exceptions]]` / `[ignore]` / `[file_sets.*]` paths that no longer exist, file sets that overlap `[ignore]` or have no paths, `[disabled]` / `[overrides]` entries that name an unknown rule, and any rule whose `runs_on` names a file set or concept nothing provides — all reported (warn by default, file-set/run-target structural errors at error; adjust per id with `[overrides]`).
+
+When harness-lint detects a deprecated or never-implemented construct (such as `[[suppressions]]` or `[[scan_ignored]]`), it prints a warning linking to [MIGRATE.md](MIGRATE.md), which gives a mechanical migration for each. An AI agent set up with the harness-lint skill follows that link and applies the migration for you.
 
 ## Local Rules
 

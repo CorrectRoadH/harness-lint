@@ -45,6 +45,87 @@ harness-lint update
 harness-lint remove python
 ```
 
+## 設定デモ
+
+`harness.toml` は、どのファイルをチェックするか、ローカルルールをどこに置くか、どのルールパックをインストールするか、どのルール結果を別扱いするかを制御します。
+
+```toml
+# 生成された設定に表示される、任意のプロジェクト名。
+[project]
+name = "my-service"
+
+# デフォルトの lint 動作。
+[lint]
+# warn は問題を報告し、error はチェックを失敗させます。
+default_level = "warn"
+# `harness-lint check --changed` で使用します。
+changed_base = "origin/main"
+# 実行間でファイル単位の結果を再利用します。
+cache = true
+
+# プロジェクト所有のローカルルールファイル。
+[rules]
+local = ["rules"]
+
+# インストールして復元する共有ルールパック。
+[packs]
+typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
+
+# ルールファイルを編集せずに、1 つのルールのレベルを変更します。
+[overrides]
+"typescript.no-console-log" = "error"
+
+# 特定のルールをオフにします。
+[disabled]
+rules = ["typescript.no-explicit-any"]
+
+# すべてのルールでこれらのパスをスキップします。何もスキャンしません。
+[ignore]
+paths = ["dist/**", "coverage/**"]
+
+# ほとんどのルールがスキップすべきだが、一部のルールが必要とする名前付きファイル領域。
+# default_rules = false はこれを default 領域から外すため、通常の
+# ルールはスキャンしません。provides は、共有パックのルールがあなたの
+# レイアウトをハードコードせずに対象にできる、移植可能な概念名を列挙します。
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go", "packages/proto/gen/**"]
+default_rules = false
+provides = ["generated"]
+
+# 一致するパスに対してのみ 1 つのルールを隠します。ほかのルールはそれらのファイルを引き続きチェックします。
+[[exceptions]]
+rule = "typescript.no-console-log"
+paths = ["src/generated/**"]
+reason = "Generated SDK code is checked in and emits debug output during local mocks."
+```
+
+ルールは frontmatter の `runs_on` で領域にオプトインします。`runs_on` がない場合、ルールは **default** 領域（`default_rules = false` のセットが要求しない、可視のすべて）をスキャンします。
+
+```markdown
+---
+id: local.proto-no-id-getter
+title: Proto messages must generate GetId
+language: go
+runs_on: ["generated"]   # generated 領域のみ。通常のソースは決してスキャンしない
+---
+```
+
+### 設定がどう合成されるか
+
+harness-lint は 3 つの独立した質問に、この順番で答えます。それらを分けておくことが、上記のノブを予測どおりに重ねられる理由です。
+
+1. **ルールはオンか？** パックのデフォルト無効リストと `[disabled]` はルールを完全にオフにします。`[overrides]` はその重大度を変えるだけです。オフのルールは残りをスキップします。
+2. **ルールはどのファイルをスキャンするか？** リポジトリから始めて、優先順位の順に適用します。
+   - 構造的な除外 — `.git`、`node_modules`、`target`、`.harness`、ルールディレクトリ、および `.gitignore` 対象のファイルは決してスキャン対象にならず、これを上書きするものはありません。
+   - `[ignore].paths` — すべてのルールから除外されます。何も再度オプトインできません。
+   - **file sets** — 残ったファイルが分割されます。`default_rules = false` のセットは `default` 領域から外れ、ルールは `runs_on` でそのセット（またはそれが `provides` する概念）を名指ししたときだけ到達できます。`runs_on` のないルールは `default` をスキャンします。
+   - ルールの言語と GritQL の `$filename` 述語が、残りをさらに絞り込みます。
+3. **結果は報告されるか？** `[[exceptions]]` は、一致するパスでスキャン済みルールの診断を隠します。
+
+`runs_on` は排他的なスコープであり、裏口ではありません。ルールがデフォルトで閉じたファイルセットに到達するのは、それを要求したからであり、そのルールだけです。セットの *位置*（`paths`）は `harness.toml` でプロジェクト所有ですが、ルールの *対象* は移植可能な名前（`generated`）です。そのため共有パックのルールは、生成コードがどこにあるかを知らなくても `runs_on: ["generated"]` を出荷でき、あなたは 1 つの `provides` で両者をつなぎます。ファイルセットは自由にリネームできます。その `provides` が概念を列挙し続ける限り、すべてのパックルールは動き続けます。通常のソースと領域の両方が必要ですか？ 両方を列挙します: `runs_on: ["default", "generated"]`。
+
+harness-lint は自身の設定の整合性もチェックします。存在しなくなった `[[exceptions]]` / `[ignore]` / `[file_sets.*]` のパス、`[ignore]` と重複する、またはパスを持たないファイルセット、未知のルールを名指しする `[disabled]` / `[overrides]` のエントリ、そして `runs_on` が何も提供しないファイルセットや概念を名指しするすべてのルール — これらはすべて報告されます（デフォルトは warn、ファイルセット / 実行ターゲットの構造的エラーは error。id ごとに `[overrides]` で調整します）。
+
 ## ローカルルール
 
 プロジェクト固有のカスタムルールは、デフォルトでは `rules/*.md` に置きます。別の場所に置きたい場合は、`harness.toml` で設定できます。

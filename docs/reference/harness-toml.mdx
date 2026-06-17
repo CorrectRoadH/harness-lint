@@ -1,7 +1,7 @@
 ---
 title: "harness.toml: Complete Configuration File Reference"
 sidebarTitle: "harness.toml"
-description: "Full reference for every section and field in harness.toml: lint settings, rule paths, packs, overrides, disabled rules, ignores, and exceptions."
+description: "Full reference for every section and field in harness.toml: lint settings, rule paths, packs, overrides, disabled rules, ignores, file sets, and exceptions."
 ---
 
 `harness.toml` is the single configuration file for a harness-lint project. Place it at the root of your repository (alongside `.git`). harness-lint walks up the directory tree from the current working directory to find it automatically, so you never need to pass `--config` during normal use.
@@ -158,7 +158,60 @@ Skips entire file paths for **all** rules. Use this for generated output, vendor
   <Tip>
     Use `[[exceptions]]` (see below) when you need to exclude a *specific rule* for a subset of files. Reserve `[ignore]` for paths where no rules should run at all.
   </Tip>
+
+  <Warning>
+    Do not put generated code into `[ignore]` if a dedicated rule still needs to inspect it — `[ignore]` is unbreakable and nothing can opt back in. For generated regions that a few rules must still scan, use a default-closed [`[file_sets]`](#file-sets) instead.
+  </Warning>
 </ParamField>
+
+---
+
+## \[file_sets\]
+
+Declares named regions of the repository that most rules skip but some rules need. Each named set is written as `[file_sets.<name>]`. A rule reaches a default-closed set only by listing the set name (or a concept it `provides`) in its `runs_on` frontmatter field — see [`runs_on` in the rule format reference](/reference/rule-format).
+
+```toml
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
+```
+
+<ParamField query="paths" type="array of glob patterns" required>
+  Repo-relative glob patterns that define the region. Must be non-empty — an empty set is a configuration error.
+
+  ```toml
+  [file_sets.generated]
+  paths = ["backend/gen/**/*.pb.go"]
+  ```
+</ParamField>
+
+<ParamField query="default_rules" type="boolean" default="true">
+  When `false`, the region is removed from the `default` region, so ordinary rules (those without `runs_on`) skip it entirely. Only rules that opt in with `runs_on` reach it. Leave it `true` (or omit it) for a set whose only purpose is to advertise a `provides` concept while still being scanned by default rules.
+
+  ```toml
+  [file_sets.generated]
+  paths = ["backend/gen/**/*.pb.go"]
+  default_rules = false
+  ```
+</ParamField>
+
+<ParamField query="provides" type="array of strings" default="[]">
+  Portable concept names that a shared pack rule can target without knowing your project's layout. A pack rule ships `runs_on: ["generated"]`; your project connects it by adding `provides = ["generated"]` to whichever file set holds that code.
+
+  ```toml
+  [file_sets.generated]
+  paths = ["backend/gen/**/*.pb.go"]
+  default_rules = false
+  provides = ["generated"]
+  ```
+</ParamField>
+
+`runs_on` is **exclusive**, per-rule scope: naming a default-closed set never leaks the opt-in to other rules. Because the set's *location* (`paths`) lives in `harness.toml` and the rule's *target* is the portable `provides` concept, you can rename the file set freely — every pack rule keeps working as long as `provides` is unchanged. To scan both ordinary source and a region, list both: `runs_on: ["default", "generated"]`.
+
+<Warning>
+  A `[file_sets]` path that also matches `[ignore]` is a configuration error: the ignored files can never be scanned, so the file set is unreachable. Keep file-set paths out of `[ignore]`.
+</Warning>
 
 ---
 
@@ -236,6 +289,13 @@ rules = ["typescript.no-explicit-any"]
 # Skip these paths for every rule.
 [ignore]
 paths = ["dist/**", "coverage/**", "**/*.generated.ts"]
+
+# A named region most rules skip; rules opt in with runs_on. default_rules =
+# false removes it from the default region; provides exposes a portable concept.
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
 
 # Hide one rule only for matching paths; other rules still check those files.
 [[exceptions]]

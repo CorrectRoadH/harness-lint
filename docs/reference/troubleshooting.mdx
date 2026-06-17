@@ -188,6 +188,24 @@ If no rule should ever scan a directory (e.g. `dist/`, `coverage/`), add it to `
 paths = ["dist/**", "coverage/**"]
 ```
 
+**Option 4 — Use `runs_on` + a default-closed `[file_sets]` to scope a rule to (or away from) a region:**
+
+When a region — most often generated code — should be skipped by ordinary rules but still inspected by a few dedicated rules, declare it as a default-closed file set instead of putting it in `[ignore]` (which is unbreakable). Ordinary rules then skip the region automatically, and only rules that opt in with `runs_on` reach it:
+
+```toml
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
+```
+
+```yaml
+# in the rule frontmatter of the rule that should run on generated code
+runs_on: ["generated"]
+```
+
+A rule with no `runs_on` scans only the `default` region, so it stops firing on the generated files. Use `runs_on: ["default", "generated"]` if a rule should scan both. See [`[file_sets]`](/reference/harness-toml#file-sets) and [`runs_on`](/reference/rule-format#yaml-frontmatter) for full details.
+
 </Accordion>
 
 ---
@@ -291,6 +309,107 @@ Then commit **both** `harness.toml` and `harness.lock` so every team member and 
 git add harness.toml harness.lock
 git commit -m "chore: update harness-lint packs"
 ```
+
+</Accordion>
+
+---
+
+<Accordion title="`harness.unknown-run-target`: a rule runs_on a target nothing provides">
+
+**Symptom:** `harness-lint doctor` or `harness-lint check` reports, anchored at `harness.toml`:
+
+```
+harness.unknown-run-target: rule `local.proto-no-id-getter` runs_on "generated", but no file set provides it
+```
+
+**Cause:** A rule's `runs_on` names a file set or a concept that no `[file_sets]` in this project declares. This is the common case after installing a shared pack: the pack ships `runs_on: ["generated"]` and documents the concept in its `INSTALL.md`, but the installing project has not yet supplied a matching file set.
+
+**Fix:** Add a `[file_sets]` set whose `provides` includes the concept (or whose name matches the `runs_on` entry):
+
+```toml
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
+```
+
+This diagnostic is an **error** by default. Adjust its level per project with `[overrides]` keyed by `harness.unknown-run-target`.
+
+</Accordion>
+
+---
+
+<Accordion title="`harness.empty-file-set`: a file set has no paths">
+
+**Symptom:** `harness-lint doctor` reports, anchored at `harness.toml`:
+
+```
+harness.empty-file-set: file set `generated` has no paths
+```
+
+**Cause:** A `[file_sets.<name>]` section is missing its `paths` key or sets it to an empty list. A file set with no paths can never match any files.
+
+**Fix:** Give the set a non-empty `paths` list of repo-relative globs:
+
+```toml
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
+```
+
+This diagnostic is an **error** by default. Adjust its level with `[overrides]` keyed by `harness.empty-file-set`.
+
+</Accordion>
+
+---
+
+<Accordion title="`harness.file-set-ignore-overlap`: a file-set path is also ignored">
+
+**Symptom:** `harness-lint doctor` reports, anchored at `harness.toml`:
+
+```
+harness.file-set-ignore-overlap: file set `generated` path "backend/gen/**/*.pb.go" is also covered by [ignore]
+```
+
+**Cause:** A `[file_sets]` path also matches an `[ignore].paths` pattern. Because `[ignore]` is unbreakable and removes files from *every* rule before file-set partitioning, the file set would be unreachable — no rule could ever scan it.
+
+**Fix:** Remove the overlapping pattern from `[ignore]`, and rely on the default-closed file set (`default_rules = false`) to keep ordinary rules out of the region. Only rules that opt in with `runs_on` will then reach it:
+
+```toml
+# Remove "backend/gen/**" from [ignore], then:
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
+```
+
+This diagnostic is an **error** by default. Adjust its level with `[overrides]` keyed by `harness.file-set-ignore-overlap`.
+
+</Accordion>
+
+---
+
+<Accordion title="`harness.stale-file-set-path`: a file-set path no longer exists">
+
+**Symptom:** `harness-lint doctor` reports, anchored at `harness.toml`:
+
+```
+harness.stale-file-set-path: file set `generated` path "backend/gen/**/*.pb.go" matches nothing
+```
+
+**Cause:** A `[file_sets]` path no longer matches any file or directory in the repository — usually because the generated output moved or was renamed. The set quietly stops covering anything, so rules that `runs_on` it silently scan no files. (Patterns whose first component is already a glob, such as `**/*_test.go`, are not checked, because there is no literal prefix to anchor against.)
+
+**Fix:** Update the path to the current location of the region. Renaming the *file set* is safe as long as its `provides` is unchanged, but the `paths` must point at real files:
+
+```toml
+[file_sets.generated]
+paths = ["backend/internal/gen/**/*.pb.go"]   # updated location
+default_rules = false
+provides = ["generated"]
+```
+
+This diagnostic is a **warning** by default. Escalate it to an error per project with `[overrides]` keyed by `harness.stale-file-set-path`.
 
 </Accordion>
 

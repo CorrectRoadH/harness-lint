@@ -219,8 +219,27 @@ fn run_check(
         .collect();
 
     let packs = load_rule_packs(&root, &config)?;
+    let known_rule_ids: BTreeSet<&str> = packs
+        .iter()
+        .flat_map(|pack| {
+            pack.rules
+                .iter()
+                .map(|rule| rule.id.as_str())
+                .chain(pack.default_disabled.iter().map(|id| id.as_str()))
+        })
+        .collect();
+    let ref_diagnostics: Vec<_> = config_health::check_unknown_rule_refs(&config, &known_rule_ids)
+        .into_iter()
+        .filter(|diagnostic| config_check_selected(&command, &diagnostic.rule_id))
+        .collect();
+    let all_rules: Vec<&RuleDefinition> = packs.iter().flat_map(|pack| pack.rules.iter()).collect();
+    let run_target_diagnostics: Vec<_> = config_health::check_run_targets(&config, &all_rules)
+        .into_iter()
+        .filter(|diagnostic| config_check_selected(&command, &diagnostic.rule_id))
+        .collect();
+    let file_set_index = paths::FileSetIndex::build(&config)?;
     let active_rules = collect_effective_rules(&packs, &config, &command);
-    let selected_paths = select_paths(&root, &config, &command, &active_rules)?;
+    let selected_paths = select_paths(&root, &config, &command, &active_rules, &file_set_index)?;
     if verbose {
         eprintln!(
             "harness-lint: {} active rule(s), {} GritQL path(s)",
@@ -238,6 +257,7 @@ fn run_check(
             &selected_paths.grit,
             &config,
             &command,
+            &file_set_index,
             verbose,
         )?
     };
@@ -251,6 +271,8 @@ fn run_check(
     }
     let mut diagnostics = exception_outcome.diagnostics;
     diagnostics.extend(config_diagnostics);
+    diagnostics.extend(ref_diagnostics);
+    diagnostics.extend(run_target_diagnostics);
     diagnostics.sort_by(|left, right| {
         left.path
             .cmp(&right.path)
@@ -288,6 +310,7 @@ fn run_grit_checks(
     selected_paths: &[PathBuf],
     config: &ProjectConfig,
     command: &CheckCommand,
+    file_set_index: &paths::FileSetIndex,
     verbose: bool,
 ) -> Result<Vec<crate::model::Diagnostic>> {
     let mut diagnostics = Vec::new();
@@ -297,7 +320,7 @@ fn run_grit_checks(
             .filter(|path| {
                 rules
                     .iter()
-                    .any(|rule| paths::rule_matches_path(rule, path.as_path()))
+                    .any(|rule| paths::rule_scans_path(rule, path.as_path(), file_set_index))
             })
             .cloned()
             .collect();
@@ -308,8 +331,13 @@ fn run_grit_checks(
         if config.lint.cache {
             let rule_fingerprint = cache::fingerprint(&format!("{:?}", compiled.grit_rules));
             let config_fingerprint = cache::fingerprint(&format!(
-                "{:?}{:?}{:?}{:?}{:?}",
-                command.rule, command.tag, config.overrides, config.disabled, config.ignore
+                "{:?}{:?}{:?}{:?}{:?}{:?}",
+                command.rule,
+                command.tag,
+                config.overrides,
+                config.disabled,
+                config.ignore,
+                config.file_sets
             ));
             diagnostics.extend(run_cached_check(
                 root,
@@ -459,12 +487,32 @@ fn run_doctor(
     if stale_paths.is_empty() {
         findings.push(doctor_ok(
             "config-paths",
-            "all exception and ignore paths exist".to_string(),
+            "all exception, ignore, and file-set paths exist".to_string(),
         ));
     } else {
         for diagnostic in stale_paths {
-            findings.push(doctor_warn("config-paths", diagnostic.message));
+            if diagnostic.level.is_failing() {
+                findings.push(doctor_error("config-paths", diagnostic.message));
+            } else {
+                findings.push(doctor_warn("config-paths", diagnostic.message));
+            }
         }
+    }
+
+    if !config.file_sets.is_empty() {
+        findings.push(doctor_ok(
+            "file-sets",
+            format!(
+                "defined {} file set(s): {}",
+                config.file_sets.len(),
+                config
+                    .file_sets
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
     }
 
     if config.rules.local.is_empty() {
@@ -513,7 +561,12 @@ fn run_doctor(
             ));
             let rule_ids: BTreeSet<&str> = packs
                 .iter()
-                .flat_map(|pack| pack.rules.iter().map(|rule| rule.id.as_str()))
+                .flat_map(|pack| {
+                    pack.rules
+                        .iter()
+                        .map(|rule| rule.id.as_str())
+                        .chain(pack.default_disabled.iter().map(|id| id.as_str()))
+                })
                 .collect();
             for exception in &config.exceptions {
                 if !rule_ids.contains(exception.rule.as_str()) {
@@ -524,6 +577,22 @@ fn run_doctor(
                             exception.rule
                         ),
                     ));
+                }
+            }
+            for diagnostic in config_health::check_unknown_rule_refs(&config, &rule_ids) {
+                findings.push(doctor_warn("config-refs", diagnostic.message));
+            }
+            let all_rules: Vec<&RuleDefinition> =
+                packs.iter().flat_map(|pack| pack.rules.iter()).collect();
+            let run_target_issues = config_health::check_run_targets(&config, &all_rules);
+            if run_target_issues.is_empty() {
+                findings.push(doctor_ok(
+                    "run-targets",
+                    "every rule `runs_on` a defined file set or provided concept".to_string(),
+                ));
+            } else {
+                for diagnostic in run_target_issues {
+                    findings.push(doctor_error("run-targets", diagnostic.message));
                 }
             }
         }
@@ -863,6 +932,7 @@ mod tests {
                 level: Severity::Warn,
                 skill: None,
                 tags: vec![],
+                runs_on: vec![],
                 description: String::new(),
                 body: RuleBody::Grit(String::new()),
                 examples: vec![],
@@ -909,6 +979,7 @@ mod tests {
                 level: Severity::Warn,
                 skill: None,
                 tags: vec![],
+                runs_on: vec![],
                 description: String::new(),
                 body: RuleBody::Grit("language js\n`page.goto($url)`".to_string()),
                 examples: vec![],
@@ -1545,6 +1616,7 @@ fn select_paths(
     config: &ProjectConfig,
     command: &CheckCommand,
     rules: &[RuleDefinition],
+    file_set_index: &paths::FileSetIndex,
 ) -> Result<SelectedPaths> {
     let is_implicit_full_scan = !command.changed && !command.staged && !command.all;
     let raw_paths = if command.staged {
@@ -1560,6 +1632,7 @@ fn select_paths(
         &config.ignore.paths,
         rules,
         &config.rules.local,
+        file_set_index,
     )?;
     if is_implicit_full_scan && grit_paths.len() > 1000 {
         bail!(

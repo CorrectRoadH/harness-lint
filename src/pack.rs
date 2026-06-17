@@ -364,6 +364,7 @@ pub fn load_rule_pack(resolved: &ResolvedPack) -> Result<RulePack> {
         name: manifest.pack.name,
         version: manifest.pack.version,
         rules,
+        default_disabled: disabled.into_iter().collect(),
     })
 }
 
@@ -404,6 +405,7 @@ pub fn load_local_rule_packs(root: &Path, dirs: &[PathBuf]) -> Result<Vec<RulePa
                 name,
                 version: "0.0.0".to_string(),
                 rules,
+                default_disabled: Vec::new(),
             });
         }
     }
@@ -414,6 +416,7 @@ pub fn load_local_rule_packs(root: &Path, dirs: &[PathBuf]) -> Result<Vec<RulePa
             name: "Local Rules".to_string(),
             version: "0.0.0".to_string(),
             rules: direct_rules,
+            default_disabled: Vec::new(),
         });
     }
     Ok(packs)

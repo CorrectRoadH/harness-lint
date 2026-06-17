@@ -1,7 +1,7 @@
 ---
 title: "harness.toml：完整配置文件参考"
 sidebarTitle: "harness.toml"
-description: "harness.toml 中每个 section 和字段的完整参考：lint 设置、规则路径、规则包、覆盖项、禁用规则、忽略和例外。"
+description: "harness.toml 中每个 section 和字段的完整参考：lint 设置、规则路径、规则包、覆盖项、禁用规则、忽略、file sets 和例外。"
 ---
 
 `harness.toml` 是 harness-lint 项目的唯一配置文件。把它放在仓库根目录，也就是 `.git` 旁边。harness-lint 会从当前工作目录向上遍历查找它，所以正常使用时不需要传 `--config`。
@@ -158,7 +158,57 @@ python     = "github:CorrectRoadH/harness-lint@main#packs/python"
   <Tip>
     当你只需要对一部分文件排除**某条特定规则**时，使用 `[[exceptions]]`。把 `[ignore]` 留给完全不应该运行任何规则的路径。
   </Tip>
+
+  <Warning>
+    如果某些**专门规则**需要检查生成代码，不要把它放进 `[ignore]`。`[ignore]` 不可破——被它移除的文件无法被任何规则重新订阅。改用 default-closed 的 [`[file_sets]`](#file-sets)。
+  </Warning>
 </ParamField>
+
+---
+
+## \[file\_sets\]
+
+定义命名文件区域：一块“多数规则该跳过、个别规则需要”的区域。`[file_sets]` 只作用于扫描阶段——决定哪条规则能看到哪些文件，不改变规则是否启用或诊断是否报告。
+
+每个 `[file_sets.<名字>]` 子表声明一个区域。规则通过 frontmatter 的 [`runs_on`](/zh-Hans/reference/rule-format) 订阅区域。
+
+<ParamField query="paths" type="array of glob patterns" required>
+  该区域包含的 repo 相对 glob 列表。必填且非空——空的 `paths` 是配置错误。
+
+  ```toml
+  [file_sets.generated]
+  paths = ["backend/gen/**/*.pb.go"]
+  ```
+</ParamField>
+
+<ParamField query="default_rules" type="boolean" default="true">
+  为 `false` 时把该区域从 `default` 区移除：普通规则（frontmatter 无 `runs_on`）不再扫它，只有在 `runs_on` 里显式点名该集合或它 `provides` 的概念的规则才能进入。保持 `true`（默认）时，该区域仍是 `default` 区的一部分，所有规则照常扫描。
+
+  ```toml
+  [file_sets.generated]
+  paths = ["backend/gen/**/*.pb.go"]
+  default_rules = false
+  ```
+</ParamField>
+
+<ParamField query="provides" type="array of strings" default="[]">
+  可移植概念名列表。让共享 pack 规则用 `runs_on: ["generated"]` 命中该区域，而不必知道项目布局。集合的*位置*（`paths`）归项目，规则的*目标*是概念名。只要 `provides` 不变，file set 改名安全。
+
+  ```toml
+  [file_sets.generated]
+  paths = ["backend/gen/**/*.pb.go"]
+  default_rules = false
+  provides = ["generated"]
+  ```
+</ParamField>
+
+<Note>
+  规则只有在 `runs_on` 里点名某 default-closed 集合（或它 `provides` 的概念），才能进入该集合，且仅此一条规则进入——不泄漏给别的规则。`runs_on` 是规则 frontmatter 字段，参见 [规则格式](/zh-Hans/reference/rule-format)。
+</Note>
+
+<Warning>
+  file-set 路径与 `[ignore]` 重叠是配置错误（`harness.file-set-ignore-overlap`）：`[ignore]` 不可破，被它覆盖的文件永远不可达。
+</Warning>
 
 ---
 
@@ -233,9 +283,15 @@ python     = "github:CorrectRoadH/harness-lint@main#packs/python"
 [disabled]
 rules = ["typescript.no-explicit-any"]
 
-# Skip these paths for every rule.
+# Skip these paths for every rule. Nothing scans them.
 [ignore]
 paths = ["dist/**", "coverage/**", "**/*.generated.ts"]
+
+# A default-closed region only rules that opt in via runs_on can scan.
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
 
 # Hide one rule only for matching paths; other rules still check those files.
 [[exceptions]]

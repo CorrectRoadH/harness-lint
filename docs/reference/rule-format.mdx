@@ -74,6 +74,35 @@ The frontmatter block sits between `---` delimiters at the very top of the file.
   ```
 </ParamField>
 
+<ParamField query="runs_on" type="array of strings">
+  The repository regions the rule scans. Each entry is a `[file_sets.<name>]` set name, a concept that a file set `provides`, or the literal `default`. When `runs_on` is **absent**, the rule scans only the `default` region — everything visible that no `default_rules = false` file set claims.
+
+  A default-closed file set (`default_rules = false`) is reachable only by a rule that names the set or one of its `provides` concepts here. This opt-in is exclusive and per-rule: it never leaks to other rules.
+
+  ```yaml
+  runs_on: ["generated"]            # only the generated region; never ordinary source
+  ```
+
+  To scan both ordinary source and a region, list both:
+
+  ```yaml
+  runs_on: ["default", "generated"]
+  ```
+
+  An empty list (`runs_on: []`) is an error. See [`[file_sets]`](/reference/harness-toml#file-sets) for how regions and `provides` concepts are declared in `harness.toml`.
+</ParamField>
+
+---
+
+## Region-scoped rules
+
+`runs_on` and a GritQL `$filename` predicate operate at different layers, and most region-aware rules use both:
+
+- **`runs_on` selects the region.** It is the *only* way to reach a default-closed `[file_sets]` set. A shared pack rule should target a portable concept (`runs_on: ["generated"]`) so it works in any project that supplies a matching `provides`, without knowing where that project keeps its generated code.
+- **`$filename` narrows syntactically within the files a rule already sees.** It cannot pull in files that `runs_on` (or the default partition) excluded — it only filters down the region the rule is already scanning.
+
+In short: use `runs_on` to choose *which region* a rule applies to, and `$filename` to refine *which files inside that region* the pattern matches.
+
 ---
 
 ## GritQL Fenced Code Block
@@ -172,6 +201,28 @@ print(user_id)
 
 ```python
 logger.info("loaded user %s", user_id)
+```
+````
+
+A region-scoped rule adds `runs_on` to target a `[file_sets]` region (or a concept it `provides`) instead of the `default` region:
+
+````markdown
+---
+id: local.proto-no-id-getter
+title: Proto messages must generate GetId
+language: go
+level: warn
+runs_on: ["generated"]
+---
+
+# Proto messages must generate GetId
+
+Only scans the `generated` region — the project's `[file_sets]` set that
+`provides = ["generated"]`. Ordinary source files are never checked by this rule.
+
+```grit
+language go
+`func ($receiver) GetId() $_ { $_ }`
 ```
 ````
 

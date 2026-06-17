@@ -193,12 +193,14 @@ mod tests {
                 level: Severity::Warn,
                 skill: None,
                 tags: vec!["local".to_string()],
+                runs_on: vec![],
                 description: "desc".to_string(),
                 body: RuleBody::Grit("language python\n`print($x)`".to_string()),
                 examples: vec![],
                 source_path: PathBuf::from("warn.md"),
                 pack_id: Some("local".to_string()),
             }],
+            default_disabled: Vec::new(),
         };
         let compiled =
             compile_grit_rules(tempdir.path(), vec![pack], &BTreeMap::new(), &[]).unwrap();

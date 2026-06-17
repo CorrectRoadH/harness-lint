@@ -179,6 +179,99 @@ logger.info("user=%s", user)
 }
 
 #[test]
+fn cli_check_file_set_scopes_default_and_generated_rules() {
+    if !grit_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(tempdir.path().join("rules")).unwrap();
+    fs::create_dir_all(tempdir.path().join("src/generated")).unwrap();
+    fs::write(
+        tempdir.path().join("harness.toml"),
+        r#"
+[project]
+name = "demo"
+
+[rules]
+local = ["rules"]
+
+[file_sets.codegen]
+paths = ["src/generated/**"]
+default_rules = false
+provides = ["generated"]
+"#,
+    )
+    .unwrap();
+    // Default rule (no runs_on): scans the default region only.
+    fs::write(
+        tempdir.path().join("rules/no-print.md"),
+        r#"---
+id: local.no-print
+title: Avoid print
+language: python
+---
+
+# Avoid print
+
+```grit
+language python
+`print($value)`
+```
+"#,
+    )
+    .unwrap();
+    // Generated-only rule: opts into the `generated` concept.
+    fs::write(
+        tempdir.path().join("rules/gen-print.md"),
+        r#"---
+id: local.gen-print
+title: Generated print
+language: python
+runs_on: ["generated"]
+---
+
+# Generated print
+
+```grit
+language python
+`print($value)`
+```
+"#,
+    )
+    .unwrap();
+    fs::write(tempdir.path().join("src/app.py"), "print('visible')\n").unwrap();
+    fs::write(
+        tempdir.path().join("src/generated/adapter.py"),
+        "print('hidden')\n",
+    )
+    .unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+
+    // The default rule sees ordinary source but not the default-closed file set.
+    let default_rule = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["check", "--all", "--rule", "local.no-print"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&default_rule.stdout);
+    assert!(stdout.contains("src/app.py"), "{stdout}");
+    assert!(!stdout.contains("src/generated/adapter.py"), "{stdout}");
+
+    // The generated-only rule reaches the file set and nothing else.
+    let gen_rule = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["check", "--all", "--rule", "local.gen-print"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&gen_rule.stdout);
+    assert!(stdout.contains("src/generated/adapter.py"), "{stdout}");
+    assert!(!stdout.contains("src/app.py"), "{stdout}");
+}
+
+#[test]
 fn cli_warns_for_legacy_suppressions_key() {
     let tempdir = tempfile::tempdir().unwrap();
     fs::create_dir_all(tempdir.path().join("rules")).unwrap();

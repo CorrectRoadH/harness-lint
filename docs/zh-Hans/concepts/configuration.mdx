@@ -44,9 +44,18 @@ typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
 [disabled]
 rules = ["typescript.no-explicit-any"]
 
-# Skip these paths for every rule.
+# Skip these paths for every rule. Nothing scans them.
 [ignore]
 paths = ["dist/**", "coverage/**"]
+
+# A named file region most rules should skip, but a few rules need.
+# default_rules = false removes it from the default region, so ordinary
+# rules don't scan it; provides lists portable concept names a shared pack
+# rule can target without hardcoding your layout.
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
 
 # Hide one rule only for matching paths; other rules still check those files.
 [[exceptions]]
@@ -163,6 +172,35 @@ paths = ["dist/**", "coverage/**", "vendor/**"]
 
 glob 模式列表。任何匹配这些模式的文件都会从每条规则、每次 `check` 运行中排除。`[ignore]` 适合没有任何规则应该扫描的目录，例如生成构建产物、第三方 vendored 代码或覆盖率报告。
 
+注意区别：如果某些**专门规则**需要检查生成代码，不要把它放进 `[ignore]`（`[ignore]` 不可破，无法重新订阅）。改用 default-closed file set（见下）。
+
+---
+
+### `[file_sets]`
+
+```toml
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false
+provides = ["generated"]
+```
+
+`[file_sets.<名字>]` 定义一个命名文件区域：一块“多数规则该跳过、个别规则需要”的区域。它只作用于扫描阶段——决定哪条规则能看到哪些文件。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `paths` | glob 模式列表 | 必填、非空 | 该区域包含的 repo 相对 glob。 |
+| `default_rules` | boolean | `true` | 为 `false` 时把该区域从 `default` 区移除：普通规则（无 `runs_on`）不再扫它，只有显式订阅的规则能进。 |
+| `provides` | 字符串列表 | `[]` | 可移植概念名列表，让共享 pack 规则不必知道项目布局即可命中该区域，例如 `provides = ["generated"]`。 |
+
+规则通过 frontmatter 的 `runs_on` 订阅一个区域，点名 file set 名或它 `provides` 的概念。`runs_on` 是 exclusive scope 且按规则生效：规则进入 default-closed 集合是因为它主动要了，且只此一条，不泄漏给别的规则。详见 [规则格式](/zh-Hans/reference/rule-format)。
+
+集合位置（`paths`）归项目，规则的目标是可移植概念（`generated`）。共享 pack 出 `runs_on: ["generated"]`，项目提供 `[file_sets.X] provides = ["generated"]` 把两者连起来。只要 `provides` 不变，file set 改名安全。
+
+<Warning>
+  file-set 路径与 `[ignore]` 重叠是配置错误：`[ignore]` 不可破，被它覆盖的文件永远不可达。需要专门规则检查的生成代码应做成 default-closed file set，而不是放进 `[ignore]`。
+</Warning>
+
 ---
 
 ### `[[exceptions]]`
@@ -198,6 +236,22 @@ url = "https://raw.githubusercontent.com/CorrectRoadH/harness-lint/main/site/cat
 | `url` | string | 公共目录 URL | harness-lint 在 `harness-lint install`、`harness-lint search` 和 `harness-lint list --available` 中解析规则包名称时使用的 URL。默认指向 GitHub 上的公共 harness-lint 目录。你可以把它改成自托管或企业内部目录。 |
 
 大多数项目不需要设置 `[registry]`。只有在运行私有目录服务器或内部镜像公共目录时才配置它。
+
+---
+
+## 配置如何组合
+
+harness-lint 按顺序回答三个独立的问题。把它们分开，正是上面各个旋钮能可预测地叠加的原因。
+
+1. **规则是否启用？** pack 的 default-disabled 列表和 `[disabled]` 会彻底关掉一条规则；`[overrides]` 只改它的严重级别。被关掉的规则跳过后续步骤。
+2. **规则扫描哪些文件？** 从整个 repo 出发，按优先级（从高到低）依次应用：
+   - 结构排除——`.git`、`node_modules`、`target`、`.harness`、你的规则目录，以及 `.gitignore` 的文件，永不可扫，任何字段不可破；
+   - `[ignore].paths`——从所有规则移除，无法重新订阅；
+   - **file set 分区**——剩余文件被分区。`default_rules = false` 的集合从 `default` 区移除；规则只有在 `runs_on` 里点名该集合（或它 `provides` 的概念）才能进入。无 `runs_on` 的规则扫 `default` 区；
+   - 规则的 `language` 和 GritQL `$filename` 谓词继续收窄剩下的文件。
+3. **结果是否报告？** `[[exceptions]]` 在匹配路径上隐藏已扫描规则的诊断。
+
+`runs_on` 是 exclusive scope，不是后门：规则进入 default-closed 集合只因为它主动要了，且只此一条。集合的*位置*（`paths`）归项目（在 `harness.toml` 中），规则的*目标*是可移植概念名（`generated`），所以共享 pack 规则能出 `runs_on: ["generated"]` 而不必知道你的生成代码放在哪——你用一条 `provides` 把两者连起来。file set 可随意改名；只要它的 `provides` 仍列出该概念，每条 pack 规则都继续工作。既要普通源码又要某区域？两个都列上：`runs_on: ["default", "generated"]`。
 
 ---
 

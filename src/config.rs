@@ -9,6 +9,11 @@ use crate::model::{HarnessLock, Severity};
 
 pub const CONFIG_FILE: &str = "harness.toml";
 pub const LOCK_FILE: &str = "harness.lock";
+/// Stable URL of the migration guide. Deprecation/legacy-construct warnings link
+/// here so an AI agent (via the harness-lint skill) can fetch it and apply the
+/// matching migration automatically.
+pub const MIGRATION_GUIDE_URL: &str =
+    "https://github.com/CorrectRoadH/harness-lint/blob/main/MIGRATE.md";
 pub const USER_RULE_DIR: &str = "rules";
 pub const WORK_DIR: &str = ".harness";
 pub const PACKS_DIR: &str = ".harness/packs";
@@ -32,6 +37,8 @@ pub struct ProjectConfig {
     pub disabled: DisabledSection,
     #[serde(default)]
     pub ignore: IgnoreSection,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub file_sets: BTreeMap<String, FileSetSection>,
     #[serde(default, alias = "suppressions", skip_serializing_if = "Vec::is_empty")]
     pub exceptions: Vec<RuleExceptionSection>,
     #[serde(default)]
@@ -50,6 +57,7 @@ impl Default for ProjectConfig {
             overrides: BTreeMap::new(),
             disabled: DisabledSection::default(),
             ignore: IgnoreSection::default(),
+            file_sets: BTreeMap::new(),
             exceptions: Vec::new(),
             registry: RegistrySection::default(),
             used_legacy_exceptions_key: false,
@@ -108,6 +116,41 @@ pub struct DisabledSection {
 pub struct IgnoreSection {
     #[serde(default)]
     pub paths: Vec<String>,
+}
+
+/// A named region of the repository that a rule can opt into with `runs_on`.
+///
+/// Unlike `[ignore]` (never scanned by anyone), a file set is *scannable* by
+/// rules that name it. With `default_rules = false` it is removed from the
+/// `default` region, so ordinary rules (no `runs_on`) skip it while opted-in
+/// rules still reach it. `provides` lists portable concept names a pack rule
+/// may reference, decoupling the project's chosen set name from pack vocabulary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileSetSection {
+    #[serde(default)]
+    pub paths: Vec<String>,
+    /// Whether rules without an explicit `runs_on` still scan this region.
+    /// `false` makes the set default-closed (the typical generated-code case).
+    #[serde(default = "default_true")]
+    pub default_rules: bool,
+    /// Portable concept names this set satisfies (e.g. `generated`). A rule
+    /// `runs_on = ["generated"]` binds to every set whose `provides` lists it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub provides: Vec<String>,
+}
+
+impl Default for FileSetSection {
+    fn default() -> Self {
+        Self {
+            paths: Vec::new(),
+            default_rules: true,
+            provides: Vec::new(),
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -170,7 +213,15 @@ pub fn load_config(root: &Path, explicit: Option<&Path>) -> Result<ProjectConfig
     if uses_legacy_suppressions_key(&content) {
         config.used_legacy_exceptions_key = true;
         eprintln!(
-            "warning: `[[suppressions]]` is deprecated; rename it to `[[exceptions]]` in {}",
+            "warning: `[[suppressions]]` is deprecated; rename it to `[[exceptions]]` in {}; \
+             see {MIGRATION_GUIDE_URL}",
+            path.display()
+        );
+    }
+    if uses_unsupported_scan_ignored_key(&content) {
+        eprintln!(
+            "warning: `[[scan_ignored]]` in {} is not a supported key and is silently ignored; \
+             migrate to `[file_sets]` + rule `runs_on` — see {MIGRATION_GUIDE_URL}",
             path.display()
         );
     }
@@ -181,6 +232,13 @@ fn uses_legacy_suppressions_key(content: &str) -> bool {
     content.lines().any(|line| {
         let trimmed = line.trim();
         trimmed == "[suppressions]" || trimmed == "[[suppressions]]"
+    })
+}
+
+fn uses_unsupported_scan_ignored_key(content: &str) -> bool {
+    content.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed == "[scan_ignored]" || trimmed == "[[scan_ignored]]"
     })
 }
 
@@ -290,6 +348,30 @@ reason = "Generated adapters intentionally use this pattern."
     }
 
     #[test]
+    fn parses_file_sets() {
+        let config: ProjectConfig = toml::from_str(
+            r#"
+[file_sets.generated]
+paths = ["apps/backend/gen/**/*.pb.go", "packages/proto/gen/**"]
+default_rules = false
+provides = ["generated"]
+
+[file_sets.api]
+paths = ["apps/api/**"]
+"#,
+        )
+        .unwrap();
+        let generated = &config.file_sets["generated"];
+        assert_eq!(generated.paths.len(), 2);
+        assert!(!generated.default_rules);
+        assert_eq!(generated.provides, vec!["generated"]);
+        // default_rules defaults to true; provides defaults to empty.
+        let api = &config.file_sets["api"];
+        assert!(api.default_rules);
+        assert!(api.provides.is_empty());
+    }
+
+    #[test]
     fn parses_legacy_suppressions_key() {
         let config: ProjectConfig = toml::from_str(
             r#"
@@ -322,6 +404,15 @@ paths = ["generated/**"]
 
         assert!(config.used_legacy_exceptions_key);
         assert_eq!(config.exceptions.len(), 1);
+    }
+
+    #[test]
+    fn detects_unsupported_scan_ignored_key() {
+        assert!(uses_unsupported_scan_ignored_key(
+            "[[scan_ignored]]\nrule = \"x\"\n"
+        ));
+        assert!(uses_unsupported_scan_ignored_key("[scan_ignored]\n"));
+        assert!(!uses_unsupported_scan_ignored_key("[ignore]\npaths = []\n"));
     }
 
     #[test]

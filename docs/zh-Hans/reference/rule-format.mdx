@@ -45,6 +45,18 @@ frontmatter 块位于文件最顶部的 `---` 分隔符之间。
   ```
 </ParamField>
 
+<ParamField query="runs_on" type="array of strings">
+  规则订阅的文件区域列表。每个元素是一个 file set 名、某个 set 在 `provides` 里声明的概念名，或字面量 `default`。
+
+  省略 `runs_on` 时，规则扫描 `default` 区（所有可见、且未被任何 `default_rules = false` 集合认领的文件）。要进入 `harness.toml` 中某个 default-closed 的 [`[file_sets]`](/zh-Hans/reference/harness-toml#file-sets)，规则必须在 `runs_on` 里点名该集合或它 `provides` 的概念。
+
+  空列表 `runs_on: []` 是错误。既要普通源码又要某区域，两个都列上：`runs_on: ["default", "generated"]`。
+
+  ```yaml
+  runs_on: ["generated"]
+  ```
+</ParamField>
+
 <ParamField query="level" type="string" required>
   匹配的默认严重级别。接受值：`warn` 和 `error`。
 
@@ -96,6 +108,17 @@ language python
 **TypeScript / JavaScript 规则：** 即使 frontmatter 写的是 `language: typescript`，GritQL 代码块也要写 `language js`。`js` 语言名覆盖 TypeScript 和 JavaScript 源文件。只有当你明确需要 TypeScript parser 变体时，才使用 `language js(typescript)`，例如匹配纯 JavaScript 中非法的语法。
 
 **按文件限制规则：** 如果模式只应应用于特定文件路径，请在 GritQL 代码块中用 `$filename` 元变量编码范围，而不是依赖单独路径配置。参见 [GritQL 模式](/zh-Hans/reference/gritql-patterns) 参考中的示例。
+
+---
+
+## 区域作用域：`runs_on` vs. `$filename`
+
+`runs_on` 和 `$filename` 都收窄规则面对的文件，但层级不同，互为补充：
+
+- **`runs_on`（区域作用域）** 决定规则进入哪个文件区域。它是唯一能让规则到达 default-closed [`[file_sets]`](/zh-Hans/reference/harness-toml#file-sets) 区域的方式——例如点名 `generated` 概念才能扫描被项目从 `default` 区移出的生成代码。`runs_on` 是 exclusive scope 且按规则生效：规则进入该区域只因它主动要了，且不泄漏给别的规则。
+- **`$filename`（区域内收窄）** 在规则已经能看到的文件里，按文件名语法进一步过滤。它无法让规则到达一个它本就进不去的 default-closed 区域。
+
+换句话说：`runs_on` 选区域，`$filename` 在区域内挑文件。需要扫描专门的生成代码区域时用 `runs_on`；在普通 `default` 区里限定到某些路径时用 `$filename`。
 
 ---
 
@@ -174,6 +197,18 @@ print(user_id)
 logger.info("loaded user %s", user_id)
 ```
 ````
+
+需要扫描某个 default-closed 区域的规则，用 `runs_on` 订阅一个概念。下面这条规则只扫描 `generated` 概念对应的区域，绝不碰普通源码：
+
+```yaml
+---
+id: local.proto-no-id-getter
+title: Proto messages must generate GetId
+language: go
+runs_on: ["generated"]
+level: warn
+---
+```
 
 ---
 

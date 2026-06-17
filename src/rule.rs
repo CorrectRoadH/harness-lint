@@ -19,6 +19,10 @@ struct RuleFrontmatter {
     skill: Option<String>,
     #[serde(default)]
     tags: Vec<String>,
+    /// `None` = field absent (rule runs on `default`); `Some([])` = explicit
+    /// empty list, which is an error; `Some([..])` = the named sets/concepts.
+    #[serde(default)]
+    runs_on: Option<Vec<String>>,
 }
 
 pub fn discover_rules(dir: &Path, pack_id: Option<&str>) -> Result<Vec<RuleDefinition>> {
@@ -62,6 +66,24 @@ pub fn parse_rule(
     let body = extract_body(grit_blocks, &source_path)?;
     let examples = extract_examples(markdown);
 
+    let runs_on = match frontmatter.runs_on {
+        Some(targets) => {
+            let targets: Vec<String> = targets
+                .into_iter()
+                .map(|target| target.trim().to_string())
+                .collect();
+            if targets.is_empty() || targets.iter().any(|target| target.is_empty()) {
+                bail!(
+                    "{} has an empty `runs_on` entry; list at least one file set or concept, \
+                     or omit `runs_on` to scan the default region",
+                    source_path.display()
+                );
+            }
+            targets
+        }
+        None => Vec::new(),
+    };
+
     let rule = RuleDefinition {
         id: frontmatter.id,
         title: frontmatter.title,
@@ -69,6 +91,7 @@ pub fn parse_rule(
         level: frontmatter.level,
         skill: frontmatter.skill,
         tags: frontmatter.tags,
+        runs_on,
         description,
         body,
         examples,
@@ -327,6 +350,69 @@ language js
         let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();
         assert_eq!(rule.id, "ai.some-rule");
         assert_eq!(rule.title, "Some Rule");
+    }
+
+    #[test]
+    fn parses_runs_on_targets() {
+        let content = r#"---
+id: local.proto-no-id-getter
+title: Proto Must Generate GetId
+language: go
+runs_on: ["generated", "codegen"]
+---
+
+# Proto
+
+Body.
+
+```grit
+language go
+`func ($x) GetId()`
+```
+"#;
+        let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();
+        assert_eq!(rule.runs_on, vec!["generated", "codegen"]);
+    }
+
+    #[test]
+    fn absent_runs_on_is_empty_default_region() {
+        let content = r#"---
+id: local.x
+title: X
+language: go
+---
+
+# X
+
+```grit
+language go
+`panic($x)`
+```
+"#;
+        let rule = parse_rule(content, PathBuf::from("rule.md"), None).unwrap();
+        assert!(rule.runs_on.is_empty());
+    }
+
+    #[test]
+    fn rejects_empty_runs_on_list() {
+        let content = r#"---
+id: local.x
+title: X
+language: go
+runs_on: []
+---
+
+# X
+
+```grit
+language go
+`panic($x)`
+```
+"#;
+        let error = parse_rule(content, PathBuf::from("rule.md"), None)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("empty `runs_on`"));
     }
 
     #[test]

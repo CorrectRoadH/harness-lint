@@ -80,9 +80,17 @@ typescript = "github:CorrectRoadH/harness-lint@main#packs/typescript"
 [disabled]
 rules = ["typescript.no-explicit-any"]
 
-# 这些路径会被所有规则跳过。
+# 这些路径会被所有规则跳过，没有任何规则会扫描它们。
 [ignore]
 paths = ["dist/**", "coverage/**"]
+
+# 一个命名的文件分区：大多数规则应跳过它，只有少数规则需要它。
+# default_rules = false 把它从 default 区移除，于是普通规则不会扫描它；
+# provides 列出可移植的概念名，让共享 pack 规则不必硬编码你的目录结构就能命中它。
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go", "packages/proto/gen/**"]
+default_rules = false
+provides = ["generated"]
 
 # 只隐藏某条规则在指定路径上的结果；其他规则仍会检查这些文件。
 [[exceptions]]
@@ -90,6 +98,33 @@ rule = "typescript.no-console-log"
 paths = ["src/generated/**"]
 reason = "Generated SDK code is checked in and emits debug output during local mocks."
 ```
+
+规则通过 frontmatter 里的 `runs_on` 选择进入某个分区。没有 `runs_on` 时，规则扫描 **default** 区（即所有可见、且没有被任何 `default_rules = false` 的集合占据的文件）：
+
+```markdown
+---
+id: local.proto-no-id-getter
+title: Proto messages must generate GetId
+language: go
+runs_on: ["generated"]   # 只扫描 generated 分区；永远不碰普通源码
+---
+```
+
+### 配置如何组合
+
+harness-lint 按顺序回答三个相互独立的问题。正是因为把它们分开，上面这些开关才能可预测地叠加。
+
+1. **规则是否启用？** pack 的默认禁用列表和 `[disabled]` 会彻底关闭一条规则；`[overrides]` 只改它的级别。被关闭的规则会跳过后续步骤。
+2. **规则扫描哪些文件？** 从整个仓库出发，再按优先级依次应用：
+   - 结构性排除——`.git`、`node_modules`、`target`、`.harness`、你的规则目录，以及被 `.gitignore` 忽略的文件，永远不可扫描，任何配置都无法覆盖这一点；
+   - `[ignore].paths`——从每条规则中移除，没有任何方式能重新加回来；
+   - **file sets**——剩余文件会被分区。`default_rules = false` 的集合会从 `default` 区移除；规则只有在 `runs_on` 里点名该集合（或它 `provides` 的某个概念）时才能触达它。没有 `runs_on` 的规则扫描 `default` 区；
+   - 之后再用规则的语言以及 GritQL 的 `$filename` 谓词收窄剩余文件。
+3. **结果是否上报？** `[[exceptions]]` 会在匹配路径上隐藏某条已扫描规则的诊断。
+
+`runs_on` 是 exclusive scope（独占范围），不是后门：一条规则能触达一个默认关闭的 file set，仅仅因为它主动申请了，而且永远只有该规则能进。集合的*位置*（`paths`）归项目所有、写在 `harness.toml` 里；规则的*目标*则是一个可移植的概念名（`generated`），所以共享 pack 规则可以直接发布 `runs_on: ["generated"]`，无需知道你的生成代码放在哪里——你只用一个 `provides` 把两者连起来。可以随意给 file set 改名；只要它的 `provides` 仍然列着那个概念，每条 pack 规则都照常工作。既要普通源码又要某个分区？两个都列上：`runs_on: ["default", "generated"]`。
+
+harness-lint 还会检查自身配置的完整性：`[[exceptions]]` / `[ignore]` / `[file_sets.*]` 中已不存在的路径、与 `[ignore]` 重叠或没有任何路径的 file set、`[disabled]` / `[overrides]` 中点名未知规则的条目，以及任何 `runs_on` 点名了无人提供的 file set 或概念的规则——这些都会被上报（默认 warn，file-set／run-target 这类结构性错误为 error；可通过 `[overrides]` 按 id 调整）。
 
 
 ## 本地规则

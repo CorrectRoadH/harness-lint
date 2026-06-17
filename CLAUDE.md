@@ -54,9 +54,37 @@ paths = ["apps/backend/internal/bootstrap/public_track_*_router.go"]
 reason = "Generated router adapters intentionally discard unused generated parameters."
 ```
 
-Use `ignore.paths` only when no rules should scan those files at all, such as generated output.
+Use `ignore.paths` only when **no** rule should ever scan those files, such as build output. Do **not** put generated code that a dedicated rule needs to inspect in `[ignore]` — `[ignore]` is unbreakable and no rule can opt back in.
 
-harness-lint validates that the non-glob paths referenced by `[[exceptions]]` and `[ignore]` still exist. When a referenced file or directory is renamed or deleted, the stale entry stops matching silently — suppressed diagnostics quietly return, or an ignore no longer covers anything. These cases are reported (anchored at `harness.toml`) as `harness.stale-exception-path` and `harness.stale-ignore-path`. They are `warn` by default; escalate a given id to `error` through `[overrides]`. Patterns whose first component is already a glob (such as `**/*_test.go`) are not checked because there is no literal prefix to anchor against.
+### Choosing a scope mechanism
+
+Three knobs, three jobs — do not substitute one for another:
+
+- **`$filename` (in GritQL)** — syntactic narrowing *within* a region a rule already scans. Use it when you own the rule and the distinction is by filename pattern (e.g. exclude `*.test.ts`).
+- **`runs_on` + `[file_sets.*]`** — region scope, including reaching code most rules skip. This is the only way to make a rule scan a default-closed region such as committed generated code.
+- **`[[exceptions]]`** — report-stage only; hides an already-scanned rule's diagnostics on some paths. It never changes what is scanned.
+
+To make a rule scan generated code that ordinary rules should skip, name the region as a default-closed file set and have the rule opt in:
+
+```toml
+# harness.toml — project owns the layout (paths) and the concept mapping (provides)
+[file_sets.generated]
+paths = ["backend/gen/**/*.pb.go"]
+default_rules = false          # removed from the default region; ordinary rules skip it
+provides = ["generated"]       # portable concept a shared pack rule can target
+```
+
+```markdown
+---
+id: local.proto-no-id-getter
+language: go
+runs_on: ["generated"]         # only this region; never ordinary source
+---
+```
+
+`runs_on` lists file-set names and/or concepts those sets `provides`; the literal `default` is the implicit region of everything no default-closed set claims. Omit `runs_on` to scan `default`. For a rule that needs both, write `runs_on: ["default", "generated"]`. The file-set name is project-owned and renamable — pack rules reference the portable concept, so renaming the set is safe as long as its `provides` is unchanged. Packs must not hardcode project paths; a pack rule ships `runs_on: ["<concept>"]` and the installing project supplies the matching `[file_sets.*] provides = ["<concept>"]` (a pack may document the concepts it needs in its own `INSTALL.md`).
+
+harness-lint validates that the non-glob paths referenced by `[[exceptions]]`, `[ignore]`, and `[file_sets.*]` still exist. When a referenced file or directory is renamed or deleted, the stale entry stops matching silently — suppressed diagnostics quietly return, an ignore no longer covers anything, or a file set silently scans nothing. These are reported (anchored at `harness.toml`) as `harness.stale-exception-path`, `harness.stale-ignore-path`, and `harness.stale-file-set-path` (`warn` by default). Structural mistakes are reported at `error`: `harness.empty-file-set` (a file set with no paths), `harness.file-set-ignore-overlap` (a file-set path also covered by `[ignore]`, so it can never be reached), and `harness.unknown-run-target` (a rule `runs_on` a file set or concept nothing provides — typically a pack update expecting a concept the project never wired up). Escalate or relax any id through `[overrides]`. Patterns whose first component is already a glob (such as `**/*_test.go`) are not checked because there is no literal prefix to anchor against.
 
 After creating or editing a rule, validate it by running the single rule over the configured file set:
 

@@ -130,6 +130,8 @@ harness-lint also checks its own config integrity: `[[exceptions]]` / `[ignore]`
 
 When harness-lint detects a deprecated or never-implemented construct (such as `[[suppressions]]` or `[[scan_ignored]]`), it prints a warning linking to [MIGRATE.md](MIGRATE.md), which gives a mechanical migration for each. An AI agent set up with the harness-lint skill follows that link and applies the migration for you.
 
+For newly added (non-breaking) features and when to adopt them, run `harness-lint whatsnew` or see [WHATS-NEW.md](WHATS-NEW.md). Each entry states when a feature pays off and when to keep your existing setup, so an agent suggests it only where it fits rather than nagging.
+
 ## Local Rules
 
 Custom project rules live in `rules/*.md` by default. To put them somewhere else, configure `harness.toml`:

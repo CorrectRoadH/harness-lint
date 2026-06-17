@@ -41,6 +41,18 @@ When upgrading an existing repository or reviewing stale harness-lint config, re
 
 If a `harness-lint` command prints a deprecation or legacy-construct warning that includes a migration URL (for example `[[suppressions]]` or `[[scan_ignored]]`, both of which link to `MIGRATE.md`), fetch that URL, find the matching section, and apply the migration to `harness.toml` and any affected rule files. Then re-run `harness-lint doctor` to confirm the warning is gone. Do this proactively on the first run against an existing repo — these warnings mean config that is silently doing nothing.
 
+## Surfacing New Features (only when they fit)
+
+`harness-lint whatsnew` and [WHATS-NEW.md](../../WHATS-NEW.md) list features added in recent versions, each with explicit **adopt when / do not adopt** criteria. When setting up a repo, reviewing its config, or after a `harness-lint` upgrade, consult them and mention a feature **only when the repo actually matches its "adopt when" criteria** — never as a blanket reminder. A passive "you could use X" nag is noise; the value is your judgment of fit.
+
+Concretely, for the file sets / `runs_on` feature, recommend it only when you can point to a real trigger:
+
+- **Two or more local rules repeat the same directory region** in their `$filename` (for example several rules all scoped to `frontend/e2e/.*`). Propose one `[file_sets.*]` plus `runs_on` and drop the duplicated `$filename`. Removing a region-`$filename` that was paired with an unscoped fallback branch (a common `rule verify` workaround) also fixes the latent over-match where the fallback fired repo-wide.
+- **A local rule must inspect committed generated code** that other rules should skip → a `default_rules = false` file set the rule opts into.
+- **An installed pack rule needs a concept the project has not wired** (a `harness.unknown-run-target` error) → add `[file_sets.*]` with the matching `provides`.
+
+Do **not** suggest it for single-file scopes or "region minus a few files" (include-only `runs_on` cannot express exclusions) — those belong in `$filename`. This distinction is the whole point: surface the feature where it pays off, leave the correct `$filename` usages alone.
+
 ## Pack Workflow
 
 When installing, recommending, updating, restoring, or troubleshooting shared rule packs, read [references/packs.md](references/packs.md). For repository setup, detect the languages/frameworks, search and inspect available packs, summarize relevant candidates, and ask before installing recommended packs unless the user already named exact packs to install. Use CLI pack commands instead of editing `harness.lock` by hand.

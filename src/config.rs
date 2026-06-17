@@ -14,6 +14,11 @@ pub const LOCK_FILE: &str = "harness.lock";
 /// matching migration automatically.
 pub const MIGRATION_GUIDE_URL: &str =
     "https://github.com/CorrectRoadH/harness-lint/blob/main/MIGRATE.md";
+/// Stable URL of the "what's new" guide: per-version feature highlights with
+/// explicit "when to adopt / when not to" guidance. Surfaced by `harness-lint
+/// whatsnew` and consulted by the harness-lint skill on setup/review/upgrade.
+pub const WHATS_NEW_URL: &str =
+    "https://github.com/CorrectRoadH/harness-lint/blob/main/WHATS-NEW.md";
 pub const USER_RULE_DIR: &str = "rules";
 pub const WORK_DIR: &str = ".harness";
 pub const PACKS_DIR: &str = ".harness/packs";

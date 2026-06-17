@@ -47,6 +47,8 @@ enum Command {
     Init(InitCommand),
     #[command(about = "Diagnose config, rules, grit, and git integration")]
     Doctor,
+    #[command(about = "Show recent feature highlights and when to adopt them")]
+    Whatsnew,
     #[command(about = "Run active rules against the configured project file set")]
     Check(CheckCommand),
     #[command(about = "Search the rule-pack catalog")]
@@ -151,6 +153,10 @@ pub fn run() -> Result<ExitCode> {
             Ok(())
         }
         Command::Doctor => run_doctor(&cwd, cli.config.as_deref(), format),
+        Command::Whatsnew => {
+            run_whatsnew();
+            Ok(())
+        }
         Command::Check(command) => {
             run_check(&cwd, cli.config.as_deref(), command, format, cli.verbose)
         }
@@ -199,6 +205,28 @@ pub fn run() -> Result<ExitCode> {
     .map(|_| ExitCode::SUCCESS)
 }
 
+fn run_whatsnew() {
+    println!("harness-lint — what's new\n");
+    println!("0.4.x  File sets & runs_on");
+    println!(
+        "  Scope a rule to a named region, or reach a default-closed region such as\n  \
+         committed generated code, with `runs_on` + `[file_sets.*]`."
+    );
+    println!(
+        "  Adopt when: two or more rules share a directory region, or a rule must scan\n  \
+         generated code that ordinary rules should skip."
+    );
+    println!(
+        "  Keep `$filename` for: single-file scope, or \"a region minus a few files\"\n  \
+         (runs_on is include-only and cannot express exclusions)."
+    );
+    println!();
+    println!(
+        "Full guide (with per-feature adoption advice): {}",
+        config::WHATS_NEW_URL
+    );
+}
+
 fn run_check(
     cwd: &PathBuf,
     config_path: Option<&std::path::Path>,
@@ -237,6 +265,11 @@ fn run_check(
         .into_iter()
         .filter(|diagnostic| config_check_selected(&command, &diagnostic.rule_id))
         .collect();
+    let runs_on_filename_diagnostics: Vec<_> =
+        config_health::check_runs_on_filename(&config, &all_rules)
+            .into_iter()
+            .filter(|diagnostic| config_check_selected(&command, &diagnostic.rule_id))
+            .collect();
     let file_set_index = paths::FileSetIndex::build(&config)?;
     let active_rules = collect_effective_rules(&packs, &config, &command);
     let selected_paths = select_paths(&root, &config, &command, &active_rules, &file_set_index)?;
@@ -273,6 +306,7 @@ fn run_check(
     diagnostics.extend(config_diagnostics);
     diagnostics.extend(ref_diagnostics);
     diagnostics.extend(run_target_diagnostics);
+    diagnostics.extend(runs_on_filename_diagnostics);
     diagnostics.sort_by(|left, right| {
         left.path
             .cmp(&right.path)
@@ -593,6 +627,18 @@ fn run_doctor(
             } else {
                 for diagnostic in run_target_issues {
                     findings.push(doctor_error("run-targets", diagnostic.message));
+                }
+            }
+            let scope_conflicts = config_health::check_runs_on_filename(&config, &all_rules);
+            if scope_conflicts.is_empty() {
+                findings.push(doctor_ok(
+                    "runs-on-scope",
+                    "no rule has a `runs_on` region disjoint from its `$filename` scope"
+                        .to_string(),
+                ));
+            } else {
+                for diagnostic in scope_conflicts {
+                    findings.push(doctor_warn("runs-on-scope", diagnostic.message));
                 }
             }
         }

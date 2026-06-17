@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::config::{CONFIG_FILE, ProjectConfig};
-use crate::model::{Diagnostic, RuleDefinition, Severity};
+use crate::model::{Diagnostic, RuleBody, RuleDefinition, Severity};
 
 pub const STALE_EXCEPTION_PATH_RULE: &str = "harness.stale-exception-path";
 pub const STALE_IGNORE_PATH_RULE: &str = "harness.stale-ignore-path";
@@ -21,6 +21,7 @@ pub const STALE_FILE_SET_PATH_RULE: &str = "harness.stale-file-set-path";
 pub const EMPTY_FILE_SET_RULE: &str = "harness.empty-file-set";
 pub const FILE_SET_IGNORE_OVERLAP_RULE: &str = "harness.file-set-ignore-overlap";
 pub const UNKNOWN_RUN_TARGET_RULE: &str = "harness.unknown-run-target";
+pub const RUNS_ON_FILENAME_DISJOINT_RULE: &str = "harness.runs-on-filename-disjoint";
 
 const GLOB_META: &[char] = &['*', '?', '[', ']', '{', '}'];
 
@@ -216,6 +217,150 @@ fn known_run_targets(config: &ProjectConfig) -> BTreeSet<String> {
     targets
 }
 
+/// The literal path prefix of a regex, taken up to the first regex
+/// metacharacter (after an optional leading `^`). Mirrors `literal_prefix` but
+/// for the regexes used in GritQL `$filename` predicates.
+///
+/// `frontend/e2e/.*\.ts$` -> `frontend/e2e`
+/// `.*/gen/.*`            -> `None` (leading metachar, no anchor)
+fn regex_literal_prefix(regex: &str) -> Option<PathBuf> {
+    const REGEX_META: &[char] = &[
+        '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|', '\\', '^', '$',
+    ];
+    let regex = regex.strip_prefix('^').unwrap_or(regex);
+    let mut prefix = PathBuf::new();
+    for component in regex.split('/') {
+        if component.is_empty() {
+            continue;
+        }
+        if component.contains(REGEX_META) {
+            break;
+        }
+        prefix.push(component);
+    }
+    if prefix.as_os_str().is_empty() {
+        None
+    } else {
+        Some(prefix)
+    }
+}
+
+/// Literal prefixes of every *positive* `$filename <: r"..."` predicate in a
+/// GritQL block (negative `!$filename` exclusions are skipped). Best-effort text
+/// scan — it does not parse GritQL, so it only recognizes the common
+/// `$filename <: r"..."` shape.
+fn positive_filename_prefixes(grit: &str) -> Vec<PathBuf> {
+    let mut prefixes = Vec::new();
+    let mut search = 0;
+    while let Some(rel) = grit[search..].find("$filename") {
+        let idx = search + rel;
+        search = idx + "$filename".len();
+        // A leading `!` (after optional whitespace) marks an exclusion.
+        if grit[..idx].trim_end().ends_with('!') {
+            continue;
+        }
+        let rest = grit[search..].trim_start();
+        let Some(rest) = rest.strip_prefix("<:") else {
+            continue;
+        };
+        let Some(rest) = rest.trim_start().strip_prefix("r\"") else {
+            continue;
+        };
+        let Some(end) = rest.find('"') else {
+            continue;
+        };
+        if let Some(prefix) = regex_literal_prefix(&rest[..end]) {
+            prefixes.push(prefix);
+        }
+    }
+    prefixes
+}
+
+/// Literal prefixes of the file-set paths a rule's `runs_on` resolves to.
+/// Returns `None` when the scope is unbounded or undeterminable — `runs_on`
+/// includes `default` (which spans the whole repo), or no target resolves to a
+/// file set — in which case the rule cannot be proven dead.
+fn runs_on_literal_prefixes(config: &ProjectConfig, runs_on: &[String]) -> Option<Vec<PathBuf>> {
+    if runs_on.iter().any(|target| target == "default") {
+        return None;
+    }
+    let mut prefixes = Vec::new();
+    for target in runs_on {
+        if let Some(section) = config.file_sets.get(target) {
+            prefixes.extend(section.paths.iter().filter_map(|p| literal_prefix(p)));
+        } else {
+            for section in config.file_sets.values() {
+                if section.provides.iter().any(|concept| concept == target) {
+                    prefixes.extend(section.paths.iter().filter_map(|p| literal_prefix(p)));
+                }
+            }
+        }
+    }
+    (!prefixes.is_empty()).then_some(prefixes)
+}
+
+/// Flag rules whose `runs_on` region and GritQL `$filename` scope are provably
+/// disjoint, so the rule matches nothing. `runs_on` selects files at the scan
+/// stage; `$filename` filters them inside GritQL — if every positive `$filename`
+/// prefix lies outside every `runs_on` file-set prefix, the two never intersect.
+///
+/// Conservative by construction (only fires on provable disjointness via literal
+/// prefixes): it can miss subtle regex/glob contradictions but should not flag a
+/// rule that can actually match. Anchored at the rule file; `warn` by default.
+pub fn check_runs_on_filename(
+    config: &ProjectConfig,
+    rules: &[&RuleDefinition],
+) -> Vec<Diagnostic> {
+    let level = config
+        .overrides
+        .get(RUNS_ON_FILENAME_DISJOINT_RULE)
+        .copied()
+        .unwrap_or(Severity::Warn);
+    let mut diagnostics = Vec::new();
+    for rule in rules {
+        if rule.runs_on.is_empty() {
+            continue;
+        }
+        let Some(run_prefixes) = runs_on_literal_prefixes(config, &rule.runs_on) else {
+            continue;
+        };
+        let RuleBody::Grit(grit) = &rule.body;
+        let file_prefixes = positive_filename_prefixes(grit);
+        if file_prefixes.is_empty() {
+            continue;
+        }
+        let disjoint = file_prefixes.iter().all(|file_prefix| {
+            run_prefixes.iter().all(|run_prefix| {
+                !file_prefix.starts_with(run_prefix) && !run_prefix.starts_with(file_prefix)
+            })
+        });
+        if disjoint {
+            let scopes = file_prefixes
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            diagnostics.push(Diagnostic {
+                rule_id: RUNS_ON_FILENAME_DISJOINT_RULE.to_string(),
+                level,
+                message: format!(
+                    "rule `{}` runs_on {:?} but its GritQL `$filename` only matches `{scopes}`, \
+                     outside those regions — the rule scans nothing; drop the redundant `$filename` \
+                     or align it with the file set",
+                    rule.id, rule.runs_on
+                ),
+                path: rule.source_path.clone(),
+                start_line: 1,
+                start_column: 1,
+                end_line: None,
+                end_column: None,
+                fix_available: false,
+            });
+        }
+    }
+    diagnostics
+}
+
 /// Flag `[disabled]` and `[overrides]` entries that reference a rule id no
 /// loaded pack or local rule provides. After a pack update drops or renames a
 /// rule, such an entry stays in harness.toml but becomes silently inert: a
@@ -337,6 +482,98 @@ mod tests {
                 && d.message.contains("dist/**")
                 && d.level == Severity::Error
         }));
+    }
+
+    fn rule_with_grit(id: &str, runs_on: Vec<&str>, grit: &str) -> RuleDefinition {
+        RuleDefinition {
+            id: id.to_string(),
+            title: id.to_string(),
+            language: Some("typescript".to_string()),
+            level: Severity::Warn,
+            skill: None,
+            tags: vec![],
+            runs_on: runs_on.into_iter().map(str::to_string).collect(),
+            description: String::new(),
+            body: RuleBody::Grit(grit.to_string()),
+            examples: vec![],
+            source_path: PathBuf::from("rules/x.md"),
+            pack_id: None,
+        }
+    }
+
+    fn config_with_e2e() -> ProjectConfig {
+        let mut config = ProjectConfig::default();
+        config.file_sets.insert(
+            "e2e".to_string(),
+            FileSetSection {
+                paths: vec!["frontend/e2e/**".to_string()],
+                default_rules: true,
+                provides: vec![],
+            },
+        );
+        config
+    }
+
+    #[test]
+    fn regex_literal_prefix_stops_at_metachar() {
+        assert_eq!(
+            regex_literal_prefix(r"frontend/e2e/.*\.ts$"),
+            Some(PathBuf::from("frontend/e2e"))
+        );
+        assert_eq!(
+            regex_literal_prefix(r"^backend/internal/modules/(a|b)/x\.go$"),
+            Some(PathBuf::from("backend/internal/modules"))
+        );
+        assert_eq!(regex_literal_prefix(r".*/gen/.*"), None);
+    }
+
+    #[test]
+    fn extracts_only_positive_filename_prefixes() {
+        let grit = "`x` where {\n  $filename <: r\"frontend/e2e/.*\\.ts$\",\n  !$filename <: r\"frontend/e2e/skip\\.ts$\"\n}";
+        let prefixes = positive_filename_prefixes(grit);
+        assert_eq!(prefixes, vec![PathBuf::from("frontend/e2e")]);
+    }
+
+    #[test]
+    fn flags_runs_on_filename_disjoint() {
+        let config = config_with_e2e();
+        // runs_on e2e, but $filename points at backend -> disjoint -> dead rule.
+        let dead = rule_with_grit(
+            "local.dead",
+            vec!["e2e"],
+            "`$p.waitForTimeout($d)` where { $filename <: r\"backend/.*\\.go$\" }",
+        );
+        let diagnostics = check_runs_on_filename(&config, &[&dead]);
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].rule_id, RUNS_ON_FILENAME_DISJOINT_RULE);
+        assert_eq!(diagnostics[0].path, PathBuf::from("rules/x.md"));
+    }
+
+    #[test]
+    fn allows_overlapping_or_narrowing_filename() {
+        let config = config_with_e2e();
+        // Redundant but consistent ($filename within the e2e region): not flagged.
+        let redundant = rule_with_grit(
+            "local.redundant",
+            vec!["e2e"],
+            "`$p.waitForTimeout($d)` where { $filename <: r\"frontend/e2e/.*\\.ts$\" }",
+        );
+        // Negative-only exclusion within the region: not flagged.
+        let exclude = rule_with_grit(
+            "local.exclude",
+            vec!["e2e"],
+            "`$p.waitForTimeout($d)` where { !$filename <: r\"backend/.*\" }",
+        );
+        // No $filename at all: not flagged.
+        let plain = rule_with_grit("local.plain", vec!["e2e"], "`$p.waitForTimeout($d)`");
+        // runs_on includes default (unbounded): never dead.
+        let with_default = rule_with_grit(
+            "local.default",
+            vec!["default", "e2e"],
+            "`$p.waitForTimeout($d)` where { $filename <: r\"backend/.*\" }",
+        );
+        let rules = vec![&redundant, &exclude, &plain, &with_default];
+        assert!(check_runs_on_filename(&config, &rules).is_empty());
     }
 
     #[test]

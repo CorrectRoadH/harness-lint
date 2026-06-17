@@ -56,7 +56,9 @@ cp plugins/codex/hooks/*.sh .codex/hooks/
 chmod +x .codex/hooks/*.sh
 ```
 
-See [`plugins/README.md`](plugins/README.md) for details and `~/.codex` global setup.
+Both also ship a `/harness-lint-capture` command that reviews a session's
+feedback and turns reusable corrections into rules (the other half of LDD). See
+[`plugins/README.md`](plugins/README.md) for details and `~/.codex` global setup.
 
 ## Common Commands
 

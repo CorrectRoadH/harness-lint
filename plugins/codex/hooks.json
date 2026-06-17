@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .codex/hooks/session-start.sh",
+            "statusMessage": "Loading harness-lint guidance..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .codex/hooks/check-changed.sh",
+            "statusMessage": "Checking harness-lint..."
+          }
+        ]
+      }
+    ]
+  }
+}

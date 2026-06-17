@@ -1,0 +1,14 @@
+{
+  "name": "harness-lint",
+  "owner": {
+    "name": "CorrectRoadH",
+    "url": "https://github.com/CorrectRoadH"
+  },
+  "plugins": [
+    {
+      "name": "harness-lint",
+      "source": "./plugins/claude-code",
+      "description": "Inject harness-lint Lint Driven Development guidance and live diagnostics into the agent each session and prompt, instead of relying on AGENTS.md."
+    }
+  ]
+}

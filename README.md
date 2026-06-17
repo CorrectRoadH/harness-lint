@@ -32,6 +32,32 @@ npx skills add CorrectRoadH/harness-lint
 READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/INIT.md and install harness lint for this code repo
 ```
 
+## Agent Plugins (Claude Code & Codex)
+
+A static block in `AGENTS.md` is read once, far from the moment the agent acts.
+The plugins in [`plugins/`](plugins/) instead use lifecycle hooks to re-inject the
+Lint Driven Development guidance every session, and — more usefully — run
+`harness-lint check --changed` on each prompt and feed the **actual current
+violations** to the agent right before it writes more code.
+
+Claude Code:
+
+```text
+/plugin marketplace add CorrectRoadH/harness-lint
+/plugin install harness-lint@harness-lint
+```
+
+Codex (project-local hooks in `.codex/`):
+
+```sh
+mkdir -p .codex/hooks
+cp plugins/codex/hooks.json .codex/hooks.json
+cp plugins/codex/hooks/*.sh .codex/hooks/
+chmod +x .codex/hooks/*.sh
+```
+
+See [`plugins/README.md`](plugins/README.md) for details and `~/.codex` global setup.
+
 ## Common Commands
 
 ```sh

@@ -3,6 +3,7 @@ pub mod cache;
 pub mod cli;
 pub mod compiler;
 pub mod config;
+pub mod config_health;
 pub mod error;
 pub mod exceptions;
 pub mod git;

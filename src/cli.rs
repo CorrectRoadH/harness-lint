@@ -11,6 +11,7 @@ use crate::authoring;
 use crate::cache;
 use crate::compiler;
 use crate::config::{self, ProjectConfig};
+use crate::config_health;
 use crate::exceptions;
 use crate::git;
 use crate::grit;
@@ -208,6 +209,15 @@ fn run_check(
     let root = config::find_project_root(cwd)?;
     let config = config::load_config(&root, config_path)?;
     exceptions::validate_exceptions(&config.exceptions)?;
+
+    // Repository-level integrity checks for harness-lint's own configuration.
+    // These run independently of GritQL (even when no source paths are
+    // selected) and honour the same `--rule`/`--tag` filtering.
+    let config_diagnostics: Vec<_> = config_health::check_config_paths(&root, &config)
+        .into_iter()
+        .filter(|diagnostic| config_check_selected(&command, &diagnostic.rule_id))
+        .collect();
+
     let packs = load_rule_packs(&root, &config)?;
     let active_rules = collect_effective_rules(&packs, &config, &command);
     let selected_paths = select_paths(&root, &config, &command, &active_rules)?;
@@ -218,11 +228,7 @@ fn run_check(
             selected_paths.grit.len()
         );
     }
-    if selected_paths.grit.is_empty() {
-        report::report_diagnostics(&[], format, DiagnosticReportOptions { root: &root })?;
-        return Ok(());
-    }
-    let diagnostics = if active_rules.is_empty() || selected_paths.grit.is_empty() {
+    let grit_diagnostics = if active_rules.is_empty() || selected_paths.grit.is_empty() {
         Vec::new()
     } else {
         let _lock = acquire_grit_run_lock(&root)?;
@@ -236,7 +242,7 @@ fn run_check(
         )?
     };
     let exception_outcome =
-        exceptions::apply_diagnostic_exceptions(diagnostics, &config.exceptions)?;
+        exceptions::apply_diagnostic_exceptions(grit_diagnostics, &config.exceptions)?;
     if verbose && exception_outcome.hidden_count > 0 {
         eprintln!(
             "harness-lint: hid {} result(s) by rule exception configuration",
@@ -244,6 +250,7 @@ fn run_check(
         );
     }
     let mut diagnostics = exception_outcome.diagnostics;
+    diagnostics.extend(config_diagnostics);
     diagnostics.sort_by(|left, right| {
         left.path
             .cmp(&right.path)
@@ -263,6 +270,16 @@ fn run_check(
         bail!("harness-lint found error-level diagnostics");
     }
     Ok(())
+}
+
+/// Whether a synthetic configuration diagnostic survives the active
+/// `--rule`/`--tag` selection. Config checks carry no tags, so any `--tag`
+/// filter excludes them; a `--rule` filter keeps only matching rule ids.
+fn config_check_selected(command: &CheckCommand, rule_id: &str) -> bool {
+    if !command.tag.is_empty() {
+        return false;
+    }
+    command.rule.is_empty() || command.rule.iter().any(|rule| rule == rule_id)
 }
 
 fn run_grit_checks(
@@ -436,6 +453,18 @@ fn run_doctor(
         )),
         Ok(()) => {}
         Err(error) => findings.push(doctor_error("exceptions", error.to_string())),
+    }
+
+    let stale_paths = config_health::check_config_paths(&root, &config);
+    if stale_paths.is_empty() {
+        findings.push(doctor_ok(
+            "config-paths",
+            "all exception and ignore paths exist".to_string(),
+        ));
+    } else {
+        for diagnostic in stale_paths {
+            findings.push(doctor_warn("config-paths", diagnostic.message));
+        }
     }
 
     if config.rules.local.is_empty() {

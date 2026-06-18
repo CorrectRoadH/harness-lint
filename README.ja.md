@@ -30,6 +30,28 @@ npx skills add CorrectRoadH/harness-lint
 READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/INIT.md and install harness lint for this code repo
 ```
 
+## Agent プラグイン（Claude Code と Codex）
+
+`AGENTS.md` に書いた静的な指示は一度しか読まれず、agent が実際に手を動かす瞬間からは遠い場所にあります。[`plugins/`](plugins/) のプラグインは代わりにライフサイクルフックを使い、セッションごとに Lint Driven Development のガイダンスを再注入し、プロンプトのたびに `harness-lint check --changed` を実行して**実際の現在の違反**を agent に渡し、次の行を書く前に修正させます。
+
+Claude Code:
+
+```text
+/plugin marketplace add CorrectRoadH/harness-lint
+/plugin install harness-lint@harness-lint
+```
+
+Codex（プロジェクトローカルのフックを `.codex/` に配置）:
+
+```sh
+mkdir -p .codex/hooks
+cp plugins/codex/hooks.json .codex/hooks.json
+cp plugins/codex/hooks/*.sh .codex/hooks/
+chmod +x .codex/hooks/*.sh
+```
+
+どちらも `/harness-lint-capture` コマンドを同梱しています。セッション中のフィードバックを見直し、再利用できる指摘をルールに落とし込みます（LDD のもう半分）。詳細は [`plugins/README.md`](plugins/README.md) と `~/.codex` のグローバル設定を参照してください。
+
 ## よく使うコマンド
 
 ```sh

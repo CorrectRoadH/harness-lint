@@ -30,6 +30,28 @@ npx skills add CorrectRoadH/harness-lint
 READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/INIT.md and install harness lint for this code repo
 ```
 
+## Agent 플러그인 (Claude Code 및 Codex)
+
+`AGENTS.md`에 적은 정적 지시는 한 번만 읽히고, agent가 실제로 작업하는 순간과는 멀리 떨어져 있습니다. [`plugins/`](plugins/)의 플러그인은 대신 라이프사이클 훅을 사용해 세션마다 Lint Driven Development 지침을 다시 주입하고, 프롬프트마다 `harness-lint check --changed`를 실행해 **현재 실제 위반**을 agent에게 전달함으로써 다음 줄을 작성하기 전에 고치도록 합니다.
+
+Claude Code:
+
+```text
+/plugin marketplace add CorrectRoadH/harness-lint
+/plugin install harness-lint@harness-lint
+```
+
+Codex (프로젝트 로컬 훅을 `.codex/`에 배치):
+
+```sh
+mkdir -p .codex/hooks
+cp plugins/codex/hooks.json .codex/hooks.json
+cp plugins/codex/hooks/*.sh .codex/hooks/
+chmod +x .codex/hooks/*.sh
+```
+
+둘 다 `/harness-lint-capture` 명령을 함께 제공합니다. 세션의 피드백을 검토해 재사용 가능한 지적을 규칙으로 정착시킵니다(LDD의 나머지 절반). 자세한 내용은 [`plugins/README.md`](plugins/README.md)와 `~/.codex` 전역 설정을 참고하세요.
+
 ## 자주 쓰는 명령
 
 ```sh

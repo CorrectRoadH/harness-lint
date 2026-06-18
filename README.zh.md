@@ -30,6 +30,27 @@ npx skills add CorrectRoadH/harness-lint
 READ https://raw.githubusercontent.com/CorrectRoadH/harness-lint/refs/heads/main/INIT.md and install harness lint for this code repo
 ```
 
+## Agent 插件（Claude Code 与 Codex）
+
+写进 `AGENTS.md` 的静态指令只会被读一次，且离 agent 真正动手很远。[`plugins/`](plugins/) 里的插件改用生命周期 hook：每次会话重新注入 Lint Driven Development 指引，并在每轮 prompt 前运行 `harness-lint check --changed`，把**当前实际违规**喂给 agent，让它在写下一行代码前就修复。
+
+Claude Code：
+
+```text
+/plugin marketplace add CorrectRoadH/harness-lint
+/plugin install harness-lint@harness-lint
+```
+
+Codex（项目级 hook，放在 `.codex/`）：
+
+```sh
+mkdir -p .codex/hooks
+cp plugins/codex/hooks.json .codex/hooks.json
+cp plugins/codex/hooks/*.sh .codex/hooks/
+chmod +x .codex/hooks/*.sh
+```
+
+两边都附带 `/harness-lint-capture` 命令：审视一次会话里的反馈，把可复用的纠正沉淀成规则（LDD 的另一半）。详见 [`plugins/README.md`](plugins/README.md) 以及 `~/.codex` 全局配置说明。
 
 ## 常用命令
 

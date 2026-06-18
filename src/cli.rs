@@ -207,6 +207,19 @@ pub fn run() -> Result<ExitCode> {
 
 fn run_whatsnew() {
     println!("harness-lint — what's new\n");
+    println!("0.5.x  Agent plugins (Claude Code & Codex)");
+    println!(
+        "  Inject Lint Driven Development guidance and live `check --changed`\n  \
+         diagnostics through SessionStart/UserPromptSubmit hooks instead of a\n  \
+         static AGENTS.md block, plus a `/harness-lint-capture` command that\n  \
+         turns a session's feedback into rules."
+    );
+    println!(
+        "  Adopt when: agents keep ignoring the harness-lint guidance you put in\n  \
+         AGENTS.md, or you want violations surfaced before the agent writes code."
+    );
+    println!("  Install: see plugins/ — `/plugin install harness-lint@harness-lint`.");
+    println!();
     println!("0.4.x  File sets & runs_on");
     println!(
         "  Scope a rule to a named region, or reach a default-closed region such as\n  \

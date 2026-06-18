@@ -14,6 +14,44 @@ This file lives at a stable URL so tools can point to it:
 
 ---
 
+## 0.5.0 — Agent plugins (Claude Code & Codex)
+
+**What it is.** Plugins in [`plugins/`](plugins/) that deliver harness-lint
+guidance through agent lifecycle hooks instead of a static `AGENTS.md` block:
+
+- **`SessionStart`** injects the Lint Driven Development working guidance plus any
+  diagnostics already present on changed files.
+- **`UserPromptSubmit`** runs `harness-lint check --changed` and injects the
+  current violations before the agent writes more code (silent when clean).
+- A manual **`/harness-lint-capture`** command reviews a session's feedback and
+  turns the reusable, GritQL-expressible corrections into rules.
+
+Both Claude Code and Codex use the same `hooks.json` schema; they differ only in
+install location. The hooks degrade gracefully when the `harness-lint` binary is
+absent.
+
+**Adopt it when:**
+
+- **Agents keep ignoring the harness-lint guidance you wrote into `AGENTS.md`.**
+  A hook re-injects it every session and surfaces live violations at the moment
+  the agent is about to act, which a one-time static block cannot.
+- **You want violations surfaced before code is written,** not only when the
+  human remembers to run `check`.
+
+**Do *not* adopt it for:**
+
+- **A repo where `AGENTS.md` guidance is already being followed.** The hooks add
+  a small amount of context to every prompt; if the static block works for you,
+  the plugin is redundant.
+- **Automatically inventing rules.** `/harness-lint-capture` is deliberately
+  manual — most turns produce nothing rule-worthy, so it is not wired to `Stop`.
+
+**Install.** Claude Code: `/plugin marketplace add CorrectRoadH/harness-lint`
+then `/plugin install harness-lint@harness-lint`. Codex: copy `plugins/codex/`
+into `.codex/`. See [`plugins/README.md`](plugins/README.md).
+
+---
+
 ## 0.4.0 — File sets and `runs_on`
 
 **What it is.** A rule can scope itself to a named region of the repo with

@@ -12,14 +12,6 @@
         font-weight: 300 700;
       }
 
-      :root {
-        --teal: #1fe3b1;
-        --magenta: #f5359b;
-        --orange: #ff7a3d;
-        --cream: #f5ead2;
-        --ink: #0a0d0f;
-      }
-
       * {
         box-sizing: border-box;
       }
@@ -53,6 +45,13 @@
         color: var(--cream);
       }
 
+      :root {
+        --teal: #1fe3b1;
+        --magenta: #f5359b;
+        --orange: #ff7a3d;
+        --cream: #f5ead2;
+      }
+
       .stage::before {
         content: "";
         position: absolute;
@@ -71,8 +70,8 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         align-items: center;
-        padding: 0 56px 0 64px;
-        gap: 16px;
+        padding: 0 52px 0 64px;
+        gap: 12px;
       }
 
       .eyebrow {
@@ -186,143 +185,128 @@
         <div class="art">
           <svg viewBox="0 0 720 520" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
-                <feGaussianBlur stdDeviation="16" />
-              </filter>
               <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
-                <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.45" />
+                <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.5" />
               </filter>
-              <linearGradient id="gateGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#2af0bd" />
-                <stop offset="1" stop-color="#10b48a" />
+              <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+                <feGaussianBlur stdDeviation="22" />
+              </filter>
+              <linearGradient id="shieldGrad" x1="0.15" y1="0" x2="0.6" y2="1">
+                <stop offset="0" stop-color="#3df0c4" />
+                <stop offset="1" stop-color="#0fae84" />
               </linearGradient>
+              <clipPath id="shieldClip">
+                <path d="M332 162 L420 162 Q432 162 432 176 L432 242 Q432 296 376 330 Q320 296 320 242 L320 176 Q320 162 332 162 Z" />
+              </clipPath>
             </defs>
 
-            <!-- ============ INPUT: messy AI output ============ -->
-            <!-- back card (magenta) -->
-            <g transform="rotate(-10 96 150)" filter="url(#soft)">
-              <rect x="34" y="74" width="124" height="152" rx="18" fill="#1a2024" stroke="#f5359b" stroke-width="2.5" />
-              <rect x="34" y="74" width="124" height="40" rx="18" fill="#f5359b" />
-              <rect x="34" y="96" width="124" height="18" fill="#f5359b" />
-              <!-- robot glyph -->
-              <rect x="50" y="84" width="26" height="20" rx="6" fill="#1a2024" />
-              <circle cx="58" cy="94" r="2.6" fill="#fff" />
-              <circle cx="68" cy="94" r="2.6" fill="#fff" />
-              <line x1="63" y1="84" x2="63" y2="78" stroke="#1a2024" stroke-width="2.2" />
-              <circle cx="63" cy="76" r="2.4" fill="#1a2024" />
-              <text x="86" y="99" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="700" fill="#1a2024" letter-spacing="0.5">AGENT</text>
-              <!-- uneven code lines -->
-              <rect x="50" y="130" width="78" height="7" rx="3.5" fill="rgba(245,53,155,0.55)" />
-              <rect x="50" y="146" width="58" height="7" rx="3.5" fill="rgba(245,234,210,0.35)" />
-              <rect x="50" y="162" width="88" height="7" rx="3.5" fill="rgba(245,234,210,0.35)" />
-              <rect x="50" y="178" width="44" height="7" rx="3.5" fill="rgba(245,234,210,0.22)" />
-              <rect x="50" y="194" width="70" height="7" rx="3.5" fill="rgba(245,234,210,0.22)" />
+            <!-- ===================== INPUT: messy AI output ===================== -->
+            <!-- back card: magenta -->
+            <g transform="rotate(-6 121 156)" filter="url(#soft)">
+              <rect x="46" y="72" width="150" height="170" rx="18" fill="#171c20" stroke="#f5359b" stroke-width="2" stroke-opacity="0.55" />
+              <rect x="62" y="90" width="30" height="26" rx="9" fill="#f5359b" />
+              <line x1="77" y1="90" x2="77" y2="83" stroke="#f5359b" stroke-width="2.4" />
+              <circle cx="77" cy="81" r="2.4" fill="#f5359b" />
+              <rect x="67" y="98" width="20" height="10" rx="5" fill="#171c20" />
+              <circle cx="73" cy="103" r="2.1" fill="#ffd9ec" />
+              <circle cx="81" cy="103" r="2.1" fill="#ffd9ec" />
+              <text x="100" y="109" font-family="Space Grotesk, sans-serif" font-size="14" font-weight="600" letter-spacing="1" fill="rgba(245,234,210,0.75)">AGENT</text>
+              <rect x="62" y="132" width="118" height="9" rx="4.5" fill="rgba(245,53,155,0.5)" />
+              <rect x="62" y="150" width="92" height="9" rx="4.5" fill="rgba(245,234,210,0.26)" />
+              <rect x="62" y="168" width="116" height="9" rx="4.5" fill="rgba(245,234,210,0.26)" />
+              <rect x="62" y="186" width="70" height="9" rx="4.5" fill="rgba(245,234,210,0.18)" />
+              <rect x="62" y="204" width="100" height="9" rx="4.5" fill="rgba(245,234,210,0.18)" />
             </g>
 
-            <!-- front card (orange) with error -->
-            <g transform="rotate(-2 150 250)" filter="url(#soft)">
-              <rect x="88" y="174" width="124" height="152" rx="18" fill="#1a2024" stroke="#ff7a3d" stroke-width="2.5" />
-              <rect x="88" y="174" width="124" height="40" rx="18" fill="#ff7a3d" />
-              <rect x="88" y="196" width="124" height="18" fill="#ff7a3d" />
-              <rect x="104" y="184" width="26" height="20" rx="6" fill="#1a2024" />
-              <circle cx="112" cy="194" r="2.6" fill="#fff" />
-              <circle cx="122" cy="194" r="2.6" fill="#fff" />
-              <line x1="117" y1="184" x2="117" y2="178" stroke="#1a2024" stroke-width="2.2" />
-              <circle cx="117" cy="176" r="2.4" fill="#1a2024" />
-              <text x="140" y="199" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="700" fill="#1a2024" letter-spacing="0.5">AGENT</text>
-              <rect x="104" y="230" width="84" height="7" rx="3.5" fill="rgba(255,122,61,0.6)" />
-              <rect x="104" y="246" width="62" height="7" rx="3.5" fill="rgba(245,234,210,0.35)" />
-              <rect x="104" y="262" width="74" height="7" rx="3.5" fill="rgba(245,234,210,0.35)" />
-              <rect x="104" y="278" width="50" height="7" rx="3.5" fill="rgba(245,234,210,0.22)" />
-              <rect x="104" y="294" width="80" height="7" rx="3.5" fill="rgba(245,234,210,0.22)" />
-            </g>
-            <!-- error badge -->
-            <g transform="translate(206 178)">
-              <circle r="15" fill="#ff4d57" stroke="#1a2024" stroke-width="3" />
-              <line x1="-5" y1="-5" x2="5" y2="5" stroke="#fff" stroke-width="3" stroke-linecap="round" />
-              <line x1="5" y1="-5" x2="-5" y2="5" stroke="#fff" stroke-width="3" stroke-linecap="round" />
+            <!-- front card: orange + error -->
+            <g transform="rotate(3 193 234)" filter="url(#soft)">
+              <rect x="118" y="150" width="150" height="170" rx="18" fill="#171c20" stroke="#ff7a3d" stroke-width="2" stroke-opacity="0.6" />
+              <rect x="134" y="168" width="30" height="26" rx="9" fill="#ff7a3d" />
+              <line x1="149" y1="168" x2="149" y2="161" stroke="#ff7a3d" stroke-width="2.4" />
+              <circle cx="149" cy="159" r="2.4" fill="#ff7a3d" />
+              <rect x="139" y="176" width="20" height="10" rx="5" fill="#171c20" />
+              <circle cx="145" cy="181" r="2.1" fill="#ffe3d2" />
+              <circle cx="153" cy="181" r="2.1" fill="#ffe3d2" />
+              <text x="172" y="187" font-family="Space Grotesk, sans-serif" font-size="14" font-weight="600" letter-spacing="1" fill="rgba(245,234,210,0.78)">AGENT</text>
+              <rect x="134" y="210" width="118" height="9" rx="4.5" fill="rgba(255,122,61,0.55)" />
+              <rect x="134" y="228" width="96" height="9" rx="4.5" fill="rgba(255,77,87,0.7)" />
+              <rect x="134" y="246" width="112" height="9" rx="4.5" fill="rgba(245,234,210,0.26)" />
+              <rect x="134" y="264" width="74" height="9" rx="4.5" fill="rgba(245,234,210,0.18)" />
+              <rect x="134" y="282" width="100" height="9" rx="4.5" fill="rgba(245,234,210,0.18)" />
+              <g transform="translate(258 156)">
+                <circle r="15" fill="#ff4d57" stroke="#171c20" stroke-width="3" />
+                <line x1="-5" y1="-5" x2="5" y2="5" stroke="#fff" stroke-width="3" stroke-linecap="round" />
+                <line x1="5" y1="-5" x2="-5" y2="5" stroke="#fff" stroke-width="3" stroke-linecap="round" />
+              </g>
             </g>
 
             <!-- arrow 1 -->
-            <g stroke="#f5ead2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.85">
-              <line x1="246" y1="252" x2="288" y2="252" />
-              <polyline points="278,242 290,252 278,262" fill="none" />
+            <g stroke="#f5ead2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.8">
+              <line x1="284" y1="240" x2="312" y2="240" />
+              <polyline points="301,230 314,240 301,250" fill="none" />
             </g>
 
-            <!-- ============ LINT GATE ============ -->
-            <ellipse cx="362" cy="408" rx="78" ry="16" fill="#1fe3b1" opacity="0.18" filter="url(#glow)" />
+            <!-- ===================== LINT shield ===================== -->
+            <ellipse cx="376" cy="356" rx="72" ry="14" fill="#1fe3b1" opacity="0.22" filter="url(#glow)" />
+            <ellipse cx="376" cy="344" rx="46" ry="9" fill="#000" opacity="0.32" />
             <g filter="url(#soft)">
-              <rect x="306" y="150" width="112" height="210" rx="24" fill="url(#gateGrad)" />
-              <rect x="306" y="150" width="112" height="210" rx="24" fill="none" stroke="#0a0d0f" stroke-width="2" opacity="0.25" />
-              <text x="362" y="206" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="30" font-weight="700" fill="#06241c" letter-spacing="2">LINT</text>
-              <!-- shield check -->
-              <path d="M362 232 l34 13 v34 c0 26 -18 41 -34 49 c-16 -8 -34 -23 -34 -49 v-34 z" fill="#06281f" />
-              <polyline points="347,288 358,300 379,275" fill="none" stroke="#2af0bd" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M332 162 L420 162 Q432 162 432 176 L432 242 Q432 296 376 330 Q320 296 320 242 L320 176 Q320 162 332 162 Z" fill="url(#shieldGrad)" />
+              <g clip-path="url(#shieldClip)">
+                <ellipse cx="350" cy="186" rx="46" ry="26" fill="#ffffff" opacity="0.16" />
+              </g>
+              <path d="M332 162 L420 162 Q432 162 432 176 L432 242 Q432 296 376 330 Q320 296 320 242 L320 176 Q320 162 332 162 Z" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.25" />
+              <text x="376" y="212" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="28" font-weight="700" letter-spacing="3" fill="#06302a">LINT</text>
+              <polyline points="356,272 371,288 402,250" fill="none" stroke="#06302a" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" />
             </g>
-            <!-- gate stand -->
-            <rect x="346" y="360" width="32" height="22" fill="#0f7a5c" />
-            <rect x="320" y="380" width="84" height="12" rx="6" fill="#0c6249" />
 
             <!-- arrow 2 -->
-            <g stroke="#f5ead2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.85">
-              <line x1="436" y1="252" x2="478" y2="252" />
-              <polyline points="468,242 480,252 468,262" fill="none" />
+            <g stroke="#f5ead2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.8">
+              <line x1="452" y1="240" x2="484" y2="240" />
+              <polyline points="473,230 486,240 473,250" fill="none" />
             </g>
 
-            <!-- ============ OUTPUT: clean, passing ============ -->
-            <!-- card stands -->
-            <ellipse cx="533" cy="356" rx="34" ry="8" fill="#000" opacity="0.35" />
-            <ellipse cx="611" cy="356" rx="34" ry="8" fill="#000" opacity="0.35" />
-            <ellipse cx="689" cy="356" rx="34" ry="8" fill="#000" opacity="0.35" />
-
-            <!-- output card: teal -->
+            <!-- ===================== OUTPUT: clean, passing ===================== -->
+            <!-- teal -->
             <g filter="url(#soft)">
-              <rect x="503" y="196" width="60" height="150" rx="14" fill="#13241f" stroke="#1fe3b1" stroke-width="2.5" />
-              <text x="533" y="226" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="17" font-weight="700" fill="#1fe3b1">&lt;/&gt;</text>
-              <rect x="516" y="244" width="34" height="6" rx="3" fill="rgba(31,227,177,0.5)" />
-              <rect x="516" y="258" width="26" height="6" rx="3" fill="rgba(245,234,210,0.32)" />
-              <rect x="516" y="272" width="32" height="6" rx="3" fill="rgba(245,234,210,0.32)" />
-              <rect x="516" y="286" width="22" height="6" rx="3" fill="rgba(245,234,210,0.32)" />
+              <rect x="500" y="206" width="56" height="140" rx="16" fill="#171c20" stroke="#1fe3b1" stroke-width="2" stroke-opacity="0.55" />
+              <text x="528" y="236" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="16" font-weight="700" fill="#1fe3b1">&lt;/&gt;</text>
+              <rect x="512" y="254" width="32" height="7" rx="3.5" fill="rgba(31,227,177,0.5)" />
+              <rect x="512" y="270" width="24" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
+              <rect x="512" y="286" width="30" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
             </g>
-            <!-- output card: orange -->
+            <!-- orange -->
             <g filter="url(#soft)">
-              <rect x="581" y="196" width="60" height="150" rx="14" fill="#241a14" stroke="#ff7a3d" stroke-width="2.5" />
-              <text x="611" y="226" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="17" font-weight="700" fill="#ff7a3d">&lt;/&gt;</text>
-              <rect x="594" y="244" width="34" height="6" rx="3" fill="rgba(255,122,61,0.5)" />
-              <rect x="594" y="258" width="26" height="6" rx="3" fill="rgba(245,234,210,0.32)" />
-              <rect x="594" y="272" width="32" height="6" rx="3" fill="rgba(245,234,210,0.32)" />
-              <rect x="594" y="286" width="22" height="6" rx="3" fill="rgba(245,234,210,0.32)" />
+              <rect x="576" y="206" width="56" height="140" rx="16" fill="#171c20" stroke="#ff7a3d" stroke-width="2" stroke-opacity="0.55" />
+              <text x="604" y="236" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="16" font-weight="700" fill="#ff7a3d">&lt;/&gt;</text>
+              <rect x="588" y="254" width="32" height="7" rx="3.5" fill="rgba(255,122,61,0.5)" />
+              <rect x="588" y="270" width="24" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
+              <rect x="588" y="286" width="30" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
             </g>
-            <!-- output card: magenta -->
+            <!-- magenta -->
             <g filter="url(#soft)">
-              <rect x="659" y="196" width="60" height="150" rx="14" fill="#241420" stroke="#f5359b" stroke-width="2.5" />
-              <text x="689" y="226" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="17" font-weight="700" fill="#f5359b">&lt;/&gt;</text>
-              <rect x="672" y="244" width="34" height="6" rx="3" fill="rgba(245,53,155,0.5)" />
-              <rect x="672" y="258" width="26" height="6" rx="3" fill="rgba(245,234,210,0.32)" />
-              <rect x="672" y="272" width="32" height="6" rx="3" fill="rgba(245,234,210,0.32)" />
-              <rect x="672" y="286" width="22" height="6" rx="3" fill="rgba(245,234,210,0.32)" />
+              <rect x="652" y="206" width="56" height="140" rx="16" fill="#171c20" stroke="#f5359b" stroke-width="2" stroke-opacity="0.55" />
+              <text x="680" y="236" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="16" font-weight="700" fill="#f5359b">&lt;/&gt;</text>
+              <rect x="664" y="254" width="32" height="7" rx="3.5" fill="rgba(245,53,155,0.5)" />
+              <rect x="664" y="270" width="24" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
+              <rect x="664" y="286" width="30" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
             </g>
             <!-- pass checks -->
-            <g transform="translate(556 330)">
-              <circle r="13" fill="#1fe3b1" stroke="#0a0d0f" stroke-width="3" />
-              <polyline points="-5,0 -1,5 6,-5" fill="none" stroke="#06281f" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+            <g transform="translate(548 338)">
+              <circle r="12" fill="#1fe3b1" stroke="#0a0d0f" stroke-width="3" />
+              <polyline points="-4.5,0 -1,4 5,-5" fill="none" stroke="#06302a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
             </g>
-            <g transform="translate(634 330)">
-              <circle r="13" fill="#1fe3b1" stroke="#0a0d0f" stroke-width="3" />
-              <polyline points="-5,0 -1,5 6,-5" fill="none" stroke="#06281f" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+            <g transform="translate(624 338)">
+              <circle r="12" fill="#1fe3b1" stroke="#0a0d0f" stroke-width="3" />
+              <polyline points="-4.5,0 -1,4 5,-5" fill="none" stroke="#06302a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
             </g>
-            <g transform="translate(712 330)">
-              <circle r="13" fill="#1fe3b1" stroke="#0a0d0f" stroke-width="3" />
-              <polyline points="-5,0 -1,5 6,-5" fill="none" stroke="#06281f" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+            <g transform="translate(700 338)">
+              <circle r="12" fill="#1fe3b1" stroke="#0a0d0f" stroke-width="3" />
+              <polyline points="-4.5,0 -1,4 5,-5" fill="none" stroke="#06302a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
             </g>
 
-            <!-- ============ floating accents ============ -->
-            <g opacity="0.9">
-              <path d="M250 120 l5 12 12 5 -12 5 -5 12 -5 -12 -12 -5 12 -5 z" fill="#ffd23f" />
-              <path d="M470 150 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4 z" fill="#f5ead2" opacity="0.8" />
-              <rect x="156" y="40" width="16" height="16" rx="3" fill="#f5359b" transform="rotate(20 164 48)" />
-              <rect x="630" y="430" width="14" height="14" rx="3" fill="#1fe3b1" transform="rotate(-15 637 437)" />
-            </g>
+            <!-- ===================== accents ===================== -->
+            <path d="M298 150 l5 12 12 5 -12 5 -5 12 -5 -12 -12 -5 12 -5 z" fill="#ffd23f" opacity="0.9" />
+            <path d="M462 176 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4 z" fill="#f5ead2" opacity="0.7" />
           </svg>
         </div>
       </div>

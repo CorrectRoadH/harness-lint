@@ -16,6 +16,55 @@ AI 编码代理（Codex、Claude、Cursor 等）会遵循 `AGENTS.md` 和 `CLAUD
 
 你得到的是 LDD 飞轮：反馈 → 规则 → 执行 → 干净代码，无需人类反复解释同一条约束。
 
+把 harness-lint 接入代理有两种互补的方式，最可靠的配置会两者并用：
+
+- **代理插件（推荐）** —— 通过生命周期 hook 重新注入指导，并在代理写代码前喂给它**实时**的 `check --changed` 诊断。请从这里开始。
+- **Skill + `AGENTS.md` 片段** —— 教会代理规则格式和 LDD 工作流的静态说明。它是插件的补充，也是 hook 不可用时的回退方案。
+
+## 安装代理插件（推荐）
+
+`AGENTS.md` 里的代码块只会被读取一次，离代理真正动作的时刻很远，还容易被其余上下文淹没。[`plugins/`](https://github.com/CorrectRoadH/harness-lint/tree/main/plugins) 中的代理插件改用生命周期 hook，在每次会话、每次 prompt 时把指导重新注入到上下文顶部——更重要的是，它们会运行 `harness-lint check --changed`，并在代理写下一行代码前把**实际存在的违规**喂给它。代理面对的是具体诊断，而不是一句泛泛的提醒。
+
+Claude Code 和 Codex 插件都注册同样的两个 hook：
+
+- **`SessionStart`** —— 注入 LDD 工作指导，以及已变更文件上已经存在的诊断。
+- **`UserPromptSubmit`** —— 运行 `harness-lint check --changed`；有诊断时注入它们，让代理按 LDD 修复。工作树干净时保持沉默，避免上下文噪音。
+
+两者都会优雅降级：如果 `PATH` 上没有 `harness-lint` 二进制，hook 会无错退出（`SessionStart` 会打印一行安装提示）。
+
+<Tabs>
+  <Tab title="Claude Code">
+    从本仓库的插件市场安装：
+
+    ```text
+    /plugin marketplace add CorrectRoadH/harness-lint
+    /plugin install harness-lint@harness-lint
+    ```
+  </Tab>
+  <Tab title="Codex">
+    Codex 有自己的插件市场：
+
+    ```text
+    codex plugin marketplace add CorrectRoadH/harness-lint
+    codex plugin install harness-lint
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+这些 hook 需要 POSIX `sh` 和 `PATH` 上的 `harness-lint` 二进制。目前尚不支持 Windows。
+</Note>
+
+### 把反馈捕获成规则
+
+hook 覆盖了 LDD 中“捕获并修复”的一半。另一半——把一次纠正变成持久规则——是一个手动命令，当会话确实产生了可复用反馈时再运行：
+
+```text
+/harness-lint-capture
+```
+
+它会让代理回顾本次会话的反馈，只保留能表达成可靠 GritQL 模式的部分，并运行规则编写工作流（`rule create` → 填示例 → `doctor` → `rule verify` → `check`）。它刻意保持手动：多数对话没有值得成规则的内容，每次结束都强制捕获只会浪费上下文。
+
 ## 安装 Codex skill
 
 Codex skill 会教代理 harness-lint 的规则格式、CLI 命令和完整 LDD 工作流。每个开发环境安装一次：

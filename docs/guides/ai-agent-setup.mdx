@@ -16,6 +16,55 @@ When harness-lint is properly configured for AI agents, every coding session ben
 
 You get the LDD flywheel: feedback → rule → enforcement → clean code, with no human needed to re-explain the same constraint.
 
+There are two complementary ways to wire harness-lint into an agent, and the most reliable setups use both:
+
+- **Agent plugins (recommended)** — lifecycle hooks that re-inject guidance and feed the agent *live* `check --changed` diagnostics right before it writes code. Start here.
+- **Skill + `AGENTS.md` snippet** — static instructions that teach rule format and the LDD workflow. They complement the plugins and act as a fallback where hooks aren't available.
+
+## Install the agent plugins (recommended)
+
+A block in `AGENTS.md` is read once, far from the moment the agent acts, and is easily buried under the rest of the context. The agent plugins in [`plugins/`](https://github.com/CorrectRoadH/harness-lint/tree/main/plugins) instead use lifecycle hooks to re-inject the guidance at the top of context every session and every prompt — and, more importantly, they run `harness-lint check --changed` and feed the **actual current violations** to the agent right before it writes the next line of code. The agent reacts to concrete diagnostics, not a general reminder.
+
+Both the Claude Code and Codex plugins register the same two hooks:
+
+- **`SessionStart`** — injects the LDD working guidance and any diagnostics already present on changed files.
+- **`UserPromptSubmit`** — runs `harness-lint check --changed`; when there are diagnostics it injects them so the agent fixes them per LDD. It stays silent when the tree is clean to avoid context noise.
+
+Both degrade gracefully: if the `harness-lint` binary is not on `PATH`, the hooks exit without error (`SessionStart` prints a one-line install nudge).
+
+<Tabs>
+  <Tab title="Claude Code">
+    Install from this repo's plugin marketplace:
+
+    ```text
+    /plugin marketplace add CorrectRoadH/harness-lint
+    /plugin install harness-lint@harness-lint
+    ```
+  </Tab>
+  <Tab title="Codex">
+    Codex has its own plugin marketplace:
+
+    ```text
+    codex plugin marketplace add CorrectRoadH/harness-lint
+    codex plugin install harness-lint
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+The hooks require a POSIX `sh` and the `harness-lint` binary on `PATH`. Windows is not covered yet.
+</Note>
+
+### Capture feedback into rules
+
+The hooks cover the "catch and fix" half of LDD. The other half — turning a correction into a durable rule — is a manual command you run when a session actually produced reusable feedback:
+
+```text
+/harness-lint-capture
+```
+
+It tells the agent to review the session's feedback, keep only what can be a reliable GritQL pattern, and run the rule-authoring workflow (`rule create` → fill examples → `doctor` → `rule verify` → `check`). It is deliberately manual: most turns have nothing rule-worthy, so forcing a capture on every stop would just burn context.
+
 ## Install the Codex skill
 
 The Codex skill teaches the agent harness-lint's rule format, CLI commands, and the full LDD workflow. Install it once per development environment:

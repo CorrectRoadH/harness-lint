@@ -55,7 +55,7 @@ Codex:
 
 ```text
 codex plugin marketplace add CorrectRoadH/harness-lint
-codex plugin install harness-lint
+codex plugin add harness-lint@harness-lint
 ```
 
 Both also ship a `/harness-lint-capture` command that reviews a session's

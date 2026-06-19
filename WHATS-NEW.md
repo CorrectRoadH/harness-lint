@@ -48,7 +48,7 @@ degrade gracefully when the `harness-lint` binary is absent.
 
 **Install.** Claude Code: `/plugin marketplace add CorrectRoadH/harness-lint`
 then `/plugin install harness-lint@harness-lint`. Codex: `codex plugin marketplace
-add CorrectRoadH/harness-lint` then `codex plugin install harness-lint`. See
+add CorrectRoadH/harness-lint` then `codex plugin add harness-lint@harness-lint`. See
 [`plugins/README.md`](plugins/README.md).
 
 ---

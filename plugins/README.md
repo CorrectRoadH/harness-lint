@@ -60,7 +60,7 @@ Codex has its own plugin marketplace. Add this repo and install:
 
 ```text
 codex plugin marketplace add CorrectRoadH/harness-lint
-codex plugin install harness-lint
+codex plugin add harness-lint@harness-lint
 ```
 
 Codex discovers the plugin from [`.codex-plugin/plugin.json`](../.codex-plugin/plugin.json)

@@ -51,7 +51,7 @@ Codex:
 
 ```text
 codex plugin marketplace add CorrectRoadH/harness-lint
-codex plugin install harness-lint
+codex plugin add harness-lint@harness-lint
 ```
 
 둘 다 `/harness-lint-capture` 명령을 함께 제공합니다. 세션의 피드백을 검토해 재사용 가능한 지적을 규칙으로 정착시킵니다(LDD의 나머지 절반). 자세한 내용은 [`plugins/README.md`](plugins/README.md)를 참고하세요.

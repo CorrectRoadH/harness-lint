@@ -51,7 +51,7 @@ Codex：
 
 ```text
 codex plugin marketplace add CorrectRoadH/harness-lint
-codex plugin install harness-lint
+codex plugin add harness-lint@harness-lint
 ```
 
 两边都附带 `/harness-lint-capture` 命令：审视一次会话里的反馈，把可复用的纠正沉淀成规则（LDD 的另一半）。详见 [`plugins/README.md`](plugins/README.md)。

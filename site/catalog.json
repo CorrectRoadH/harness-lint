@@ -4,8 +4,17 @@
     "title": "Python application conventions",
     "description": "Typed Python runtime rules for explicit boundaries, safer dynamic access, and common debug hazards.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python",
-    "languages": ["python"],
-    "keywords": ["python", "pydantic", "typed", "getattr", "object", "logging"],
+    "languages": [
+      "python"
+    ],
+    "keywords": [
+      "python",
+      "pydantic",
+      "typed",
+      "getattr",
+      "object",
+      "logging"
+    ],
     "rules": [
       {
         "rule_id": "python.no-getattr-flow",
@@ -54,8 +63,17 @@
     "title": "Python PEP 8 Style",
     "description": "PEP 8-inspired rules for readable Python module style.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-pep8",
-    "languages": ["python"],
-    "keywords": ["python", "pep8", "pep-8", "style", "imports", "readability"],
+    "languages": [
+      "python"
+    ],
+    "keywords": [
+      "python",
+      "pep8",
+      "pep-8",
+      "style",
+      "imports",
+      "readability"
+    ],
     "rules": [
       {
         "rule_id": "python-pep8.no-wildcard-import",
@@ -112,8 +130,17 @@
     "title": "Python Typing Boundaries",
     "description": "Rules for typed Python APIs and fewer static-analysis escape hatches.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-typing",
-    "languages": ["python"],
-    "keywords": ["python", "typing", "types", "mypy", "pyright", "api"],
+    "languages": [
+      "python"
+    ],
+    "keywords": [
+      "python",
+      "typing",
+      "types",
+      "mypy",
+      "pyright",
+      "api"
+    ],
     "rules": [
       {
         "rule_id": "python-typing.no-type-ignore",
@@ -146,8 +173,17 @@
     "title": "Python Async Services",
     "description": "Rules for async Python services where blocking calls and hidden event loops hurt reliability.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/python-async",
-    "languages": ["python"],
-    "keywords": ["python", "async", "asyncio", "services", "blocking", "tasks"],
+    "languages": [
+      "python"
+    ],
+    "keywords": [
+      "python",
+      "async",
+      "asyncio",
+      "services",
+      "blocking",
+      "tasks"
+    ],
     "rules": [
       {
         "rule_id": "python-async.no-time-sleep",
@@ -180,8 +216,16 @@
     "title": "Go service conventions",
     "description": "Small Go rules for production service hygiene: context flow, panics, and debug output.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go",
-    "languages": ["go"],
-    "keywords": ["go", "golang", "context", "panic", "logging"],
+    "languages": [
+      "go"
+    ],
+    "keywords": [
+      "go",
+      "golang",
+      "context",
+      "panic",
+      "logging"
+    ],
     "rules": [
       {
         "rule_id": "go.no-context-todo",
@@ -222,8 +266,20 @@
     "title": "Effective Go Inspired",
     "description": "Rules inspired by Effective Go: allocation, control flow, explicit errors, simple APIs, and readable package behavior.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-effective-go",
-    "languages": ["go"],
-    "keywords": ["go", "golang", "effective go", "effective-go", "api", "errors", "allocation", "interfaces", "blank identifier"],
+    "languages": [
+      "go"
+    ],
+    "keywords": [
+      "go",
+      "golang",
+      "effective go",
+      "effective-go",
+      "api",
+      "errors",
+      "allocation",
+      "interfaces",
+      "blank identifier"
+    ],
     "rules": [
       {
         "rule_id": "go-effective-go.no-else-after-return",
@@ -312,8 +368,17 @@
     "title": "Go Concurrency Hygiene",
     "description": "Rules for goroutine lifecycle, request context flow, and cancellable service code.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-concurrency",
-    "languages": ["go"],
-    "keywords": ["go", "golang", "concurrency", "goroutine", "context", "timers"],
+    "languages": [
+      "go"
+    ],
+    "keywords": [
+      "go",
+      "golang",
+      "concurrency",
+      "goroutine",
+      "context",
+      "timers"
+    ],
     "rules": [
       {
         "rule_id": "go-concurrency.no-background-context-flow",
@@ -338,8 +403,17 @@
     "title": "Rust Application Conventions",
     "description": "Rules for Rust application code hygiene: explicit errors, no committed scaffolding, and fewer panic paths.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/rust",
-    "languages": ["rust"],
-    "keywords": ["rust", "errors", "unwrap", "panic", "dbg", "todo"],
+    "languages": [
+      "rust"
+    ],
+    "keywords": [
+      "rust",
+      "errors",
+      "unwrap",
+      "panic",
+      "dbg",
+      "todo"
+    ],
     "rules": [
       {
         "rule_id": "rust.no-dbg-macro",
@@ -380,8 +454,18 @@
     "title": "TypeScript application conventions",
     "description": "TypeScript rules for safer application code: no committed console debugging, no var, and fewer untyped escape hatches.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript",
-    "languages": ["typescript", "javascript"],
-    "keywords": ["typescript", "javascript", "react", "next", "console", "any"],
+    "languages": [
+      "typescript",
+      "javascript"
+    ],
+    "keywords": [
+      "typescript",
+      "javascript",
+      "react",
+      "next",
+      "console",
+      "any"
+    ],
     "rules": [
       {
         "rule_id": "typescript.no-console-log",
@@ -422,8 +506,18 @@
     "title": "TypeScript React",
     "description": "Rules for React codebases using TypeScript and predictable component lifecycles.",
     "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
-    "languages": ["typescript", "javascript"],
-    "keywords": ["typescript", "javascript", "react", "tsx", "effects", "components"],
+    "languages": [
+      "typescript",
+      "javascript"
+    ],
+    "keywords": [
+      "typescript",
+      "javascript",
+      "react",
+      "tsx",
+      "effects",
+      "components"
+    ],
     "rules": [
       {
         "rule_id": "typescript-react.no-index-key",
@@ -488,6 +582,42 @@
         "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/typescript-react",
         "score": 20,
         "reason": "Flag legacy string refs so code uses callback refs or useRef."
+      }
+    ]
+  },
+  {
+    "id": "go-generated",
+    "title": "Go Generated Code Hygiene",
+    "description": "Concept-scoped rules that run only on committed generated Go code (the `generated` concept): no panics, no debug prints — issues that mean the generator template is wrong. The reference example of runs_on + provides; see the pack INSTALL.md.",
+    "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-generated",
+    "languages": [
+      "go"
+    ],
+    "keywords": [
+      "go",
+      "golang",
+      "generated",
+      "codegen",
+      "runs_on",
+      "concept",
+      "file-sets"
+    ],
+    "rules": [
+      {
+        "rule_id": "go-generated.no-panic-in-generated",
+        "title": "Avoid panic in generated Go code",
+        "pack_id": "go-generated",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-generated",
+        "score": 15,
+        "reason": "Flag panic calls in generated code, where a panic means the generator template is wrong rather than the call site."
+      },
+      {
+        "rule_id": "go-generated.no-fmt-print-in-generated",
+        "title": "Avoid fmt print debugging in generated Go code",
+        "pack_id": "go-generated",
+        "pack_spec": "github:CorrectRoadH/harness-lint@main#packs/go-generated",
+        "score": 15,
+        "reason": "Flag fmt.Print-style debug output leaked into generated code by the generator template."
       }
     ]
   }

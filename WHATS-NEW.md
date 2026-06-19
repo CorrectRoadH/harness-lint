@@ -26,9 +26,9 @@ guidance through agent lifecycle hooks instead of a static `AGENTS.md` block:
 - A manual **`/harness-lint-capture`** command reviews a session's feedback and
   turns the reusable, GritQL-expressible corrections into rules.
 
-Both Claude Code and Codex use the same `hooks.json` schema; they differ only in
-install location. The hooks degrade gracefully when the `harness-lint` binary is
-absent.
+Both Claude Code and Codex use the same `hooks.json` schema and both install from
+a plugin marketplace; they differ only in the marketplace command. The hooks
+degrade gracefully when the `harness-lint` binary is absent.
 
 **Adopt it when:**
 
@@ -47,8 +47,9 @@ absent.
   manual — most turns produce nothing rule-worthy, so it is not wired to `Stop`.
 
 **Install.** Claude Code: `/plugin marketplace add CorrectRoadH/harness-lint`
-then `/plugin install harness-lint@harness-lint`. Codex: copy `plugins/codex/`
-into `.codex/`. See [`plugins/README.md`](plugins/README.md).
+then `/plugin install harness-lint@harness-lint`. Codex: `codex plugin marketplace
+add CorrectRoadH/harness-lint` then `codex plugin install harness-lint`. See
+[`plugins/README.md`](plugins/README.md).
 
 ---
 

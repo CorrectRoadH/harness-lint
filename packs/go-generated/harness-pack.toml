@@ -1,0 +1,12 @@
+[pack]
+id = "go-generated"
+name = "Go Generated Code Hygiene"
+version = "0.1.0"
+description = "Rules that run only on committed generated Go code, reached through the portable `generated` concept. A panic or debug print in generated output means the generator template is wrong, not the call site — so these checks belong on generated code, where ordinary rules deliberately do not look."
+license = "MIT"
+
+[compat]
+# runs_on / file_sets (the `generated` concept this pack targets) need >= 0.4.0.
+harness = ">=0.4.0"
+grit = ">=0.1.0"
+languages = ["go"]

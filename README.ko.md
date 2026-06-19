@@ -41,16 +41,14 @@ Claude Code:
 /plugin install harness-lint@harness-lint
 ```
 
-Codex (프로젝트 로컬 훅을 `.codex/`에 배치):
+Codex:
 
-```sh
-mkdir -p .codex/hooks
-cp plugins/codex/hooks.json .codex/hooks.json
-cp plugins/codex/hooks/*.sh .codex/hooks/
-chmod +x .codex/hooks/*.sh
+```text
+codex plugin marketplace add CorrectRoadH/harness-lint
+codex plugin install harness-lint
 ```
 
-둘 다 `/harness-lint-capture` 명령을 함께 제공합니다. 세션의 피드백을 검토해 재사용 가능한 지적을 규칙으로 정착시킵니다(LDD의 나머지 절반). 자세한 내용은 [`plugins/README.md`](plugins/README.md)와 `~/.codex` 전역 설정을 참고하세요.
+둘 다 `/harness-lint-capture` 명령을 함께 제공합니다. 세션의 피드백을 검토해 재사용 가능한 지적을 규칙으로 정착시킵니다(LDD의 나머지 절반). 자세한 내용은 [`plugins/README.md`](plugins/README.md)를 참고하세요.
 
 ## 자주 쓰는 명령
 

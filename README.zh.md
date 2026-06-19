@@ -41,16 +41,14 @@ Claude Code：
 /plugin install harness-lint@harness-lint
 ```
 
-Codex（项目级 hook，放在 `.codex/`）：
+Codex：
 
-```sh
-mkdir -p .codex/hooks
-cp plugins/codex/hooks.json .codex/hooks.json
-cp plugins/codex/hooks/*.sh .codex/hooks/
-chmod +x .codex/hooks/*.sh
+```text
+codex plugin marketplace add CorrectRoadH/harness-lint
+codex plugin install harness-lint
 ```
 
-两边都附带 `/harness-lint-capture` 命令：审视一次会话里的反馈，把可复用的纠正沉淀成规则（LDD 的另一半）。详见 [`plugins/README.md`](plugins/README.md) 以及 `~/.codex` 全局配置说明。
+两边都附带 `/harness-lint-capture` 命令：审视一次会话里的反馈，把可复用的纠正沉淀成规则（LDD 的另一半）。详见 [`plugins/README.md`](plugins/README.md)。
 
 ## 常用命令
 

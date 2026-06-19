@@ -41,16 +41,14 @@ Claude Code:
 /plugin install harness-lint@harness-lint
 ```
 
-Codex（プロジェクトローカルのフックを `.codex/` に配置）:
+Codex:
 
-```sh
-mkdir -p .codex/hooks
-cp plugins/codex/hooks.json .codex/hooks.json
-cp plugins/codex/hooks/*.sh .codex/hooks/
-chmod +x .codex/hooks/*.sh
+```text
+codex plugin marketplace add CorrectRoadH/harness-lint
+codex plugin install harness-lint
 ```
 
-どちらも `/harness-lint-capture` コマンドを同梱しています。セッション中のフィードバックを見直し、再利用できる指摘をルールに落とし込みます（LDD のもう半分）。詳細は [`plugins/README.md`](plugins/README.md) と `~/.codex` のグローバル設定を参照してください。
+どちらも `/harness-lint-capture` コマンドを同梱しています。セッション中のフィードバックを見直し、再利用できる指摘をルールに落とし込みます（LDD のもう半分）。詳細は [`plugins/README.md`](plugins/README.md) を参照してください。
 
 ## よく使うコマンド
 

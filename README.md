@@ -47,18 +47,16 @@ Claude Code:
 /plugin install harness-lint@harness-lint
 ```
 
-Codex (project-local hooks in `.codex/`):
+Codex:
 
-```sh
-mkdir -p .codex/hooks
-cp plugins/codex/hooks.json .codex/hooks.json
-cp plugins/codex/hooks/*.sh .codex/hooks/
-chmod +x .codex/hooks/*.sh
+```text
+codex plugin marketplace add CorrectRoadH/harness-lint
+codex plugin install harness-lint
 ```
 
 Both also ship a `/harness-lint-capture` command that reviews a session's
 feedback and turns reusable corrections into rules (the other half of LDD). See
-[`plugins/README.md`](plugins/README.md) for details and `~/.codex` global setup.
+[`plugins/README.md`](plugins/README.md) for details.
 
 ## Common Commands
 

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh .codex/hooks/session-start.sh",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/plugins/codex/hooks/session-start.sh\"",
             "statusMessage": "Loading harness-lint guidance..."
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh .codex/hooks/check-changed.sh",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/plugins/codex/hooks/check-changed.sh\"",
             "statusMessage": "Checking harness-lint..."
           }
         ]

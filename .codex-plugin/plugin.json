@@ -1,0 +1,24 @@
+{
+  "name": "harness-lint",
+  "version": "0.1.0",
+  "description": "Inject harness-lint Lint Driven Development guidance and live diagnostics into Codex every session and prompt, instead of relying on AGENTS.md.",
+  "author": {
+    "name": "CorrectRoadH",
+    "url": "https://github.com/CorrectRoadH"
+  },
+  "homepage": "https://github.com/CorrectRoadH/harness-lint",
+  "repository": "https://github.com/CorrectRoadH/harness-lint",
+  "license": "MIT",
+  "keywords": ["lint", "gritql", "lint-driven-development", "code-review"],
+  "hooks": "./plugins/codex/hooks/hooks.json",
+  "skills": "./plugins/codex/skills/",
+  "interface": {
+    "displayName": "harness-lint",
+    "shortDescription": "Lint Driven Development guidance and live diagnostics",
+    "longDescription": "Re-injects harness-lint guidance and the actual current `harness-lint check --changed` diagnostics into Codex at session start and on every prompt, so the agent fixes real violations instead of reading a static AGENTS.md block.",
+    "developerName": "CorrectRoadH",
+    "category": "Productivity",
+    "capabilities": ["Instructions", "Lifecycle hooks"],
+    "websiteURL": "https://github.com/CorrectRoadH/harness-lint"
+  }
+}

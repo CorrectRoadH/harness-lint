@@ -1,3 +1,11 @@
+---
+name: harness-lint-capture
+description: >
+  Close the Lint Driven Development loop: review this session's corrections and
+  feedback and capture any reusable constraint as a harness-lint rule. Trigger:
+  /harness-lint-capture, "capture this as a lint rule", "close the LDD loop".
+---
+
 Close the Lint Driven Development loop for this session.
 
 1. Review the conversation so far and list the **corrections and feedback** the
@@ -29,5 +37,3 @@ Close the Lint Driven Development loop for this session.
 
 5. If nothing in this session qualifies as a reusable, GritQL-expressible
    constraint, say so in one line and stop — do not invent a rule to have one.
-
-$ARGUMENTS

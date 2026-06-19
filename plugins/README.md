@@ -56,26 +56,15 @@ The plugin lives in [`claude-code/`](./claude-code) and references its scripts v
 
 ## Codex
 
-Codex uses the same hooks schema but loads project hooks from `.codex/`. From your
-repo root:
+Codex has its own plugin marketplace. Add this repo and install:
 
-```sh
-mkdir -p .codex/hooks
-cp path/to/harness-lint/plugins/codex/hooks.json .codex/hooks.json
-cp path/to/harness-lint/plugins/codex/hooks/*.sh .codex/hooks/
-chmod +x .codex/hooks/*.sh
+```text
+codex plugin marketplace add CorrectRoadH/harness-lint
+codex plugin install harness-lint
 ```
 
-Project-local hooks only load once the `.codex/` layer is trusted. To enable the
-hooks for every repo instead, place the same `hooks.json` and `hooks/` scripts
-under `~/.codex/` (adjust the script paths in `hooks.json` to absolute paths).
-
-For the `/harness-lint-capture` command, copy the prompt into Codex's prompts
-directory:
-
-```sh
-mkdir -p ~/.codex/prompts
-cp path/to/harness-lint/plugins/codex/prompts/harness-lint-capture.md ~/.codex/prompts/
-```
-
-(The Claude Code plugin ships this command automatically — no extra step.)
+Codex discovers the plugin from [`.codex-plugin/plugin.json`](../.codex-plugin/plugin.json)
+at the repo root. The manifest wires up the same two lifecycle hooks (registered
+in [`codex/hooks/hooks.json`](./codex/hooks/hooks.json), referencing their scripts
+via `${CLAUDE_PLUGIN_ROOT}`) and ships the `/harness-lint-capture` skill, so no
+manual `cp` into `.codex/` is needed.

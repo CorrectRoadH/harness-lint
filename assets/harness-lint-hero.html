@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>harness lint hero</title>
+    <style>
+      @font-face {
+        font-family: "Space Grotesk";
+        src: local("Space Grotesk Light"),
+          url("file:///Users/ctrdh/Library/Fonts/SpaceGrotesk-Light.ttf");
+        font-weight: 300 700;
+      }
+
+      :root {
+        --teal: #1fe3b1;
+        --magenta: #f5359b;
+        --orange: #ff7a3d;
+        --cream: #f5ead2;
+        --ink: #0a0d0f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      .stage {
+        width: 1280px;
+        height: 600px;
+        background:
+          radial-gradient(
+            900px 520px at 78% 18%,
+            rgba(31, 227, 177, 0.18),
+            transparent 60%
+          ),
+          radial-gradient(
+            760px 520px at 12% 92%,
+            rgba(245, 53, 155, 0.16),
+            transparent 58%
+          ),
+          linear-gradient(160deg, #0c1013 0%, #0a0d0f 60%, #090b0d 100%);
+        position: relative;
+        overflow: hidden;
+        font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+        color: var(--cream);
+      }
+
+      /* faint grid */
+      .stage::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: radial-gradient(120% 120% at 50% 40%, #000 35%, transparent 78%);
+      }
+
+      .wrap {
+        position: relative;
+        z-index: 1;
+        height: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-items: center;
+        padding: 0 64px;
+        gap: 28px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 15px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: rgba(245, 234, 210, 0.62);
+        font-weight: 500;
+      }
+
+      .eyebrow .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--teal);
+        box-shadow: 0 0 14px 2px rgba(31, 227, 177, 0.7);
+      }
+
+      h1 {
+        margin: 18px 0 0;
+        font-size: 84px;
+        line-height: 0.96;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      h1 .lint {
+        color: var(--teal);
+      }
+
+      .tagline {
+        margin: 22px 0 0;
+        font-size: 25px;
+        line-height: 1.38;
+        font-weight: 400;
+        color: rgba(245, 234, 210, 0.9);
+        max-width: 30ch;
+      }
+
+      .sub {
+        margin: 14px 0 0;
+        font-size: 17px;
+        color: rgba(245, 234, 210, 0.5);
+        font-weight: 400;
+        letter-spacing: 0.01em;
+      }
+
+      .chips {
+        margin: 30px 0 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .chip {
+        font-size: 15px;
+        font-weight: 500;
+        padding: 8px 16px;
+        border-radius: 999px;
+        border: 1.5px solid rgba(245, 234, 210, 0.16);
+        color: rgba(245, 234, 210, 0.82);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .chip.teal {
+        border-color: rgba(31, 227, 177, 0.5);
+        color: var(--teal);
+      }
+      .chip.magenta {
+        border-color: rgba(245, 53, 155, 0.5);
+        color: #ff6bb6;
+      }
+      .chip.orange {
+        border-color: rgba(255, 122, 61, 0.5);
+        color: var(--orange);
+      }
+
+      .art {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .art img {
+        width: 108%;
+        max-width: none;
+        height: auto;
+        filter: drop-shadow(0 26px 50px rgba(0, 0, 0, 0.55));
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="wrap">
+        <div class="copy">
+          <span class="eyebrow"><span class="dot"></span>Harness Engineering · Rust CLI</span>
+          <h1>harness <span class="lint">lint</span></h1>
+          <p class="tagline">Turn repeated AI mistakes into fast, strict lint rules.</p>
+          <p class="sub">Lint Driven Development for coding agents.</p>
+          <div class="chips">
+            <span class="chip teal">Claude Code</span>
+            <span class="chip magenta">Codex</span>
+            <span class="chip orange">GritQL</span>
+            <span class="chip">Homebrew</span>
+          </div>
+        </div>
+        <div class="art">
+          <img src="./harness-lint-readme.illustration.png" alt="agents to lint to clean code" />
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

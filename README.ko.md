@@ -1,11 +1,17 @@
-# harness lint
+<div align="center">
+
+<img src="assets/harness-lint-readme.png" alt="harness lint — AI가 반복하는 실수를 빠르고 엄격한 lint 규칙으로" width="860" />
 
 [![CI](https://img.shields.io/github/actions/workflow/status/CorrectRoadH/harness-lint/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/CorrectRoadH/harness-lint/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/CorrectRoadH/harness-lint?label=release&style=flat-square)](https://github.com/CorrectRoadH/harness-lint/releases)
 [![rust](https://img.shields.io/badge/rust-2024-blue?style=flat-square)](Cargo.toml)
 [![homebrew](https://img.shields.io/badge/homebrew-CorrectRoadH%2Ftap-fbb040?style=flat-square)](https://github.com/CorrectRoadH/homebrew-tap)
 
-[English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+[English](README.md) · [简体中文](README.zh.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+
+</div>
+
+> **코딩 에이전트를 위한 Lint Driven Development** — AI가 지시를 무시하면, 그 교정을 빠르고 엄격한 lint 규칙으로 바꿔 같은 실수를 반복하지 못하게 합니다.
 
 harness-lint는 Harness Engineering을 위한 차세대 lint 도구입니다. vibe coding에서는 여러 번 고쳐 말하거나 `AGENTS.md`에 지시를 적어 두어도 AI가 그 지시를 무시하는 일이 자주 생깁니다. 이 도구는 Lint Driven Development 방식으로 그 문제를 해결합니다. 사용자가 AI Agent에게 하지 말아야 할 일을 말하면, 먼저 그 요구를 고정된 lint 규칙으로 바꾸고, 빠르고 엄격한 검사로 AI가 같은 실수를 반복하지 못하게 합니다.
 

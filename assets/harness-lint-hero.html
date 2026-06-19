@@ -12,6 +12,15 @@
         font-weight: 300 700;
       }
 
+      :root {
+        --teal: #2fe6b6;
+        --magenta: #ff5fb0;
+        --orange: #ff9b54;
+        --red: #ff5d6b;
+        --cream: #f5ead2;
+        --mono: "Menlo", "SF Mono", "JetBrains Mono", "Consolas", monospace;
+      }
+
       * {
         box-sizing: border-box;
       }
@@ -29,14 +38,14 @@
         border-radius: 28px;
         background:
           radial-gradient(
-            900px 520px at 78% 18%,
-            rgba(31, 227, 177, 0.18),
-            transparent 60%
+            820px 520px at 80% 30%,
+            rgba(31, 227, 177, 0.2),
+            transparent 58%
           ),
           radial-gradient(
-            760px 520px at 12% 92%,
-            rgba(245, 53, 155, 0.16),
-            transparent 58%
+            720px 520px at 8% 95%,
+            rgba(245, 53, 155, 0.14),
+            transparent 56%
           ),
           linear-gradient(160deg, #0c1013 0%, #0a0d0f 60%, #090b0d 100%);
         position: relative;
@@ -45,22 +54,15 @@
         color: var(--cream);
       }
 
-      :root {
-        --teal: #1fe3b1;
-        --magenta: #f5359b;
-        --orange: #ff7a3d;
-        --cream: #f5ead2;
-      }
-
       .stage::before {
         content: "";
         position: absolute;
         inset: 0;
         background-image:
-          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-        background-size: 44px 44px;
-        mask-image: radial-gradient(120% 120% at 50% 40%, #000 35%, transparent 78%);
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 46px 46px;
+        mask-image: radial-gradient(120% 120% at 50% 40%, #000 35%, transparent 80%);
       }
 
       .wrap {
@@ -68,10 +70,10 @@
         z-index: 1;
         height: 100%;
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 0.92fr 1.08fr;
         align-items: center;
-        padding: 0 52px 0 64px;
-        gap: 12px;
+        padding: 0 48px 0 64px;
+        gap: 20px;
       }
 
       .eyebrow {
@@ -95,7 +97,7 @@
 
       h1 {
         margin: 18px 0 0;
-        font-size: 84px;
+        font-size: 82px;
         line-height: 0.96;
         font-weight: 700;
         letter-spacing: -0.02em;
@@ -107,51 +109,41 @@
 
       .tagline {
         margin: 22px 0 0;
-        font-size: 25px;
+        font-size: 24px;
         line-height: 1.38;
         font-weight: 400;
         color: rgba(245, 234, 210, 0.9);
-        max-width: 30ch;
+        max-width: 28ch;
       }
 
       .sub {
         margin: 14px 0 0;
-        font-size: 17px;
+        font-size: 16px;
         color: rgba(245, 234, 210, 0.5);
         font-weight: 400;
-        letter-spacing: 0.01em;
       }
 
       .chips {
-        margin: 30px 0 0;
+        margin: 28px 0 0;
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
       }
 
       .chip {
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 500;
-        padding: 8px 16px;
+        padding: 7px 15px;
         border-radius: 999px;
         border: 1.5px solid rgba(245, 234, 210, 0.16);
         color: rgba(245, 234, 210, 0.82);
         background: rgba(255, 255, 255, 0.02);
       }
+      .chip.teal { border-color: rgba(47, 230, 182, 0.5); color: var(--teal); }
+      .chip.magenta { border-color: rgba(255, 95, 176, 0.5); color: var(--magenta); }
+      .chip.orange { border-color: rgba(255, 155, 84, 0.5); color: var(--orange); }
 
-      .chip.teal {
-        border-color: rgba(31, 227, 177, 0.5);
-        color: var(--teal);
-      }
-      .chip.magenta {
-        border-color: rgba(245, 53, 155, 0.5);
-        color: #ff6bb6;
-      }
-      .chip.orange {
-        border-color: rgba(255, 122, 61, 0.5);
-        color: var(--orange);
-      }
-
+      /* ---------- terminal ---------- */
       .art {
         position: relative;
         display: flex;
@@ -159,11 +151,62 @@
         justify-content: center;
       }
 
-      .art svg {
-        width: 100%;
-        height: auto;
-        overflow: visible;
+      .term {
+        width: 560px;
+        border-radius: 16px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #11171c 0%, #0b0f13 100%);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        box-shadow:
+          0 50px 90px -28px rgba(0, 0, 0, 0.8),
+          0 0 0 1px rgba(255, 255, 255, 0.02),
+          0 30px 140px -40px rgba(47, 230, 182, 0.35);
       }
+
+      .term-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        background: rgba(255, 255, 255, 0.018);
+      }
+      .tl { width: 12px; height: 12px; border-radius: 50%; }
+      .tl.r { background: #ff5f57; }
+      .tl.y { background: #febc2e; }
+      .tl.g { background: #28c840; }
+      .term-title {
+        flex: 1;
+        text-align: center;
+        margin-right: 44px;
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.02em;
+        color: rgba(245, 234, 210, 0.45);
+      }
+
+      .term-body {
+        padding: 26px 28px 30px;
+        font-family: var(--mono);
+        font-size: 16px;
+        line-height: 1.9;
+        white-space: normal;
+        color: rgba(245, 234, 210, 0.86);
+      }
+
+      .term-body .row { display: block; white-space: pre; }
+      .sp { height: 13px; }
+
+      .c-dim { color: rgba(245, 234, 210, 0.38); }
+      .c-teal { color: var(--teal); }
+      .c-cream { color: var(--cream); }
+      .c-orange { color: var(--orange); }
+      .c-magenta { color: var(--magenta); }
+      .c-red { color: var(--red); }
+      .c-green { color: var(--teal); }
+      .b { font-weight: 700; }
+
+      .caret { color: var(--red); letter-spacing: -1px; }
     </style>
   </head>
   <body>
@@ -183,131 +226,21 @@
         </div>
 
         <div class="art">
-          <svg viewBox="0 0 720 520" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
-                <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.5" />
-              </filter>
-              <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
-                <feGaussianBlur stdDeviation="22" />
-              </filter>
-              <linearGradient id="shieldGrad" x1="0.15" y1="0" x2="0.6" y2="1">
-                <stop offset="0" stop-color="#3df0c4" />
-                <stop offset="1" stop-color="#0fae84" />
-              </linearGradient>
-              <clipPath id="shieldClip">
-                <path d="M332 162 L420 162 Q432 162 432 176 L432 242 Q432 296 376 330 Q320 296 320 242 L320 176 Q320 162 332 162 Z" />
-              </clipPath>
-            </defs>
-
-            <!-- ===================== INPUT: messy AI output ===================== -->
-            <!-- back card: magenta -->
-            <g transform="rotate(-6 121 156)" filter="url(#soft)">
-              <rect x="46" y="72" width="150" height="170" rx="18" fill="#171c20" stroke="#f5359b" stroke-width="2" stroke-opacity="0.55" />
-              <rect x="62" y="90" width="30" height="26" rx="9" fill="#f5359b" />
-              <line x1="77" y1="90" x2="77" y2="83" stroke="#f5359b" stroke-width="2.4" />
-              <circle cx="77" cy="81" r="2.4" fill="#f5359b" />
-              <rect x="67" y="98" width="20" height="10" rx="5" fill="#171c20" />
-              <circle cx="73" cy="103" r="2.1" fill="#ffd9ec" />
-              <circle cx="81" cy="103" r="2.1" fill="#ffd9ec" />
-              <text x="100" y="109" font-family="Space Grotesk, sans-serif" font-size="14" font-weight="600" letter-spacing="1" fill="rgba(245,234,210,0.75)">AGENT</text>
-              <rect x="62" y="132" width="118" height="9" rx="4.5" fill="rgba(245,53,155,0.5)" />
-              <rect x="62" y="150" width="92" height="9" rx="4.5" fill="rgba(245,234,210,0.26)" />
-              <rect x="62" y="168" width="116" height="9" rx="4.5" fill="rgba(245,234,210,0.26)" />
-              <rect x="62" y="186" width="70" height="9" rx="4.5" fill="rgba(245,234,210,0.18)" />
-              <rect x="62" y="204" width="100" height="9" rx="4.5" fill="rgba(245,234,210,0.18)" />
-            </g>
-
-            <!-- front card: orange + error -->
-            <g transform="rotate(3 193 234)" filter="url(#soft)">
-              <rect x="118" y="150" width="150" height="170" rx="18" fill="#171c20" stroke="#ff7a3d" stroke-width="2" stroke-opacity="0.6" />
-              <rect x="134" y="168" width="30" height="26" rx="9" fill="#ff7a3d" />
-              <line x1="149" y1="168" x2="149" y2="161" stroke="#ff7a3d" stroke-width="2.4" />
-              <circle cx="149" cy="159" r="2.4" fill="#ff7a3d" />
-              <rect x="139" y="176" width="20" height="10" rx="5" fill="#171c20" />
-              <circle cx="145" cy="181" r="2.1" fill="#ffe3d2" />
-              <circle cx="153" cy="181" r="2.1" fill="#ffe3d2" />
-              <text x="172" y="187" font-family="Space Grotesk, sans-serif" font-size="14" font-weight="600" letter-spacing="1" fill="rgba(245,234,210,0.78)">AGENT</text>
-              <rect x="134" y="210" width="118" height="9" rx="4.5" fill="rgba(255,122,61,0.55)" />
-              <rect x="134" y="228" width="96" height="9" rx="4.5" fill="rgba(255,77,87,0.7)" />
-              <rect x="134" y="246" width="112" height="9" rx="4.5" fill="rgba(245,234,210,0.26)" />
-              <rect x="134" y="264" width="74" height="9" rx="4.5" fill="rgba(245,234,210,0.18)" />
-              <rect x="134" y="282" width="100" height="9" rx="4.5" fill="rgba(245,234,210,0.18)" />
-              <g transform="translate(258 156)">
-                <circle r="15" fill="#ff4d57" stroke="#171c20" stroke-width="3" />
-                <line x1="-5" y1="-5" x2="5" y2="5" stroke="#fff" stroke-width="3" stroke-linecap="round" />
-                <line x1="5" y1="-5" x2="-5" y2="5" stroke="#fff" stroke-width="3" stroke-linecap="round" />
-              </g>
-            </g>
-
-            <!-- arrow 1 -->
-            <g stroke="#f5ead2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.8">
-              <line x1="284" y1="240" x2="312" y2="240" />
-              <polyline points="301,230 314,240 301,250" fill="none" />
-            </g>
-
-            <!-- ===================== LINT shield ===================== -->
-            <ellipse cx="376" cy="356" rx="72" ry="14" fill="#1fe3b1" opacity="0.22" filter="url(#glow)" />
-            <ellipse cx="376" cy="344" rx="46" ry="9" fill="#000" opacity="0.32" />
-            <g filter="url(#soft)">
-              <path d="M332 162 L420 162 Q432 162 432 176 L432 242 Q432 296 376 330 Q320 296 320 242 L320 176 Q320 162 332 162 Z" fill="url(#shieldGrad)" />
-              <g clip-path="url(#shieldClip)">
-                <ellipse cx="350" cy="186" rx="46" ry="26" fill="#ffffff" opacity="0.16" />
-              </g>
-              <path d="M332 162 L420 162 Q432 162 432 176 L432 242 Q432 296 376 330 Q320 296 320 242 L320 176 Q320 162 332 162 Z" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.25" />
-              <text x="376" y="212" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="28" font-weight="700" letter-spacing="3" fill="#06302a">LINT</text>
-              <polyline points="356,272 371,288 402,250" fill="none" stroke="#06302a" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" />
-            </g>
-
-            <!-- arrow 2 -->
-            <g stroke="#f5ead2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.8">
-              <line x1="452" y1="240" x2="484" y2="240" />
-              <polyline points="473,230 486,240 473,250" fill="none" />
-            </g>
-
-            <!-- ===================== OUTPUT: clean, passing ===================== -->
-            <!-- teal -->
-            <g filter="url(#soft)">
-              <rect x="500" y="206" width="56" height="140" rx="16" fill="#171c20" stroke="#1fe3b1" stroke-width="2" stroke-opacity="0.55" />
-              <text x="528" y="236" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="16" font-weight="700" fill="#1fe3b1">&lt;/&gt;</text>
-              <rect x="512" y="254" width="32" height="7" rx="3.5" fill="rgba(31,227,177,0.5)" />
-              <rect x="512" y="270" width="24" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
-              <rect x="512" y="286" width="30" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
-            </g>
-            <!-- orange -->
-            <g filter="url(#soft)">
-              <rect x="576" y="206" width="56" height="140" rx="16" fill="#171c20" stroke="#ff7a3d" stroke-width="2" stroke-opacity="0.55" />
-              <text x="604" y="236" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="16" font-weight="700" fill="#ff7a3d">&lt;/&gt;</text>
-              <rect x="588" y="254" width="32" height="7" rx="3.5" fill="rgba(255,122,61,0.5)" />
-              <rect x="588" y="270" width="24" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
-              <rect x="588" y="286" width="30" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
-            </g>
-            <!-- magenta -->
-            <g filter="url(#soft)">
-              <rect x="652" y="206" width="56" height="140" rx="16" fill="#171c20" stroke="#f5359b" stroke-width="2" stroke-opacity="0.55" />
-              <text x="680" y="236" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="16" font-weight="700" fill="#f5359b">&lt;/&gt;</text>
-              <rect x="664" y="254" width="32" height="7" rx="3.5" fill="rgba(245,53,155,0.5)" />
-              <rect x="664" y="270" width="24" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
-              <rect x="664" y="286" width="30" height="7" rx="3.5" fill="rgba(245,234,210,0.26)" />
-            </g>
-            <!-- pass checks -->
-            <g transform="translate(548 338)">
-              <circle r="12" fill="#1fe3b1" stroke="#0a0d0f" stroke-width="3" />
-              <polyline points="-4.5,0 -1,4 5,-5" fill="none" stroke="#06302a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-            </g>
-            <g transform="translate(624 338)">
-              <circle r="12" fill="#1fe3b1" stroke="#0a0d0f" stroke-width="3" />
-              <polyline points="-4.5,0 -1,4 5,-5" fill="none" stroke="#06302a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-            </g>
-            <g transform="translate(700 338)">
-              <circle r="12" fill="#1fe3b1" stroke="#0a0d0f" stroke-width="3" />
-              <polyline points="-4.5,0 -1,4 5,-5" fill="none" stroke="#06302a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-            </g>
-
-            <!-- ===================== accents ===================== -->
-            <path d="M298 150 l5 12 12 5 -12 5 -5 12 -5 -12 -12 -5 12 -5 z" fill="#ffd23f" opacity="0.9" />
-            <path d="M462 176 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4 z" fill="#f5ead2" opacity="0.7" />
-          </svg>
+          <div class="term">
+            <div class="term-bar">
+              <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+              <span class="term-title">harness-lint — zsh</span>
+            </div>
+            <div class="term-body"><span class="row"><span class="c-teal b">❯</span> <span class="c-cream">harness-lint</span> check --changed</span>
+<div class="sp"></div><span class="row"><span class="c-dim">  scanning 3 changed files…</span></span>
+<div class="sp"></div><span class="row"><span class="c-red b">✗</span> <span class="c-cream">src/auth.ts</span><span class="c-dim">:42:3</span>   <span class="c-orange">no-console-log</span></span>
+<span class="row"><span class="c-dim">  42 │</span> console.<span class="c-magenta">log</span>(<span class="c-orange">`token=${token}`</span>)</span>
+<span class="row"><span class="c-dim">     │</span> <span class="caret">     ~~~~~~~~~~~~~~~~~~~~~~~~~</span></span>
+<span class="row"><span class="c-dim">     ╵</span> <span class="c-dim">debug logging must not be committed</span></span>
+<div class="sp"></div><span class="row"><span class="c-red b">✗</span> <span class="c-cream">api/users.py</span><span class="c-dim">:88</span>     <span class="c-orange">no-bare-except</span></span>
+<div class="sp"></div><span class="row"><span class="c-red b">✗ 2 problems</span> <span class="c-dim">·  4 rules  ·  118ms</span></span>
+<span class="row"><span class="c-green">↳</span> <span class="c-dim">fix before the agent writes more code</span></span></div>
+          </div>
         </div>
       </div>
     </div>

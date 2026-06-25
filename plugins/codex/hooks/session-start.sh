@@ -23,10 +23,15 @@ just to make the check pass.
 EOF
 
 # Surface diagnostics already present on changed files at session start.
-out=$(harness-lint check --changed 2>/dev/null)
-case "$out" in
-  "" | "No diagnostics."*) : ;;
-  *) printf '\nCurrent harness-lint diagnostics on changed files:\n%s\n' "$out" ;;
-esac
+out=$(harness-lint check --changed 2>&1)
+status=$?
+if [ "$status" -ne 0 ]; then
+  printf '\nharness-lint could not check changed files; this is not a clean result:\n%s\n' "$out"
+else
+  case "$out" in
+    "" | "No diagnostics."*) : ;;
+    *) printf '\nCurrent harness-lint diagnostics on changed files:\n%s\n' "$out" ;;
+  esac
+fi
 
 exit 0

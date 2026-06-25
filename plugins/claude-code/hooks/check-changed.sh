@@ -6,7 +6,20 @@
 
 command -v harness-lint >/dev/null 2>&1 || exit 0
 
-out=$(harness-lint check --changed 2>/dev/null)
+out=$(harness-lint check --changed 2>&1)
+status=$?
+if [ "$status" -ne 0 ]; then
+  cat <<EOF
+harness-lint could not check changed files. Treat this as an unresolved lint state,
+not a clean result. Run \`harness-lint check --changed\` yourself and fix the
+configuration, git base, GritQL environment, or reported diagnostics before
+finishing.
+
+$out
+EOF
+  exit 0
+fi
+
 case "$out" in
   "" | "No diagnostics."*) exit 0 ;;
 esac

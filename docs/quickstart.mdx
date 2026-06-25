@@ -97,16 +97,21 @@ This guide walks you through installing harness-lint, setting up your project, a
   </Step>
 
   <Step title="Review the results">
-    harness-lint prints one diagnostic per violation, in the format:
+    harness-lint groups diagnostics by file and includes a source snippet:
 
     ```
-    src/api/client.ts:42:5  warn  typescript.no-console-log  Avoid console.log in production code
-    src/utils/helpers.ts:17:3  error  typescript.no-explicit-any  Avoid explicit `any` type annotations
+    src/api/client.ts
+      WARN  42:5  typescript.no-console-log
+            Avoid console.log in production code
+
+      42 | console.log(user)
+         | ^^^^^^^^^^^
     ```
 
-    Each line shows:
-    - **File path** and **line:column** where the violation was found
+    Each diagnostic shows:
+    - **File path** for the affected file
     - **Severity** — `warn` reports the problem; `error` makes `harness-lint check` exit with a non-zero code, failing CI
+    - **Line:column** where the violation was found
     - **Rule ID** — use this to look up the rule with `harness-lint rule explain <rule-id>`
     - **Message** — a short description from the rule's title
 

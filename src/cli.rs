@@ -330,7 +330,11 @@ fn run_check(
     report::report_diagnostics(
         &diagnostics,
         format,
-        DiagnosticReportOptions { root: &root },
+        DiagnosticReportOptions {
+            root: &root,
+            active_rules: active_rules.len(),
+            checked_files: selected_paths.grit.len(),
+        },
     )?;
     if diagnostics
         .iter()

@@ -14,6 +14,8 @@ pub enum ReportFormat {
 #[derive(Debug, Clone, Copy)]
 pub struct DiagnosticReportOptions<'a> {
     pub root: &'a Path,
+    pub active_rules: usize,
+    pub checked_files: usize,
 }
 
 pub fn report_diagnostics(
@@ -32,7 +34,18 @@ pub fn report_diagnostics(
 
 fn report_human(diagnostics: &[Diagnostic], options: DiagnosticReportOptions<'_>) {
     if diagnostics.is_empty() {
-        println!("No diagnostics.");
+        if options.active_rules == 0 {
+            println!("No diagnostics because no active rules were selected.");
+        } else if options.checked_files == 0 {
+            println!(
+                "No diagnostics because no files matched the selected scope and active rules."
+            );
+        } else {
+            println!(
+                "No diagnostics across {} file(s) with {} active rule(s).",
+                options.checked_files, options.active_rules
+            );
+        }
         return;
     }
 

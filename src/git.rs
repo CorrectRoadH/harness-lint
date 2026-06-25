@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 pub fn changed_files(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
     let mut files = run_git_lines(
@@ -13,7 +13,7 @@ pub fn changed_files(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
             &format!("{base}...HEAD"),
         ],
     )
-    .unwrap_or_default();
+    .with_context(|| format!("failed to compare changed files against `{base}`"))?;
     files.extend(run_git_lines(
         root,
         &["diff", "--name-only", "--diff-filter=ACMR", "--staged"],
@@ -44,7 +44,12 @@ fn run_git_lines(root: &Path, args: &[&str]) -> Result<Vec<String>> {
         .output()
         .with_context(|| format!("failed to run git {}", args.join(" ")))?;
     if !output.status.success() {
-        return Ok(Vec::new());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let detail = stderr.trim();
+        if detail.is_empty() {
+            bail!("git {} exited with {}", args.join(" "), output.status);
+        }
+        bail!("git {} failed: {detail}", args.join(" "));
     }
     Ok(String::from_utf8_lossy(&output.stdout)
         .lines()
@@ -59,9 +64,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn staged_files_returns_empty_outside_git_repo() {
+    fn staged_files_fails_outside_git_repo() {
         let tempdir = tempfile::tempdir().unwrap();
-        let files = staged_files(tempdir.path()).unwrap();
-        assert!(files.is_empty());
+        let error = staged_files(tempdir.path()).unwrap_err().to_string();
+        assert!(error.contains("git diff"));
     }
 }

@@ -150,6 +150,8 @@ fn rule_name_from_feedback(feedback: &str) -> Result<String> {
         bail!("rule feedback is empty; pass a short rule description");
     }
 
+    let mut slug = String::new();
+    let mut pending_dash = false;
     for (char_index, (byte_index, ch)) in trimmed.char_indices().enumerate() {
         if is_forbidden_rule_name_char(ch) {
             bail!(
@@ -159,8 +161,22 @@ fn rule_name_from_feedback(feedback: &str) -> Result<String> {
                 byte_index
             );
         }
+        if ch.is_alphanumeric() {
+            if pending_dash && !slug.is_empty() {
+                slug.push('-');
+            }
+            for lower in ch.to_lowercase() {
+                slug.push(lower);
+            }
+            pending_dash = false;
+        } else {
+            pending_dash = true;
+        }
     }
-    Ok(trimmed.to_string())
+    if slug.is_empty() {
+        bail!("rule feedback does not contain any usable filename characters");
+    }
+    Ok(slug)
 }
 
 fn is_forbidden_rule_name_char(ch: char) -> bool {
@@ -201,12 +217,12 @@ mod tests {
             "`print($value)`",
         )
         .unwrap();
-        assert_eq!(created.id, "local.Prefer pydantic models");
+        assert_eq!(created.id, "local.prefer-pydantic-models");
         assert_eq!(
             created.path,
             tempdir
                 .path()
-                .join("custom-rules/Prefer pydantic models.md")
+                .join("custom-rules/prefer-pydantic-models.md")
         );
         assert!(!created.content.contains("status:"));
         assert!(created.content.contains("language: python"));
@@ -283,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn create_rule_preserves_unicode_feedback_in_rule_name() {
+    fn create_rule_slugifies_unicode_feedback_in_rule_name() {
         if !grit_available() {
             return;
         }
@@ -296,7 +312,7 @@ mod tests {
             "language typescript\n`ReactDOM.render($value)`",
         )
         .unwrap();
-        assert_eq!(created.id, "local.你好，不允许使用UI");
+        assert_eq!(created.id, "local.你好-不允许使用ui");
         assert_eq!(created.title, "你好，不允许使用UI");
         assert!(
             created
@@ -305,7 +321,7 @@ mod tests {
         );
         assert_eq!(
             created.path,
-            tempdir.path().join("Rules/你好，不允许使用UI.md")
+            tempdir.path().join("Rules/你好-不允许使用ui.md")
         );
     }
 

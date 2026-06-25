@@ -463,9 +463,94 @@ fn cli_init_and_rule_create_work() {
     assert!(
         tempdir
             .path()
-            .join("rules/Prefer pydantic models.md")
+            .join("rules/prefer-pydantic-models.md")
             .exists()
     );
+}
+
+#[test]
+fn cli_check_empty_result_reports_scope_summary() {
+    if !grit_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(tempdir.path().join("rules")).unwrap();
+    fs::create_dir_all(tempdir.path().join("src")).unwrap();
+    fs::write(
+        tempdir.path().join("harness.toml"),
+        r#"
+[rules]
+local = ["rules"]
+
+[lint]
+default_level = "warn"
+changed_base = "origin/main"
+cache = false
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("rules/no-print.md"),
+        r#"---
+id: local.no-print
+title: Avoid print
+language: python
+---
+
+# Avoid print
+
+```grit
+language python
+`print($value)`
+```
+"#,
+    )
+    .unwrap();
+    fs::write(tempdir.path().join("src/app.py"), "logger.info('ok')\n").unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let output = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["check", "--all"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("No diagnostics across 1 file(s) with 1 active rule(s)."),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn cli_check_changed_reports_git_failures() {
+    let tempdir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(tempdir.path().join("rules")).unwrap();
+    fs::write(
+        tempdir.path().join("harness.toml"),
+        r#"
+[rules]
+local = ["rules"]
+"#,
+    )
+    .unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_harness-lint");
+    let output = Command::new(binary)
+        .arg("--cwd")
+        .arg(tempdir.path())
+        .args(["check", "--changed"])
+        .output()
+        .unwrap();
+
+    assert_failure_contains(&output, "failed to compare changed files");
+    assert_failure_contains(&output, "git diff");
 }
 
 #[test]

@@ -22,6 +22,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/plugins/codex/hooks/stop-gate.sh\"",
+            "timeout": 15,
+            "statusMessage": "Gating on harness-lint..."
+          }
+        ]
+      }
     ]
   }
 }

@@ -9,17 +9,13 @@ if ! command -v harness-lint >/dev/null 2>&1; then
 fi
 
 cat <<'EOF'
-This repository uses harness-lint with Lint Driven Development (LDD).
-When code review or user feedback identifies a class of mistake, do not only fix
-the one instance: if it can be expressed as a reliable GritQL pattern, capture it
-as a harness-lint rule, run lint until it reports the problem, then fix the code
-until lint passes. If it cannot be a reliable pattern, keep it in docs, not a rule.
+This repo uses harness-lint (Lint Driven Development): when review or feedback
+reveals a recurring mistake, capture it as a harness-lint rule when it's a
+reliable GritQL pattern (otherwise keep it in docs), then fix code until lint
+passes. Never weaken or delete a rule to pass a check. Load the harness-lint
+skill to author or debug rules.
 
-Key commands: `harness-lint check --changed`, `harness-lint rule list`,
-`harness-lint rule explain <id>`, `harness-lint rule verify <id>`.
-Load the harness-lint skill before authoring or debugging rules.
-When lint fails, fix the code or narrow the rule — never weaken or delete a rule
-just to make the check pass.
+Commands: `harness-lint check --changed`, `rule list`, `rule explain <id>`, `rule verify <id>`.
 EOF
 
 # Surface diagnostics already present on changed files at session start.

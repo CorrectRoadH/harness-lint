@@ -13,15 +13,23 @@ the top of context every session and every prompt, and — more importantly — 
 agent right before it writes the next line of code. The agent reacts to concrete
 diagnostics, not a general reminder.
 
-Both plugins register the same two hooks:
+Both plugins register the same three hooks, firing at three distinct moments —
+orient, surface early, enforce at finish:
 
 - **`SessionStart`** — injects the Lint Driven Development (LDD) working
   guidance and any diagnostics already present on changed files.
 - **`UserPromptSubmit`** — runs `harness-lint check --changed`; when there are
-  diagnostics it injects them so the agent fixes them per LDD. It stays silent
-  when the tree is clean to avoid context noise.
+  diagnostics it injects them so the agent fixes them as part of the turn. It
+  stays silent when the tree is clean to avoid context noise.
+- **`Stop`** — the enforcement gate. When the agent tries to finish with
+  diagnostics still on changed files, it bounces the agent back (via a Stop-hook
+  block) to keep fixing instead of yielding a dirty tree. It is bounded by a
+  per-session attempt counter, so after a few forced passes — or on any infra
+  error from the check itself — it lets the agent stop and the remaining
+  diagnostics resurface at the next prompt. It stays silent when the tree is
+  clean.
 
-Both degrade gracefully: if the `harness-lint` binary is not on `PATH`, the
+All three degrade gracefully: if the `harness-lint` binary is not on `PATH`, the
 hooks exit without error (SessionStart prints a one-line install nudge).
 
 ## Capture command
@@ -64,7 +72,7 @@ codex plugin add harness-lint@harness-lint
 ```
 
 Codex discovers the plugin from [`.codex-plugin/plugin.json`](../.codex-plugin/plugin.json)
-at the repo root. The manifest wires up the same two lifecycle hooks (registered
+at the repo root. The manifest wires up the same three lifecycle hooks (registered
 in [`codex/hooks/hooks.json`](./codex/hooks/hooks.json), referencing their scripts
 via `${CLAUDE_PLUGIN_ROOT}`) and ships the `/harness-lint-capture` skill, so no
 manual `cp` into `.codex/` is needed.

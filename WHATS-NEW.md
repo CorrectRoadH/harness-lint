@@ -14,6 +14,37 @@ This file lives at a stable URL so tools can point to it:
 
 ---
 
+## 0.6.0 — Robustness release & markdown authoring guidance
+
+**What it is.** A correctness-focused release; no config migration needed.
+
+- **`harness-lint cache clear`** — new command that wipes `.harness/cache`. `check`
+  also garbage-collects file-cache entries older than 30 days automatically, and a
+  corrupt cache entry now self-heals as a cache miss instead of failing every run.
+- **Crash-safe locks.** `.harness` locks are OS advisory file locks now: a killed
+  or Ctrl-C'd run can no longer leave a stale lock that blocks later checks.
+- **Typos fail loudly.** `check --rule <unknown-id>` / `--tag <unknown-tag>` is an
+  error instead of a silent "No diagnostics" pass, and `doctor` warns
+  (`rule-languages`) when a rule's `language:` value is not a name harness-lint
+  recognizes (an unknown language scans every file).
+- **Markdown rule guidance.** Grit's markdown support is alpha; the docs and the
+  agent skill now say exactly what works: write `language markdown(block)`
+  explicitly, match AST nodes (`atx_heading()`, `fenced_code_block()`), and do not
+  build rules that need frontmatter fields, fence contents, or inline-in-block
+  structure. See the GritQL patterns reference, section "Markdown-Specific Notes".
+- **Correctness fixes.** CRLF rule files parse; non-ASCII and whitespace filenames
+  survive `check --changed`; files deleted from the worktree no longer abort
+  `--changed`/`--staged`; `.mdx` files are scanned by `language: markdown` rules;
+  grit output that fails to parse warns instead of silently reporting clean;
+  `rule create` refuses to overwrite an existing rule file; bare `vendor/pack`
+  specs that exist locally are no longer mistaken for GitHub shorthands.
+
+**Adopt it when:** always — update and rerun `harness-lint doctor` once. The only
+behavior you might notice is the new error on misspelled `--rule`/`--tag` values,
+which previously passed silently.
+
+---
+
 ## 0.5.0 — Agent plugins (Claude Code & Codex)
 
 **What it is.** Plugins in [`plugins/`](plugins/) that deliver harness-lint

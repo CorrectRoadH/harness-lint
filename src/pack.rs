@@ -61,7 +61,7 @@ struct RulesSection {
     entries: toml::Table,
 }
 
-pub fn parse_pack_spec(id: &str, spec: &str) -> PackSpec {
+pub fn parse_pack_spec(root: &Path, id: &str, spec: &str) -> PackSpec {
     let spec = spec.trim();
     if let Some(rest) = spec.strip_prefix("local:") {
         return parse_source_parts(id, PackSourceKind::Local, rest);
@@ -82,6 +82,13 @@ pub fn parse_pack_spec(id: &str, spec: &str) -> PackSpec {
         return parsed;
     }
     if looks_like_github_shorthand(spec) {
+        // A bare `dir/subdir` is ambiguous between a local path and a GitHub
+        // `owner/repo` shorthand; an existing local path wins so that
+        // `vendor/rules-pack` is loaded from disk, not cloned.
+        let (path_part, _) = split_fragment(spec);
+        if root.join(path_part).exists() {
+            return parse_source_parts(id, PackSourceKind::Local, spec);
+        }
         return parse_git_source(id, spec);
     }
     if spec.starts_with("http://") || spec.starts_with("https://") {
@@ -100,7 +107,13 @@ fn parse_git_source(id: &str, spec: &str) -> PackSpec {
 
 fn parse_source_parts(id: &str, source: PackSourceKind, value: &str) -> PackSpec {
     let (rest, fragment) = split_fragment(value);
-    let (mut spec, version_req) = split_version(rest);
+    // Local specs are filesystem paths where `@` is an ordinary character
+    // (e.g. `packs/@scope/rules`), not a version separator.
+    let (mut spec, version_req) = if source == PackSourceKind::Local {
+        (rest.to_string(), None)
+    } else {
+        split_version(rest)
+    };
     if let Some(fragment) = fragment {
         spec = format!("{spec}#{fragment}");
     }
@@ -193,23 +206,27 @@ fn with_fragment(spec: &str, fragment: Option<&str>) -> String {
 }
 
 fn split_fragment(value: &str) -> (&str, Option<&str>) {
-    if let Some((left, right)) = value.split_once('#') {
-        if !right.is_empty() {
-            return (left, Some(right));
-        }
+    if let Some((left, right)) = value.split_once('#')
+        && !right.is_empty()
+    {
+        return (left, Some(right));
     }
     (value, None)
 }
 
 fn split_version(value: &str) -> (String, Option<String>) {
-    if let Some((left, right)) = value.rsplit_once('@') {
-        if !right.is_empty() && !left.is_empty() {
-            return (left.to_string(), Some(right.to_string()));
-        }
+    if let Some((left, right)) = value.rsplit_once('@')
+        && !right.is_empty()
+        && !left.is_empty()
+    {
+        return (left.to_string(), Some(right.to_string()));
     }
     (value.to_string(), None)
 }
 
+/// Resolve a local pack without hashing its contents. Load paths (`check`,
+/// `rule list`, `doctor`) call this on every run; only lock-file operations
+/// need the checksum, via [`resolve_local_pack_checksummed`].
 pub fn resolve_local_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
     let (pack_path, fragment) = split_spec_path(&spec.spec);
     let local_path = if Path::new(pack_path).is_absolute() {
@@ -222,14 +239,19 @@ pub fn resolve_local_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
     }
     let local_path = resolve_pack_root(&local_path, &spec.id, fragment)?;
     let pack_path = fragment.map(PathBuf::from);
-    let checksum = compute_pack_content_hash(&local_path)?;
     Ok(ResolvedPack {
         spec,
         local_path,
         pack_path,
         version: None,
-        checksum: Some(checksum),
+        checksum: None,
     })
+}
+
+pub fn resolve_local_pack_checksummed(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
+    let mut resolved = resolve_local_pack(root, spec)?;
+    resolved.checksum = Some(compute_pack_content_hash(&resolved.local_path)?);
+    Ok(resolved)
 }
 
 pub fn install_git_pack(root: &Path, spec: PackSpec) -> Result<ResolvedPack> {
@@ -744,7 +766,7 @@ fn git_clone_output(
         .env("GIT_LFS_SKIP_SMUDGE", "1")
         .env("GIT_HTTP_LOW_SPEED_LIMIT", "1000")
         .env("GIT_HTTP_LOW_SPEED_TIME", "30")
-        .arg(&url)
+        .arg(url)
         .arg(target)
         .output()
 }
@@ -922,7 +944,11 @@ mod tests {
 
     #[test]
     fn parses_github_pack_spec_with_version() {
-        let spec = parse_pack_spec("python", "github:harness-lint/rules-python@1.2.0");
+        let spec = parse_pack_spec(
+            Path::new("."),
+            "python",
+            "github:harness-lint/rules-python@1.2.0",
+        );
         assert_eq!(spec.source, PackSourceKind::Git);
         assert_eq!(spec.spec, "harness-lint/rules-python");
         assert_eq!(spec.version_req.as_deref(), Some("1.2.0"));
@@ -931,6 +957,7 @@ mod tests {
     #[test]
     fn parses_github_pack_spec_with_subdirectory() {
         let spec = parse_pack_spec(
+            Path::new("."),
             "python",
             "github:CorrectRoadH/harness-lint@main#packs/python",
         );
@@ -942,6 +969,7 @@ mod tests {
     #[test]
     fn parses_github_tree_url() {
         let spec = parse_pack_spec(
+            Path::new("."),
             "python",
             "https://github.com/CorrectRoadH/harness-lint/tree/main/packs/python",
         );
@@ -952,7 +980,11 @@ mod tests {
 
     #[test]
     fn parses_github_shorthand_with_pack_path() {
-        let spec = parse_pack_spec("python", "CorrectRoadH/harness-lint/packs/python@main");
+        let spec = parse_pack_spec(
+            Path::new("."),
+            "python",
+            "CorrectRoadH/harness-lint/packs/python@main",
+        );
         assert_eq!(spec.source, PackSourceKind::Git);
         assert_eq!(spec.spec, "CorrectRoadH/harness-lint#packs/python");
         assert_eq!(spec.version_req.as_deref(), Some("main"));

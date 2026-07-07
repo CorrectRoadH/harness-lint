@@ -26,7 +26,7 @@ pub const REPOS_DIR: &str = ".harness/repos";
 pub const GENERATED_GRIT_DIR: &str = ".harness/generated/.grit";
 pub const CACHE_DIR: &str = ".harness/cache";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ProjectConfig {
     #[serde(default)]
     pub project: ProjectSection,
@@ -52,33 +52,9 @@ pub struct ProjectConfig {
     pub used_legacy_exceptions_key: bool,
 }
 
-impl Default for ProjectConfig {
-    fn default() -> Self {
-        Self {
-            project: ProjectSection::default(),
-            lint: LintSection::default(),
-            rules: RulesSection::default(),
-            packs: BTreeMap::new(),
-            overrides: BTreeMap::new(),
-            disabled: DisabledSection::default(),
-            ignore: IgnoreSection::default(),
-            file_sets: BTreeMap::new(),
-            exceptions: Vec::new(),
-            registry: RegistrySection::default(),
-            used_legacy_exceptions_key: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ProjectSection {
     pub name: Option<String>,
-}
-
-impl Default for ProjectSection {
-    fn default() -> Self {
-        Self { name: None }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

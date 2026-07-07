@@ -148,6 +148,7 @@ Authoring rules:
 Writing GritQL:
 
 - Start with `language <name>` when the rule targets a specific language. Use Grit CLI language names such as `js`, `python`, `json`, `java`, `hcl`, `css`, `markdown`, `yaml`, `rust`, `ruby`, `php`, `go`, and `sql`. For TypeScript/JavaScript rules, use `language js` in the GritQL block even when rule frontmatter says `language: typescript`; use `language js(typescript)` when the TypeScript parser variant is needed.
+- Markdown is a special case: Grit's markdown support is alpha-tier. Always write `language markdown(block)` explicitly — a bare `language markdown` selects the *inline* grammar, so block-structure patterns fail to compile or never match. Match AST nodes such as `atx_heading()`, `paragraph()`, or `fenced_code_block()` with `where` regex conditions; multi-token literal snippets like `` `# TODO` `` do not match. GritQL cannot see YAML frontmatter fields, code inside fenced blocks, or inline structure within a block (e.g. a link inside a heading) — if the markdown constraint needs any of those, do not create a harness-lint rule; keep it in agent instructions or docs.
 - Prefer the smallest syntax shape that proves the rule. A narrow pattern with fewer false positives is better than a broad one that guesses intent.
 - Use metavariables such as `$value`, `$name`, or `$body` for parts that may vary.
 - Match the forbidden shape directly first. Add exceptions only after a real false positive appears.

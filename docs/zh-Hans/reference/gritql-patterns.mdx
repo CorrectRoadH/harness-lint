@@ -85,7 +85,7 @@ language go
 | `css` | CSS（`.css`） |
 | `yaml` | YAML（`.yml`、`.yaml`） |
 | `json` | JSON（`.json`） |
-| `markdown` | Markdown（`.md`、`.mdx`） |
+| `markdown` | Markdown（`.md`、`.mdx`）— alpha 级支持，见 [Markdown 特别说明](#6-markdown-特别说明) |
 | `hcl` | HCL / Terraform（`.tf`、`.hcl`） |
 | `sql` | SQL（`.sql`） |
 | `php` | PHP（`.php`） |
@@ -110,7 +110,30 @@ language js(typescript)
 
 ---
 
-## 6. `where` 子句
+## 6. Markdown 特别说明
+
+Grit 对 Markdown 的解析是 alpha 级的，能力远弱于代码语言。写 markdown 模式时遵守三条规则：
+
+**始终显式声明 block 语法。** Markdown 由两套独立的 grammar 解析（块级结构和行内文本）。裸写 `language markdown` 会选中 *inline* grammar，而按 `.md` 扩展名扫描的文件用的是 *block* grammar——所以裸 `language markdown` 下的块级结构模式要么编译失败（`pattern definition not found`），要么永远匹配不上。应写成：
+
+```grit
+language markdown(block)
+atx_heading()
+```
+
+**匹配 AST 节点，而不是多 token 的字面量 snippet。** Markdown 的 snippet 解析非常有限：像 `` `# TODO` `` 这样的字面量匹配不到真实的标题。应使用节点模式——`atx_heading()`、`paragraph()`、`fenced_code_block()`——再配合 `where` 条件和正则约束节点文本。
+
+**知道哪些内容不可见。** GritQL 无法查询：
+
+- YAML frontmatter 的字段——整个 frontmatter 是一个不透明节点；
+- 围栏代码块内部的代码——fence 内容是纯文本，用 `contains` 加代码 snippet 也进不去；
+- 块内的行内结构，例如"二级标题里的链接"——block 和 inline grammar 无法在一条规则里组合。
+
+如果一条 markdown 约束依赖上述任何一项，就不要为它创建 harness-lint 规则，把约束留在 agent 指令或项目文档里。
+
+---
+
+## 7. `where` 子句
 
 添加 `where` 子句可以给模式附加条件。条件是逗号分隔的 predicates，在基础模式匹配后求值：
 
@@ -125,7 +148,7 @@ language go
 
 ---
 
-## 7. `$filename` 条件
+## 8. `$filename` 条件
 
 `$filename` 是内置元变量，保存当前扫描文件相对项目根目录的路径。把它放在 `where` 子句中，可以把规则限制到特定文件。
 
@@ -165,7 +188,7 @@ regex 语法是标准 Rust regex（`r"pattern"`）。因为路径相对项目根
 
 ---
 
-## 8. 实用示例
+## 9. 实用示例
 
 ### 示例 1：Python 标记 `print` 调用
 

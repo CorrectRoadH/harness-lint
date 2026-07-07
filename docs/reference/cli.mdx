@@ -334,6 +334,16 @@ Checks performed:
 
 ---
 
+## harness-lint cache clear
+
+Deletes all cached check results under `.harness/cache`. Useful when you suspect stale results; note that `check` also garbage-collects file-cache entries older than 30 days automatically.
+
+```sh
+harness-lint cache clear
+```
+
+---
+
 ## harness-lint whatsnew
 
 Prints recent feature highlights, each paired with explicit "adopt when / do not adopt" guidance, and links to [`WHATS-NEW.md`](https://github.com/CorrectRoadH/harness-lint/blob/main/WHATS-NEW.md).

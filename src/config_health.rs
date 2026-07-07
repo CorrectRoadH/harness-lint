@@ -23,6 +23,20 @@ pub const FILE_SET_IGNORE_OVERLAP_RULE: &str = "harness.file-set-ignore-overlap"
 pub const UNKNOWN_RUN_TARGET_RULE: &str = "harness.unknown-run-target";
 pub const RUNS_ON_FILENAME_DISJOINT_RULE: &str = "harness.runs-on-filename-disjoint";
 
+/// Every diagnostic id this module can emit, so `--rule` selection can
+/// validate ids against config checks as well as pack rules.
+pub const CHECK_IDS: &[&str] = &[
+    STALE_EXCEPTION_PATH_RULE,
+    STALE_IGNORE_PATH_RULE,
+    UNKNOWN_DISABLED_RULE,
+    UNKNOWN_OVERRIDE_RULE,
+    STALE_FILE_SET_PATH_RULE,
+    EMPTY_FILE_SET_RULE,
+    FILE_SET_IGNORE_OVERLAP_RULE,
+    UNKNOWN_RUN_TARGET_RULE,
+    RUNS_ON_FILENAME_DISJOINT_RULE,
+];
+
 const GLOB_META: &[char] = &['*', '?', '[', ']', '{', '}'];
 
 /// The literal path prefix of a glob pattern, taken up to (but excluding) the
@@ -435,9 +449,11 @@ mod tests {
         let root = tempdir.path();
         fs::create_dir_all(root.join("apps/backend/gen")).unwrap();
 
-        let mut config = ProjectConfig::default();
-        config.ignore = IgnoreSection {
-            paths: vec!["dist/**".to_string()],
+        let mut config = ProjectConfig {
+            ignore: IgnoreSection {
+                paths: vec!["dist/**".to_string()],
+            },
+            ..ProjectConfig::default()
         };
         config.file_sets.insert(
             "generated".to_string(),
@@ -626,27 +642,29 @@ mod tests {
         let root = tempdir.path();
         fs::create_dir_all(root.join("backend/internal/cache")).unwrap();
 
-        let mut config = ProjectConfig::default();
-        config.exceptions = vec![
-            RuleExceptionSection {
-                rule: "go.no-panic".to_string(),
-                // Present directory glob: not stale.
-                paths: vec!["backend/internal/cache/**".to_string()],
-                reason: None,
-            },
-            RuleExceptionSection {
-                rule: "go.no-panic".to_string(),
-                // Literal file that was moved away: stale.
-                paths: vec!["backend/cmd/server/main.go".to_string()],
-                reason: None,
-            },
-        ];
-        config.ignore = IgnoreSection {
-            paths: vec![
-                "backend/internal/cache/**".to_string(), // present
-                "frontend/src/lib/gen/**".to_string(),   // missing
-                "**/*.snap".to_string(),                 // leading glob, skipped
+        let config = ProjectConfig {
+            exceptions: vec![
+                RuleExceptionSection {
+                    rule: "go.no-panic".to_string(),
+                    // Present directory glob: not stale.
+                    paths: vec!["backend/internal/cache/**".to_string()],
+                    reason: None,
+                },
+                RuleExceptionSection {
+                    rule: "go.no-panic".to_string(),
+                    // Literal file that was moved away: stale.
+                    paths: vec!["backend/cmd/server/main.go".to_string()],
+                    reason: None,
+                },
             ],
+            ignore: IgnoreSection {
+                paths: vec![
+                    "backend/internal/cache/**".to_string(), // present
+                    "frontend/src/lib/gen/**".to_string(),   // missing
+                    "**/*.snap".to_string(),                 // leading glob, skipped
+                ],
+            },
+            ..ProjectConfig::default()
         };
 
         let diagnostics = check_config_paths(root, &config);

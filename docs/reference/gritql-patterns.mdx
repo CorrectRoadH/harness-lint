@@ -85,7 +85,7 @@ Use these names in the `language` directive inside GritQL blocks and in the `lan
 | `css` | CSS (`.css`) |
 | `yaml` | YAML (`.yml`, `.yaml`) |
 | `json` | JSON (`.json`) |
-| `markdown` | Markdown (`.md`, `.mdx`) |
+| `markdown` | Markdown (`.md`, `.mdx`) — alpha, see [Markdown-Specific Notes](#6-markdown-specific-notes) |
 | `hcl` | HCL / Terraform (`.tf`, `.hcl`) |
 | `sql` | SQL (`.sql`) |
 | `php` | PHP (`.php`) |
@@ -110,7 +110,30 @@ language js(typescript)
 
 ---
 
-## 6. `where` Clauses
+## 6. Markdown-Specific Notes
+
+Grit parses Markdown with an alpha-tier grammar that is far more limited than the code languages. Three rules keep markdown patterns predictable:
+
+**Always declare the block grammar explicitly.** Markdown is parsed by two separate grammars — block structure and inline text — and a bare `language markdown` selects the *inline* grammar, while `.md` files scanned by extension use the *block* grammar. Block-structure patterns under a bare `language markdown` therefore fail to compile (`pattern definition not found`) or never match. Write:
+
+```grit
+language markdown(block)
+atx_heading()
+```
+
+**Match AST nodes, not multi-token snippets.** Markdown snippet parsing is minimal: a literal snippet such as `` `# TODO` `` does not match a real heading. Use node patterns — `atx_heading()`, `paragraph()`, `fenced_code_block()` — combined with `where` conditions and regexes on the node text.
+
+**Know what is invisible.** GritQL cannot query:
+
+- YAML frontmatter fields — the entire frontmatter is one opaque node,
+- code inside fenced blocks — fence contents are raw text, so `contains` with a code snippet never reaches in,
+- inline structure within a block, such as "a link inside a level-2 heading" — the block and inline grammars cannot be combined in one rule.
+
+If a markdown constraint depends on any of these, do not create a harness-lint rule for it. Keep the constraint in agent instructions or project documentation instead.
+
+---
+
+## 7. `where` Clauses
 
 Add a `where` clause to attach conditions to a pattern. Conditions are comma-separated predicates evaluated after the base pattern matches:
 
@@ -125,7 +148,7 @@ language go
 
 ---
 
-## 7. `$filename` Conditions
+## 8. `$filename` Conditions
 
 `$filename` is a built-in metavariable that holds the path of the file currently being scanned, relative to the project root. Use it inside a `where` clause to limit a rule to specific files.
 
@@ -165,7 +188,7 @@ The regex syntax is standard Rust regex (`r"pattern"`). The `.*` prefix is neede
 
 ---
 
-## 8. Practical Examples
+## 9. Practical Examples
 
 ### Example 1 — Python: flag `print` calls
 

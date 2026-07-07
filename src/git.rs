@@ -40,6 +40,9 @@ pub fn staged_files(root: &Path) -> Result<Vec<PathBuf>> {
 fn run_git_lines(root: &Path, args: &[&str]) -> Result<Vec<String>> {
     let output = Command::new("git")
         .current_dir(root)
+        // Git C-quotes non-ASCII paths by default, which would corrupt the
+        // returned filenames.
+        .args(["-c", "core.quotepath=off"])
         .args(args)
         .output()
         .with_context(|| format!("failed to run git {}", args.join(" ")))?;
@@ -53,7 +56,8 @@ fn run_git_lines(root: &Path, args: &[&str]) -> Result<Vec<String>> {
     }
     Ok(String::from_utf8_lossy(&output.stdout)
         .lines()
-        .map(str::trim)
+        // Strip only the CR a Windows git may append, not filename whitespace.
+        .map(|line| line.strip_suffix('\r').unwrap_or(line))
         .filter(|line| !line.is_empty())
         .map(ToOwned::to_owned)
         .collect())

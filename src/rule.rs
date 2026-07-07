@@ -104,11 +104,19 @@ pub fn parse_rule(
 }
 
 fn split_frontmatter(content: &str) -> Option<(&str, &str)> {
-    let rest = content.strip_prefix("---\n")?;
-    let end = rest.find("\n---")?;
-    let (frontmatter, after) = rest.split_at(end);
-    let markdown = after.strip_prefix("\n---\n").unwrap_or(after);
-    Some((frontmatter, markdown))
+    let rest = content
+        .strip_prefix("---\r\n")
+        .or_else(|| content.strip_prefix("---\n"))?;
+    // The closing fence must be a whole `---` line; a `---` embedded in a
+    // frontmatter value must not terminate the block.
+    let mut offset = 0;
+    for line in rest.split_inclusive('\n') {
+        if line.trim_end_matches(['\r', '\n']) == "---" {
+            return Some((&rest[..offset], &rest[offset + line.len()..]));
+        }
+        offset += line.len();
+    }
+    None
 }
 
 fn extract_description(markdown: &str) -> String {
@@ -167,22 +175,22 @@ fn extract_examples(markdown: &str) -> Vec<RuleExample> {
             current = Some(RuleExampleKind::Bad);
         } else if trimmed.eq_ignore_ascii_case("## good") {
             current = Some(RuleExampleKind::Good);
-        } else if trimmed.starts_with("```") {
-            if let Some(kind) = current {
-                let language = trimmed.trim_start_matches("```").trim();
-                let language = (!language.is_empty()).then(|| language.to_string());
-                let mut code = Vec::new();
+        } else if trimmed.starts_with("```")
+            && let Some(kind) = current
+        {
+            let language = trimmed.trim_start_matches("```").trim();
+            let language = (!language.is_empty()).then(|| language.to_string());
+            let mut code = Vec::new();
+            index += 1;
+            while index < lines.len() && !lines[index].trim_start().starts_with("```") {
+                code.push(lines[index]);
                 index += 1;
-                while index < lines.len() && !lines[index].trim_start().starts_with("```") {
-                    code.push(lines[index]);
-                    index += 1;
-                }
-                examples.push(RuleExample {
-                    kind,
-                    language,
-                    code: code.join("\n"),
-                });
             }
+            examples.push(RuleExample {
+                kind,
+                language,
+                code: code.join("\n"),
+            });
         }
         index += 1;
     }

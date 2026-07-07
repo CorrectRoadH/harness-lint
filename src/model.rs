@@ -7,17 +7,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Severity {
     None,
     Info,
+    #[default]
     Warn,
     Error,
-}
-
-impl Default for Severity {
-    fn default() -> Self {
-        Self::Warn
-    }
 }
 
 impl Severity {

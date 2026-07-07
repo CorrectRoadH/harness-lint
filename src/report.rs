@@ -51,6 +51,9 @@ fn report_human(diagnostics: &[Diagnostic], options: DiagnosticReportOptions<'_>
 
     let colors = ColorMode::detect();
     let mut current_path: Option<&PathBuf> = None;
+    // Diagnostics arrive sorted by path; cache the current file's lines so a
+    // file with many diagnostics is read once, not once per diagnostic.
+    let mut current_lines: Option<Vec<String>> = None;
     for diagnostic in diagnostics {
         if current_path != Some(&diagnostic.path) {
             if current_path.is_some() {
@@ -61,6 +64,7 @@ fn report_human(diagnostics: &[Diagnostic], options: DiagnosticReportOptions<'_>
                 colors.paint(Color::Path, &diagnostic.path.display().to_string())
             );
             current_path = Some(&diagnostic.path);
+            current_lines = read_source_lines(options.root, &diagnostic.path);
         }
 
         println!(
@@ -75,23 +79,23 @@ fn report_human(diagnostics: &[Diagnostic], options: DiagnosticReportOptions<'_>
         );
         println!("        {}", diagnostic.message);
 
-        if let Some(source) = read_source_line(options.root, diagnostic) {
-            print_snippet(diagnostic, &source, colors);
+        if let Some(source) = current_lines
+            .as_ref()
+            .and_then(|lines| lines.get(diagnostic.start_line.saturating_sub(1) as usize))
+        {
+            print_snippet(diagnostic, source, colors);
         }
     }
 }
 
-fn read_source_line(root: &Path, diagnostic: &Diagnostic) -> Option<String> {
-    let path = if diagnostic.path.is_absolute() {
-        diagnostic.path.clone()
+fn read_source_lines(root: &Path, path: &Path) -> Option<Vec<String>> {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
     } else {
-        root.join(&diagnostic.path)
+        root.join(path)
     };
     let content = std::fs::read_to_string(path).ok()?;
-    content
-        .lines()
-        .nth(diagnostic.start_line.saturating_sub(1) as usize)
-        .map(ToOwned::to_owned)
+    Some(content.lines().map(ToOwned::to_owned).collect())
 }
 
 fn print_snippet(diagnostic: &Diagnostic, source: &str, colors: ColorMode) {
@@ -113,10 +117,10 @@ fn print_snippet(diagnostic: &Diagnostic, source: &str, colors: ColorMode) {
 }
 
 fn caret_width(diagnostic: &Diagnostic) -> usize {
-    if diagnostic.end_line == Some(diagnostic.start_line) {
-        if let Some(end_column) = diagnostic.end_column {
-            return end_column.saturating_sub(diagnostic.start_column).max(1) as usize;
-        }
+    if diagnostic.end_line == Some(diagnostic.start_line)
+        && let Some(end_column) = diagnostic.end_column
+    {
+        return end_column.saturating_sub(diagnostic.start_column).max(1) as usize;
     }
     1
 }

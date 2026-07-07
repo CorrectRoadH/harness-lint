@@ -153,7 +153,20 @@ pub fn rule_matches_path(rule: &RuleDefinition, path: &Path) -> bool {
         return true;
     };
     let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
-    match language.to_ascii_lowercase().as_str() {
+    // An unknown language falls back to matching every file so a typo does
+    // not silently disable the rule; `doctor` flags it (rule-languages).
+    language_matches_extension(language, ext).unwrap_or(true)
+}
+
+/// Whether a rule `language` value is one this matcher understands. Unknown
+/// values still run (matching every file), but `doctor` warns about them.
+pub fn is_known_language(language: &str) -> bool {
+    language_matches_extension(language, "").is_some()
+}
+
+/// `None` = unknown language name; `Some(matched)` otherwise.
+fn language_matches_extension(language: &str, ext: &str) -> Option<bool> {
+    Some(match language.to_ascii_lowercase().as_str() {
         "python" | "py" => ext == "py",
         "javascript" | "ecmascript" | "node" | "nodejs" | "js" => {
             matches!(ext, "js" | "jsx" | "mjs" | "cjs")
@@ -173,7 +186,7 @@ pub fn rule_matches_path(rule: &RuleDefinition, path: &Path) -> bool {
         "terraform" | "tf" => ext == "tf",
         "html" | "htm" => matches!(ext, "html" | "htm"),
         "css" => ext == "css",
-        "markdown" | "md" => ext == "md",
+        "markdown" | "md" => matches!(ext, "md" | "mdx"),
         "yaml" | "yml" => matches!(ext, "yaml" | "yml"),
         "json" => ext == "json",
         "toml" => ext == "toml",
@@ -182,8 +195,8 @@ pub fn rule_matches_path(rule: &RuleDefinition, path: &Path) -> bool {
         "php" => ext == "php",
         "svg" => ext == "svg",
         "text" => true,
-        _ => true,
-    }
+        _ => return None,
+    })
 }
 
 fn build_ignore_set(patterns: &[String]) -> Result<GlobSet> {
@@ -195,13 +208,16 @@ fn build_ignore_set(patterns: &[String]) -> Result<GlobSet> {
 }
 
 fn is_internal_path(path: &Path, rule_dirs: &[PathBuf]) -> bool {
+    // Rule directories are excluded via the configured `rule_dirs` below, not
+    // by name, so a project whose rule dir is elsewhere can still lint a
+    // top-level `rules/` source directory. `target`/`node_modules`/`.venv`
+    // stay hardcoded: they are conventional build/vendor output and excluding
+    // them keeps `check` fast even when a repo forgets to gitignore them.
     path.starts_with(".git")
         || path.starts_with(WORK_DIR)
         || path.starts_with(PACKS_DIR)
         || path.starts_with(GENERATED_GRIT_DIR)
         || path.starts_with(CACHE_DIR)
-        || path.starts_with("rules")
-        || path.starts_with("harness/rules")
         || path.starts_with("target")
         || path.starts_with("node_modules")
         || path.starts_with(".venv")

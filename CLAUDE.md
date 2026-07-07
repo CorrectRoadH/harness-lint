@@ -36,6 +36,8 @@ Do not create a harness-lint rule for feedback that cannot be expressed as a rel
 
 For TypeScript/JavaScript rules, use `language js` inside the GritQL block even when the rule frontmatter says `language: typescript`. If a TypeScript parser variant matters, `language js(typescript)` is valid. Other rule languages should use Grit CLI language names such as `python`, `json`, `java`, `hcl`, `css`, `markdown`, `yaml`, `rust`, `ruby`, `php`, `go`, and `sql`.
 
+Markdown rules are a special case — Grit's markdown support is alpha-tier. Always write `language markdown(block)` explicitly: a bare `language markdown` selects the *inline* grammar, so block-structure patterns fail to compile (`pattern definition not found`) or never match. Match AST nodes such as `atx_heading()`, `paragraph()`, or `fenced_code_block()` with `where` regex conditions; multi-token literal snippets like `` `# TODO` `` do not match. GritQL cannot see YAML frontmatter fields, code inside fenced blocks, or inline structure within a block (e.g. a link inside a heading). Markdown feedback that depends on any of those belongs in agent instructions or docs, not in a rule.
+
 If a rule should only apply to certain files and you own the rule, encode the scope inside the GritQL with `$filename`, for example:
 
 ```grit

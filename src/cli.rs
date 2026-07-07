@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Parser, Subcommand};
@@ -75,6 +74,17 @@ enum Command {
         #[command(subcommand)]
         command: RuleCommand,
     },
+    #[command(about = "Manage cached check results")]
+    Cache {
+        #[command(subcommand)]
+        command: CacheCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CacheCommand {
+    #[command(about = "Delete all cached check results")]
+    Clear,
 }
 
 #[derive(Debug, Args)]
@@ -131,7 +141,7 @@ enum RuleCommand {
     Suggest { feedback: String },
 }
 
-pub fn run() -> Result<ExitCode> {
+pub fn run() -> Result<()> {
     let cli = Cli::parse();
     let format = if cli.json {
         ReportFormat::Json
@@ -201,12 +211,32 @@ pub fn run() -> Result<ExitCode> {
             format,
         ),
         Command::Rule { command } => run_rule(&cwd, cli.config.as_deref(), command, format),
+        Command::Cache { command } => match command {
+            CacheCommand::Clear => {
+                let root = config::find_project_root(&cwd)?;
+                cache::clear(&root)?;
+                println!(
+                    "Cleared cache at {}",
+                    root.join(config::CACHE_DIR).display()
+                );
+                Ok(())
+            }
+        },
     }
-    .map(|_| ExitCode::SUCCESS)
 }
 
 fn run_whatsnew() {
     println!("harness-lint — what's new\n");
+    println!("0.6.x  Robustness release & markdown authoring guidance");
+    println!(
+        "  New `cache clear` command plus automatic 30-day cache GC; crash-safe\n  \
+         OS file locks (no stale locks after Ctrl-C); misspelled `--rule`/`--tag`\n  \
+         values now error instead of passing silently; `doctor` flags unknown\n  \
+         rule languages; documented how to author markdown rules\n  \
+         (`language markdown(block)` + AST nodes)."
+    );
+    println!("  Adopt when: always — update and rerun `harness-lint doctor` once.");
+    println!();
     println!("0.5.x  Agent plugins (Claude Code & Codex)");
     println!(
         "  Inject Lint Driven Development guidance and live `check --changed`\n  \
@@ -241,7 +271,7 @@ fn run_whatsnew() {
 }
 
 fn run_check(
-    cwd: &PathBuf,
+    cwd: &Path,
     config_path: Option<&std::path::Path>,
     command: CheckCommand,
     format: ReportFormat,
@@ -284,6 +314,7 @@ fn run_check(
             .filter(|diagnostic| config_check_selected(&command, &diagnostic.rule_id))
             .collect();
     let file_set_index = paths::FileSetIndex::build(&config)?;
+    validate_rule_selection(&command, &packs, &known_rule_ids)?;
     let active_rules = collect_effective_rules(&packs, &config, &command);
     let selected_paths = select_paths(&root, &config, &command, &active_rules, &file_set_index)?;
     if verbose {
@@ -427,48 +458,62 @@ fn group_rules_by_language(active_rules: &[RuleDefinition]) -> Vec<Vec<RuleDefin
     groups.into_values().collect()
 }
 
+/// Holds an OS advisory lock on a file under `.harness/`. The lock is
+/// released when the file handle closes — including on Ctrl-C or a crash — so
+/// a dead process can never leave a stale lock behind. The lock file itself
+/// is intentionally never deleted: unlink-and-recreate would let two
+/// processes lock different inodes of the same path.
 #[derive(Debug)]
-struct GritRunLock {
-    path: PathBuf,
+struct WorkLock {
+    _file: fs::File,
 }
 
-impl Drop for GritRunLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
-}
-
-fn acquire_grit_run_lock(root: &Path) -> Result<GritRunLock> {
-    let lock_dir = root.join(".harness");
+fn acquire_work_lock(root: &Path, file_name: &str, what: &str) -> Result<WorkLock> {
+    let lock_dir = root.join(config::WORK_DIR);
     fs::create_dir_all(&lock_dir)
         .with_context(|| format!("failed to create {}", lock_dir.display()))?;
-    let path = lock_dir.join("grit-run.lock");
+    let path = lock_dir.join(file_name);
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("failed to open {}", path.display()))?;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut reported_wait = false;
     loop {
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-        {
-            Ok(mut file) => {
-                writeln!(file, "pid={}", std::process::id())
-                    .with_context(|| format!("failed to write {}", path.display()))?;
-                return Ok(GritRunLock { path });
+        match file.try_lock() {
+            Ok(()) => {
+                // Best-effort breadcrumb for humans inspecting the file.
+                let _ = file.set_len(0);
+                let _ = writeln!(&file, "pid={}", std::process::id());
+                return Ok(WorkLock { _file: file });
             }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            Err(std::fs::TryLockError::WouldBlock) => {
+                if !reported_wait {
+                    eprintln!(
+                        "harness-lint: waiting for another {what} to release {}",
+                        path.display()
+                    );
+                    reported_wait = true;
+                }
                 if std::time::Instant::now() >= deadline {
                     bail!(
-                        "timed out waiting for another harness-lint check to release {}; remove the lock if no harness-lint process is running",
+                        "timed out waiting for another harness-lint {what} to release {}",
                         path.display()
                     );
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
-            Err(error) => {
+            Err(std::fs::TryLockError::Error(error)) => {
                 return Err(error).with_context(|| format!("failed to acquire {}", path.display()));
             }
         }
     }
+}
+
+fn acquire_grit_run_lock(root: &Path) -> Result<WorkLock> {
+    acquire_work_lock(root, "grit-run.lock", "check")
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -487,7 +532,7 @@ enum DoctorStatus {
 }
 
 fn run_doctor(
-    cwd: &PathBuf,
+    cwd: &Path,
     config_path: Option<&std::path::Path>,
     format: ReportFormat,
 ) -> Result<()> {
@@ -658,6 +703,32 @@ fn run_doctor(
                     findings.push(doctor_warn("runs-on-scope", diagnostic.message));
                 }
             }
+            let unknown_languages: Vec<&RuleDefinition> = all_rules
+                .iter()
+                .filter(|rule| {
+                    rule.language
+                        .as_deref()
+                        .is_some_and(|language| !paths::is_known_language(language))
+                })
+                .copied()
+                .collect();
+            if unknown_languages.is_empty() {
+                findings.push(doctor_ok(
+                    "rule-languages",
+                    "every rule `language` maps to a known file type".to_string(),
+                ));
+            } else {
+                for rule in unknown_languages {
+                    findings.push(doctor_warn(
+                        "rule-languages",
+                        format!(
+                            "rule `{}` has unrecognized language `{}`; it will scan every file",
+                            rule.id,
+                            rule.language.as_deref().unwrap_or_default()
+                        ),
+                    ));
+                }
+            }
         }
         Err(error) => findings.push(doctor_error("rules", error.to_string())),
     }
@@ -790,25 +861,25 @@ fn validate_local_rules(root: &Path, config: &ProjectConfig) -> Result<LocalRule
             "validated {rule_count} local rule(s), but only {executable_count} include executable GritQL"
         );
     }
-    validate_local_gritql(root, rules)
-        .context("local rule GritQL failed validation during doctor")?;
+    validate_local_gritql(rules).context("local rule GritQL failed validation during doctor")?;
     Ok(LocalRuleValidation { rule_count })
 }
 
-fn validate_local_gritql(root: &Path, rules: Vec<RuleDefinition>) -> Result<()> {
-    let compiled = compiler::compile_rule_set(root, rules)?;
+fn validate_local_gritql(rules: Vec<RuleDefinition>) -> Result<()> {
+    // Compile into a scratch workspace like `rule verify` does; compiling into
+    // the shared `.harness/generated/.grit` would delete the pattern files of
+    // a concurrently running `check` (which holds the grit run lock).
+    let scratch = crate::scratch::ScratchDir::new("harness-lint-doctor")?;
+    let compiled = compiler::compile_rule_set(scratch.path(), rules)?;
     if compiled.grit_rules.is_empty() {
         return Ok(());
     }
 
-    let probe_path = std::env::temp_dir().join(format!(
-        "harness-lint-doctor-probe-{}.ts",
-        std::process::id()
-    ));
+    let probe_path = scratch.path().join("harness-lint-doctor-probe.ts");
     fs::write(&probe_path, "const harnessLintDoctorProbe = 1;\n")
         .with_context(|| format!("failed to write {}", probe_path.display()))?;
-    let result = grit::run_grit(root, &compiled, std::slice::from_ref(&probe_path)).map(|_| ());
-    let _ = fs::remove_file(&probe_path);
+    let result =
+        grit::run_grit(scratch.path(), &compiled, std::slice::from_ref(&probe_path)).map(|_| ());
     if let Err(error) = result {
         bail!("{}", local_gritql_validation_message(&compiled, &error));
     }
@@ -890,25 +961,48 @@ fn run_cached_check(
         );
     }
 
-    for (index, batch) in misses.chunks(GRIT_BATCH_SIZE).enumerate() {
+    let batches = grit_batches(root, &misses);
+    let batch_count = batches.len();
+    for (index, batch) in batches.into_iter().enumerate() {
         if verbose {
             eprintln!(
                 "harness-lint: running GritQL batch {}/{} ({} file(s))",
                 index + 1,
-                misses.len().div_ceil(GRIT_BATCH_SIZE),
+                batch_count,
                 batch.len()
             );
         }
         let batch_paths = batch.to_vec();
         let fresh = normalizer.normalize(grit::run_grit(root, compiled, &batch_paths)?);
         let mut by_path = cache::group_by_path(root, fresh);
-        for path in batch {
-            let path_diagnostics = by_path.remove(path).unwrap_or_default();
-            if let Some(key) = miss_keys.get(path) {
-                cache::store_file(root, key, path_diagnostics.clone())?;
+        let matched: Vec<(&PathBuf, Vec<crate::model::Diagnostic>)> = batch
+            .iter()
+            .map(|path| (path, by_path.remove(path).unwrap_or_default()))
+            .collect();
+        // Leftover entries mean grit reported paths we could not map back to
+        // the batch; caching per-path results then would record false empties.
+        if by_path.is_empty() {
+            for (path, path_diagnostics) in matched {
+                if let Some(key) = miss_keys.get(path) {
+                    cache::store_file(root, key, path_diagnostics.clone())?;
+                }
+                diagnostics.extend(path_diagnostics);
             }
-            diagnostics.extend(path_diagnostics);
+        } else {
+            eprintln!(
+                "harness-lint: warning: {} diagnostic path(s) did not match the checked files; \
+                 skipping cache for this batch",
+                by_path.len()
+            );
+            diagnostics.extend(matched.into_iter().flat_map(|(_, list)| list));
+            diagnostics.extend(by_path.into_values().flatten());
         }
+    }
+
+    // Every file edit creates a new cache key; garbage-collect old entries
+    // opportunistically, only on runs that already paid for cache writes.
+    if !misses.is_empty() {
+        cache::prune_stale_file_entries(root);
     }
 
     diagnostics.sort_by(|left, right| {
@@ -928,10 +1022,36 @@ fn run_uncached_check(
 ) -> Result<Vec<crate::model::Diagnostic>> {
     let normalizer = DiagnosticNormalizer::new(root, compiled);
     let mut diagnostics = Vec::new();
-    for batch in paths.chunks(GRIT_BATCH_SIZE) {
+    for batch in grit_batches(root, paths) {
         diagnostics.extend(normalizer.normalize(grit::run_grit(root, compiled, batch)?));
     }
     Ok(diagnostics)
+}
+
+/// Batches capped by file count *and* cumulative absolute-path length: the
+/// paths become `grit check` argv entries, and Windows caps a command line at
+/// 32,767 characters, which 256 deep paths alone can exceed.
+const GRIT_BATCH_MAX_ARG_BYTES: usize = 24_000;
+
+fn grit_batches<'a>(root: &Path, paths: &'a [PathBuf]) -> Vec<&'a [PathBuf]> {
+    let mut batches = Vec::new();
+    let mut start = 0;
+    let mut bytes = 0;
+    for (index, path) in paths.iter().enumerate() {
+        let arg_len = root.join(path).as_os_str().len() + 3;
+        if index > start
+            && (index - start >= GRIT_BATCH_SIZE || bytes + arg_len > GRIT_BATCH_MAX_ARG_BYTES)
+        {
+            batches.push(&paths[start..index]);
+            start = index;
+            bytes = 0;
+        }
+        bytes += arg_len;
+    }
+    if start < paths.len() {
+        batches.push(&paths[start..]);
+    }
+    batches
 }
 
 struct DiagnosticNormalizer<'a> {
@@ -1099,7 +1219,7 @@ title: Draft Rule
 }
 
 fn run_catalog(
-    cwd: &PathBuf,
+    cwd: &Path,
     config_path: Option<&std::path::Path>,
     command: CatalogCommand,
     _format: ReportFormat,
@@ -1122,9 +1242,9 @@ fn run_catalog(
                         .pack_spec
                 }
             };
-            let parsed = pack::parse_pack_spec(&id, &spec);
+            let parsed = pack::parse_pack_spec(&root, &id, &spec);
             let resolved = match parsed.source {
-                PackSourceKind::Local => pack::resolve_local_pack(&root, parsed)?,
+                PackSourceKind::Local => pack::resolve_local_pack_checksummed(&root, parsed)?,
                 PackSourceKind::Git => pack::install_git_pack(&root, parsed)?,
                 _ => bail!("unsupported pack source for `{id}`"),
             };
@@ -1187,7 +1307,7 @@ fn run_catalog(
             let lock = config::load_lock(&root)?;
             let mut found = 0usize;
             for (id, spec) in &config.packs {
-                let parsed = pack::parse_pack_spec(id, spec);
+                let parsed = pack::parse_pack_spec(&root, id, spec);
                 match parsed.source {
                     PackSourceKind::Git => {
                         let Some(entry) = lock.packs.get(id) else {
@@ -1206,7 +1326,7 @@ fn run_catalog(
                         }
                     }
                     PackSourceKind::Local => {
-                        let resolved = pack::resolve_local_pack(&root, parsed)?;
+                        let resolved = pack::resolve_local_pack_checksummed(&root, parsed)?;
                         let Some(installed) =
                             lock.packs.get(id).and_then(|entry| entry.checksum.clone())
                         else {
@@ -1280,56 +1400,8 @@ fn requires_pack_operation_lock(command: &CatalogCommand) -> bool {
     )
 }
 
-#[derive(Debug)]
-struct PackOperationLock {
-    path: PathBuf,
-}
-
-impl Drop for PackOperationLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
-}
-
-fn acquire_pack_operation_lock(root: &Path) -> Result<PackOperationLock> {
-    let lock_dir = root.join(config::WORK_DIR);
-    fs::create_dir_all(&lock_dir)
-        .with_context(|| format!("failed to create {}", lock_dir.display()))?;
-    let path = lock_dir.join("pack-operation.lock");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
-    let mut reported_wait = false;
-    loop {
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-        {
-            Ok(mut file) => {
-                writeln!(file, "pid={}", std::process::id())
-                    .with_context(|| format!("failed to write {}", path.display()))?;
-                return Ok(PackOperationLock { path });
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                if !reported_wait {
-                    eprintln!(
-                        "harness-lint: waiting for another pack operation to release {}",
-                        path.display()
-                    );
-                    reported_wait = true;
-                }
-                if std::time::Instant::now() >= deadline {
-                    bail!(
-                        "timed out waiting for another harness-lint pack operation to release {}; remove the lock if no harness-lint process is running",
-                        path.display()
-                    );
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            Err(error) => {
-                return Err(error).with_context(|| format!("failed to acquire {}", path.display()));
-            }
-        }
-    }
+fn acquire_pack_operation_lock(root: &Path) -> Result<WorkLock> {
+    acquire_work_lock(root, "pack-operation.lock", "pack operation")
 }
 
 fn print_available_packs(registry_url: Option<&str>) -> Result<()> {
@@ -1357,11 +1429,11 @@ fn update_configured_packs(root: &Path, config_path: Option<&std::path::Path>) -
     let mut lock = config::load_lock(root)?;
     let mut updated = 0usize;
     for (id, spec) in &config.packs {
-        let parsed = pack::parse_pack_spec(id, spec);
+        let parsed = pack::parse_pack_spec(root, id, spec);
         let previous_checksum = lock.packs.get(id).and_then(|entry| entry.checksum.clone());
         match parsed.source {
             PackSourceKind::Local => {
-                let resolved = pack::resolve_local_pack(root, parsed)?;
+                let resolved = pack::resolve_local_pack_checksummed(root, parsed)?;
                 let changed = previous_checksum != resolved.checksum;
                 lock.packs
                     .insert(id.clone(), pack::lock_entry(&resolved, root));
@@ -1401,7 +1473,7 @@ fn restore_locked_packs(root: &Path, config_path: Option<&std::path::Path>) -> R
         let Some(entry) = lock.packs.get(id) else {
             bail!("pack `{id}` is missing from harness.lock; run `harness-lint update` first");
         };
-        let parsed = pack::parse_pack_spec(id, spec);
+        let parsed = pack::parse_pack_spec(root, id, spec);
         if parsed.source != entry.source || parsed.spec != entry.spec {
             bail!(
                 "pack `{id}` differs between harness.toml and harness.lock; run `harness-lint update` to refresh the lock"
@@ -1409,7 +1481,7 @@ fn restore_locked_packs(root: &Path, config_path: Option<&std::path::Path>) -> R
         }
         match entry.source {
             PackSourceKind::Local => {
-                let resolved = pack::resolve_local_pack(root, parsed)?;
+                let resolved = pack::resolve_local_pack_checksummed(root, parsed)?;
                 if entry.checksum.is_some() && entry.checksum != resolved.checksum {
                     bail!(
                         "local pack `{id}` differs from harness.lock; run `harness-lint update` if this change is intentional"
@@ -1432,7 +1504,7 @@ fn restore_locked_packs(root: &Path, config_path: Option<&std::path::Path>) -> R
 }
 
 fn run_rule(
-    cwd: &PathBuf,
+    cwd: &Path,
     config_path: Option<&std::path::Path>,
     command: RuleCommand,
     format: ReportFormat,
@@ -1682,11 +1754,17 @@ fn select_paths(
     file_set_index: &paths::FileSetIndex,
 ) -> Result<SelectedPaths> {
     let is_implicit_full_scan = !command.changed && !command.staged && !command.all;
-    let raw_paths = if command.staged {
-        git::staged_files(root)?
-    } else if command.changed {
-        let base = command.base.as_deref().unwrap_or(&config.lint.changed_base);
-        git::changed_files(root, base)?
+    let raw_paths = if command.staged || command.changed {
+        let mut git_paths = if command.staged {
+            git::staged_files(root)?
+        } else {
+            let base = command.base.as_deref().unwrap_or(&config.lint.changed_base);
+            git::changed_files(root, base)?
+        };
+        // Git can list files that no longer exist in the worktree (committed
+        // or staged, then deleted); checking them would abort the run.
+        git_paths.retain(|path| root.join(path).is_file());
+        git_paths
     } else {
         paths::discover_all_files(root, &[], &config.rules.local)?
     };
@@ -1716,15 +1794,19 @@ fn load_rule_packs(
     config: &ProjectConfig,
 ) -> Result<Vec<crate::model::RulePack>> {
     let mut packs = Vec::new();
+    let mut lock = None;
     for (id, spec) in &config.packs {
-        let spec = pack::parse_pack_spec(id, spec);
+        let spec = pack::parse_pack_spec(root, id, spec);
         match spec.source {
             PackSourceKind::Local => {
                 let resolved = pack::resolve_local_pack(root, spec)?;
                 packs.push(pack::load_rule_pack(&resolved)?);
             }
             PackSourceKind::Git => {
-                let lock = config::load_lock(root)?;
+                if lock.is_none() {
+                    lock = Some(config::load_lock(root)?);
+                }
+                let lock = lock.as_ref().expect("lock loaded above");
                 let entry = lock.packs.get(id).ok_or_else(|| {
                     anyhow!("pack `{id}` is not installed; run `harness-lint update`")
                 })?;
@@ -1760,12 +1842,49 @@ fn load_rules(root: &std::path::Path, config: &ProjectConfig) -> Result<Vec<Rule
     Ok(rules)
 }
 
+/// Fail fast when an explicit `--rule`/`--tag` selection matches nothing that
+/// is loaded; otherwise a typo silently reports "No diagnostics" and exits 0.
+fn validate_rule_selection(
+    command: &CheckCommand,
+    packs: &[crate::model::RulePack],
+    known_rule_ids: &BTreeSet<&str>,
+) -> Result<()> {
+    for rule_id in &command.rule {
+        if !known_rule_ids.contains(rule_id.as_str())
+            && !config_health::CHECK_IDS.contains(&rule_id.as_str())
+        {
+            bail!(
+                "`--rule {rule_id}` does not match any loaded rule; run `harness-lint rule list` to see rule ids"
+            );
+        }
+    }
+    if command.tag.is_empty() {
+        return Ok(());
+    }
+    let known_tags: BTreeSet<&str> = packs
+        .iter()
+        .flat_map(|pack| pack.rules.iter())
+        .flat_map(|rule| rule.tags.iter().map(|tag| tag.as_str()))
+        .collect();
+    for tag in &command.tag {
+        if !known_tags.contains(tag.as_str()) {
+            bail!("`--tag {tag}` does not match any loaded rule tag");
+        }
+    }
+    Ok(())
+}
+
 fn collect_effective_rules(
     packs: &[crate::model::RulePack],
     config: &ProjectConfig,
     command: &CheckCommand,
 ) -> Vec<RuleDefinition> {
-    let mut rules = Vec::new();
+    // Deduplicate by rule id: two packs shipping the same id would otherwise
+    // both compile to the same generated pattern filename with a silent
+    // last-write-wins collision. Later packs win here too, but deliberately —
+    // local rule dirs load after installed packs, so a local rule can shadow
+    // a pack rule.
+    let mut by_id: BTreeMap<String, RuleDefinition> = BTreeMap::new();
     for pack in packs {
         for mut rule in pack.rules.clone() {
             if config.disabled.rules.iter().any(|id| id == &rule.id) {
@@ -1785,8 +1904,8 @@ fn collect_effective_rules(
             if let Some(level) = config.overrides.get(&rule.id) {
                 rule.level = *level;
             }
-            rules.push(rule);
+            by_id.insert(rule.id.clone(), rule);
         }
     }
-    rules
+    by_id.into_values().collect()
 }

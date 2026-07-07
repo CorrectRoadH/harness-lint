@@ -11,34 +11,8 @@ use crate::config::CACHE_DIR;
 use crate::model::Diagnostic;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedDiagnostics {
-    pub diagnostics: Vec<Diagnostic>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedFileDiagnostics {
     pub diagnostics: Vec<Diagnostic>,
-}
-
-pub fn cache_key(
-    root: &Path,
-    paths: &[PathBuf],
-    rule_fingerprint: &str,
-    config_fingerprint: &str,
-) -> Result<String> {
-    let mut hasher = Sha256::new();
-    hasher.update(rule_fingerprint.as_bytes());
-    hasher.update(config_fingerprint.as_bytes());
-    for path in paths {
-        hasher.update(path.to_string_lossy().as_bytes());
-        let full = root.join(path);
-        if full.exists() {
-            hasher.update(
-                fs::read(&full).with_context(|| format!("failed to read {}", full.display()))?,
-            );
-        }
-    }
-    Ok(format!("{:x}", hasher.finalize()))
 }
 
 pub fn file_hash(root: &Path, path: &Path) -> Result<String> {
@@ -69,9 +43,15 @@ pub fn load_file(root: &Path, key: &str) -> Result<Option<Vec<Diagnostic>>> {
     }
     let content = fs::read_to_string(&path)
         .with_context(|| format!("failed to read cache {}", path.display()))?;
-    let cached: CachedFileDiagnostics = serde_json::from_str(&content)
-        .with_context(|| format!("failed to parse cache {}", path.display()))?;
-    Ok(Some(cached.diagnostics))
+    // A corrupt or truncated entry is a cache miss, not a fatal error; drop it
+    // so the next store rewrites it.
+    match serde_json::from_str::<CachedFileDiagnostics>(&content) {
+        Ok(cached) => Ok(Some(cached.diagnostics)),
+        Err(_) => {
+            let _ = fs::remove_file(&path);
+            Ok(None)
+        }
+    }
 }
 
 pub fn store_file(root: &Path, key: &str, diagnostics: Vec<Diagnostic>) -> Result<()> {
@@ -82,8 +62,13 @@ pub fn store_file(root: &Path, key: &str, diagnostics: Vec<Diagnostic>) -> Resul
     }
     let content = serde_json::to_string(&CachedFileDiagnostics { diagnostics })
         .context("failed to serialize file diagnostics cache")?;
-    fs::write(&path, content)
-        .with_context(|| format!("failed to write cache {}", path.display()))?;
+    let temp_path = path.with_extension(format!("tmp.{}", std::process::id()));
+    fs::write(&temp_path, content)
+        .with_context(|| format!("failed to write cache {}", temp_path.display()))?;
+    if let Err(error) = fs::rename(&temp_path, &path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error).with_context(|| format!("failed to write cache {}", path.display()));
+    }
     Ok(())
 }
 
@@ -110,31 +95,6 @@ pub fn normalize_path(root: &Path, path: &Path) -> PathBuf {
     }
 }
 
-pub fn load(root: &Path, key: &str) -> Result<Option<Vec<Diagnostic>>> {
-    let path = cache_path(root, key);
-    if !path.exists() {
-        return Ok(None);
-    }
-    let content = fs::read_to_string(&path)
-        .with_context(|| format!("failed to read cache {}", path.display()))?;
-    let cached: CachedDiagnostics = serde_json::from_str(&content)
-        .with_context(|| format!("failed to parse cache {}", path.display()))?;
-    Ok(Some(cached.diagnostics))
-}
-
-pub fn store(root: &Path, key: &str, diagnostics: Vec<Diagnostic>) -> Result<()> {
-    let path = cache_path(root, key);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create cache dir {}", parent.display()))?;
-    }
-    let content = serde_json::to_string(&CachedDiagnostics { diagnostics })
-        .context("failed to serialize diagnostics cache")?;
-    fs::write(&path, content)
-        .with_context(|| format!("failed to write cache {}", path.display()))?;
-    Ok(())
-}
-
 pub fn clear(root: &Path) -> Result<()> {
     let path = root.join(CACHE_DIR);
     if path.exists() {
@@ -144,14 +104,35 @@ pub fn clear(root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Entries older than this are pruned after a check run that stored new
+/// results. Every file edit creates a new key, so without garbage collection
+/// the directory grows without bound.
+const FILE_CACHE_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 60 * 60);
+
+/// Best-effort garbage collection of stale file-cache entries.
+pub fn prune_stale_file_entries(root: &Path) {
+    let dir = root.join(CACHE_DIR).join("files");
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return;
+    };
+    let now = std::time::SystemTime::now();
+    for entry in entries.flatten() {
+        let stale = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| now.duration_since(modified).ok())
+            .is_some_and(|age| age > FILE_CACHE_MAX_AGE);
+        if stale {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 pub fn fingerprint<T: Hash>(value: &T) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     value.hash(&mut hasher);
     hasher.finish().to_string()
-}
-
-fn cache_path(root: &Path, key: &str) -> PathBuf {
-    root.join(CACHE_DIR).join(format!("{key}.json"))
 }
 
 fn file_cache_path(root: &Path, key: &str) -> PathBuf {

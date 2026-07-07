@@ -34,9 +34,18 @@ pub fn list_packs(registry_url: Option<&str>) -> Result<Vec<RegistryPack>> {
 }
 
 fn catalog(registry_url: Option<&str>) -> Vec<RegistryPack> {
-    registry_url
-        .and_then(|url| remote_catalog(url).ok())
-        .unwrap_or_else(embedded_catalog)
+    if let Some(url) = registry_url {
+        match remote_catalog(url) {
+            Ok(catalog) => return catalog,
+            Err(error) => {
+                eprintln!(
+                    "harness-lint: warning: could not load registry {url} ({error:#}); \
+                     falling back to the embedded catalog"
+                );
+            }
+        }
+    }
+    embedded_catalog()
 }
 
 fn remote_catalog(registry_url: &str) -> Result<Vec<RegistryPack>> {

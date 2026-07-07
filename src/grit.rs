@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
@@ -8,18 +9,28 @@ use crate::model::{CompiledRules, Diagnostic, Severity};
 use crate::scratch::ScratchDir;
 
 pub fn ensure_grit_available() -> Result<String> {
-    let output = Command::new("grit")
-        .env("GRIT_TELEMETRY_DISABLED", "true")
-        .arg("--version")
-        .output()
-        .context("failed to run `grit --version`; install Grit CLI before running checks")?;
-    if !output.status.success() {
-        bail!("`grit --version` failed; install or repair the Grit CLI");
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    static VERSION: OnceLock<std::result::Result<String, String>> = OnceLock::new();
+    VERSION
+        .get_or_init(|| {
+            let output = Command::new("grit")
+                .env("GRIT_TELEMETRY_DISABLED", "true")
+                .arg("--version")
+                .output()
+                .map_err(|error| {
+                    format!(
+                        "failed to run `grit --version`; install Grit CLI before running checks: {error}"
+                    )
+                })?;
+            if !output.status.success() {
+                return Err("`grit --version` failed; install or repair the Grit CLI".to_string());
+            }
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        })
+        .clone()
+        .map_err(|error| anyhow::anyhow!(error))
 }
 
-pub fn check_grit_compatibility(version_output: &str, _requirement: Option<&str>) -> Result<()> {
+pub fn check_grit_compatibility(version_output: &str) -> Result<()> {
     if version_output.trim().is_empty() {
         bail!("`grit --version` returned an empty version string");
     }
@@ -36,7 +47,7 @@ pub fn run_grit(
     }
 
     let version = ensure_grit_available()?;
-    check_grit_compatibility(&version, None)?;
+    check_grit_compatibility(&version)?;
     let grit_cache_dir = root.join(".harness/cache/grit");
     std::fs::create_dir_all(&grit_cache_dir)
         .with_context(|| format!("failed to create {}", grit_cache_dir.display()))?;
@@ -64,13 +75,19 @@ pub fn run_grit(
     if !output.status.success() && diagnostics.is_empty() {
         bail!("`grit check` failed: {}", stderr.trim());
     }
+    // `grit check` exits non-zero for matches too, so a compile error in one
+    // pattern can hide behind another pattern's diagnostics. Surface stderr so
+    // a partially failing run is not mistaken for complete coverage.
+    if !output.status.success() && !diagnostics.is_empty() && !stderr.trim().is_empty() {
+        eprintln!("harness-lint: `grit check` reported: {}", stderr.trim());
+    }
 
     Ok(diagnostics)
 }
 
 pub fn validate_grit_pattern(body: &str, sample_language: &str) -> Result<()> {
     let version = ensure_grit_available()?;
-    check_grit_compatibility(&version, None)?;
+    check_grit_compatibility(&version)?;
 
     let scratch = ScratchDir::new("harness-lint-grit-validate")?;
     let grit_dir = scratch.path().join(".grit");
@@ -167,7 +184,16 @@ fn parse_grit_output(stdout: &str, stderr: &str) -> Vec<Diagnostic> {
             .into_iter()
             .map(GritJsonResult::into_diagnostic)
             .collect(),
-        Err(_) => parse_grit_jsonl(json),
+        Err(error) => {
+            let diagnostics = parse_grit_jsonl(json);
+            if diagnostics.is_empty() {
+                eprintln!(
+                    "harness-lint: warning: could not parse `grit check` JSON output ({error}); \
+                     diagnostics from this batch may be missing"
+                );
+            }
+            diagnostics
+        }
     }
 }
 
@@ -197,7 +223,7 @@ struct GritJsonPosition {
     col: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 struct GritJsonExtra {
     #[serde(default)]
     message: Option<String>,
@@ -223,15 +249,6 @@ impl GritJsonResult {
             end_line: self.end.as_ref().map(|position| position.line),
             end_column: self.end.as_ref().map(|position| position.col),
             fix_available: false,
-        }
-    }
-}
-
-impl Default for GritJsonExtra {
-    fn default() -> Self {
-        Self {
-            message: None,
-            severity: None,
         }
     }
 }
@@ -324,8 +341,8 @@ mod tests {
 
     #[test]
     fn accepts_non_empty_grit_version() {
-        check_grit_compatibility("grit 0.1.0", Some(">=0.1.0")).unwrap();
-        assert!(check_grit_compatibility("", None).is_err());
+        check_grit_compatibility("grit 0.1.0").unwrap();
+        assert!(check_grit_compatibility("").is_err());
     }
 
     #[test]

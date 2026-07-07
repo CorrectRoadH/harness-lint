@@ -53,6 +53,12 @@ TODO: Add an example that should be allowed.
 "#
     );
 
+    if path.exists() {
+        bail!(
+            "rule file {} already exists; edit it or pick different feedback wording",
+            path.display()
+        );
+    }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;

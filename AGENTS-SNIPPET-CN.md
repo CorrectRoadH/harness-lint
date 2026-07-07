@@ -19,6 +19,7 @@
 - 尽量让 `id` 和文件名对齐，例如 `id: local.no-print-debug` 对应 `no-print-debug.md`。
 - 每个规则文件必须有且只有一个可执行的 `grit` fenced code block。GritQL 先写最小、最确定的坏代码形状；用 `$value`、`$name`、`$body` 这类 metavariable 表示会变化的部分；如果 GritQL 看不准，就不要创建 harness-lint rule。
 - TypeScript/JavaScript 规则在 GritQL block 里使用 `language js`，即使 frontmatter 写的是 `language: typescript`；需要 TypeScript parser 变体时可以写 `language js(typescript)`。其他规则语言使用 Grit CLI 语言名，例如 `python`、`json`、`java`、`hcl`、`css`、`markdown`、`yaml`、`rust`、`ruby`、`php`、`go`、`sql`。
+- Markdown 规则必须显式写 `language markdown(block)`（裸 `language markdown` 会选中 inline grammar，块级模式永远匹配不上），并用 `atx_heading()`、`fenced_code_block()` 这类 AST 节点模式代替多 token 字面量 snippet。GritQL 看不到 YAML frontmatter 字段、围栏代码块内部的代码和块内行内结构——依赖这些的约束不要建规则，保留在 agent 指令里。
 - 如果规则只应该作用于部分文件，直接在 GritQL 中用 `$filename` 条件表达，例如 `$filename <: r".*src/.*\.ts"` 和 `!$filename <: r".*\.test\.ts"`。
 - Bad 示例写最小的违规代码；Good 示例写本项目推荐的替代写法；示例语言要和 `language` 一致。
 - 只有 GritQL、说明、Bad / Good 示例都足够清楚时，才使用 `level: error`；否则保持 `level: warn`。
